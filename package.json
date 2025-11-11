@@ -1,0 +1,65 @@
+{
+  "name": "very-happy-dom",
+  "type": "module",
+  "version": "0.0.10",
+  "description": "Like a light-weight version of `happy-dom` powered by Bun.",
+  "author": "Chris Breuer <chris@stacksjs.org>",
+  "license": "MIT",
+  "homepage": "https://github.com/stacksjs/very-happy-dom#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stacksjs/very-happy-dom.git"
+  },
+  "bugs": {
+    "url": "https://github.com/stacksjs/very-happy-dom/issues"
+  },
+  "keywords": [
+    "very-happy-dom",
+    "happy-dom",
+    "dom",
+    "testing",
+    "bun",
+    "jsdom",
+    "virtual-dom"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./*": {
+      "import": "./dist/*"
+    }
+  },
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "README.md",
+    "dist"
+  ],
+  "scripts": {
+    "build": "bun --bun build.ts",
+    "fresh": "bunx rimraf node_modules/ bun.lock && bun i",
+    "prepublishOnly": "bun --bun run build",
+    "test": "bun test",
+    "lint": "bunx --bun eslint .",
+    "lint:fix": "bunx --bun eslint . --fix",
+    "changelog": "bunx logsmith --verbose",
+    "changelog:generate": "bunx logsmith --output CHANGELOG.md",
+    "release": "bun run changelog:generate && bunx bumpx prompt --recursive",
+    "postinstall": "bunx git-hooks",
+    "typecheck": "bun --bun tsc --noEmit"
+  },
+  "devDependencies": {
+    "better-dx": "^0.2.1"
+  },
+  "git-hooks": {
+    "pre-commit": {
+      "staged-lint": {
+        "*.{js,ts,json,yaml,yml,md}": "echo 'Linter coming soon'"
+      }
+    },
+    "commit-msg": "bunx gitlint --edit .git/COMMIT_EDITMSG"
+  }
+}
