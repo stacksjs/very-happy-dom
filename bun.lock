@@ -5,7 +5,7 @@
     "": {
       "name": "bun-ts-starter",
       "devDependencies": {
-        "better-dx": "^0.2.1",
+        "better-dx": "^0.2.3",
       },
     },
   },
