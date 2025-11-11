@@ -60,7 +60,7 @@
     "typecheck": "bun --bun tsc --noEmit"
   },
   "devDependencies": {
-    "better-dx": "^0.2.1"
+    "better-dx": "^0.2.3"
   },
   "git-hooks": {
     "pre-commit": {
