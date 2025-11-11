@@ -174,7 +174,12 @@ export class VirtualDocument implements VirtualNode {
     return child
   }
 
-  createElement(tagName: string): VirtualElement {
+  createElement(tagName: string): VirtualElement | any {
+    // Special handling for canvas elements
+    if (tagName.toLowerCase() === 'canvas') {
+      const { HTMLCanvasElement } = require('../apis/Canvas')
+      return new HTMLCanvasElement()
+    }
     return new VirtualElement(tagName)
   }
 

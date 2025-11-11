@@ -1,6 +1,7 @@
 import type { Storage } from '../storage/Storage'
 import type { DetachedWindowAPI } from './DetachedWindowAPI'
 import { DataTransfer, Notification, Performance } from '../apis/BrowserAPIs'
+import { CanvasRenderingContext2D, HTMLCanvasElement } from '../apis/Canvas'
 import { Navigator as VeryHappyNavigator } from '../apis/Clipboard'
 import { VeryHappyFile, VeryHappyFileList, VeryHappyFileReader } from '../apis/FileAPI'
 import { CustomEvent as VeryHappyCustomEvent } from '../events/CustomEvent'
@@ -79,6 +80,10 @@ export class Window {
   public File: typeof VeryHappyFile = VeryHappyFile
   public FileReader: typeof VeryHappyFileReader = VeryHappyFileReader
   public FileList: typeof VeryHappyFileList = VeryHappyFileList
+
+  // Canvas API
+  public HTMLCanvasElement: typeof HTMLCanvasElement = HTMLCanvasElement
+  public CanvasRenderingContext2D: typeof CanvasRenderingContext2D = CanvasRenderingContext2D
 
   // Additional Browser APIs
   public performance: Performance = new Performance()

@@ -1,5 +1,20 @@
 // Export Browser APIs
 export { DataTransfer, EnhancedConsole, Geolocation, Notification, Performance } from './apis/BrowserAPIs'
+export type {
+  CanvasFillStrokeStyles,
+  CanvasGradient,
+  CanvasImageSource,
+  CanvasLineCap,
+  CanvasLineJoin,
+  CanvasPattern,
+  CanvasTextAlign,
+  CanvasTextBaseline,
+  DOMMatrix2DInit,
+  GlobalCompositeOperation,
+  ImageData,
+  TextMetrics,
+} from './apis/Canvas'
+export { CanvasRenderingContext2D, HTMLCanvasElement } from './apis/Canvas'
 export { Clipboard, Navigator } from './apis/Clipboard'
 export { VeryHappyFile as File, VeryHappyFileList as FileList, VeryHappyFileReader as FileReader } from './apis/FileAPI'
 export { Browser } from './browser/Browser'
