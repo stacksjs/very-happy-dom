@@ -8,7 +8,7 @@
         "mitata": "^1.0.34",
       },
       "devDependencies": {
-        "better-dx": "^0.2.1",
+        "better-dx": "^0.2.3",
       },
     },
   },
