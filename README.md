@@ -18,6 +18,26 @@ A blazingly fast, lightweight virtual DOM implementation powered by Bun. Perfect
 
 Built for speed with Bun, very-happy-dom delivers exceptional performance:
 
+| Operation | Time | Details |
+|-----------|------|---------|
+| Window Creation | 1.74 µs | Create new window instance |
+| Element Creation | 1.68 µs | createElement('div') |
+| 100 Elements | 5.60 µs | Create 100 elements |
+| appendChild | 1.78 µs | Append single child |
+| 100 appendChild | 6.70 µs | Append 100 children |
+| querySelector | 4.12 µs | Simple tag selector |
+| querySelectorAll (100 nodes) | 102.18 µs | Query 100 elements |
+| setAttribute | 1.90 µs | Set single attribute |
+| addEventListener | 1.95 µs | Add event listener |
+| Canvas createElement | 2.57 µs | Create canvas element |
+| Canvas getContext('2d') | 2.71 µs | Get 2D context |
+| localStorage setItem | 2.16 µs | Store data |
+| innerHTML parsing | 10.41 µs | Parse complex HTML |
+
+**Microseconds (µs), not milliseconds!** Most operations complete in under 5 microseconds.
+
+*Benchmarks run on Apple M3 Pro with Bun 1.3.2*
+
 ### Features
 
 - 🚀 **Blazingly Fast** - Optimized for Bun's runtime
