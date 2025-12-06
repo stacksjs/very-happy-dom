@@ -81,3 +81,8 @@ export { Window } from './window/Window'
 export { XPathEvaluator } from './xpath/XPathEvaluator'
 // Export XPath APIs
 export { XPathResult, XPathResultType } from './xpath/XPathResult'
+
+// Export Screenshot APIs
+export { captureHtml, captureUrl, ScreenshotCapture, type ScreenshotOptions } from './screenshot/capture'
+export { compareImages, ImageDiff, type DiffOptions, type DiffResult } from './screenshot/diff'
+export { createRenderer, HtmlRenderer, type RenderOptions, type RenderResult } from './screenshot/renderer'
