@@ -10,7 +10,7 @@
 
 A blazingly fast, lightweight virtual DOM implementation powered by Bun. Perfect for testing web applications without the overhead of a real browser.
 
-## Why very-happy-dom?
+## Why very-happy-dom
 
 **very-happy-dom** is designed to be a faster, leaner alternative to `happy-dom` and `jsdom` for testing environments. Built from the ground up with Bun's performance in mind, it provides a comprehensive browser-like environment for your tests.
 
@@ -350,6 +350,7 @@ const document = window.document
 <summary>Click to expand full API list</summary>
 
 ### DOM
+
 - ✅ Document
 - ✅ Element
 - ✅ TextNode
@@ -360,18 +361,21 @@ const document = window.document
 - ✅ Style
 
 ### Selectors
+
 - ✅ querySelector / querySelectorAll
 - ✅ getElementById / getElementsByClassName / getElementsByTagName
 - ✅ CSS Selectors (all combinators)
 - ✅ XPath
 
 ### Events
+
 - ✅ addEventListener / removeEventListener
 - ✅ Event bubbling and capturing
 - ✅ CustomEvent
 - ✅ Event.preventDefault / stopPropagation
 
 ### Network
+
 - ✅ fetch()
 - ✅ XMLHttpRequest
 - ✅ WebSocket
@@ -380,30 +384,36 @@ const document = window.document
 - ✅ Request Interception
 
 ### Storage
+
 - ✅ localStorage
 - ✅ sessionStorage
 
 ### Timers
+
 - ✅ setTimeout / clearTimeout
 - ✅ setInterval / clearInterval
 - ✅ requestAnimationFrame / cancelAnimationFrame
 
 ### Observers
+
 - ✅ MutationObserver
 - ✅ IntersectionObserver
 - ✅ ResizeObserver
 
 ### Canvas
+
 - ✅ Canvas element
 - ✅ 2D rendering context
 - ✅ Basic drawing operations
 - ✅ toDataURL / toBlob
 
 ### Web Components
+
 - ✅ Custom Elements
 - ✅ Shadow DOM
 
 ### Other APIs
+
 - ✅ Performance API
 - ✅ Console API
 - ✅ Clipboard API

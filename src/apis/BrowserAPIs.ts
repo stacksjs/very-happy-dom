@@ -147,10 +147,12 @@ export class Notification {
   public icon?: string
   public tag?: string
 
+  // eslint-disable pickier/no-unused-vars
   public onclick: ((event: Event) => void) | null = null
   public onclose: ((event: Event) => void) | null = null
   public onerror: ((event: Event) => void) | null = null
   public onshow: ((event: Event) => void) | null = null
+  // eslint-enable pickier/no-unused-vars
 
   constructor(title: string, options?: NotificationOptions) {
     this.title = title

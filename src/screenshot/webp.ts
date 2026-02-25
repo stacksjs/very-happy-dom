@@ -307,8 +307,8 @@ enum VP8LTransformType {
 function predict(pixels: Uint8Array, x: number, y: number, width: number): number[] {
   const idx = (y * width + x) * 4
   const left = x > 0 ? [(pixels[idx - 4] || 0), (pixels[idx - 3] || 0), (pixels[idx - 2] || 0), (pixels[idx - 1] || 0)] : [0, 0, 0, 255]
-  const top = y > 0 ? [(pixels[idx - width * 4] || 0), (pixels[idx - width * 4 + 1] || 0), (pixels[idx - width * 4 + 2] || 0), (pixels[idx - width * 4 + 3] || 0)] : [0, 0, 0, 255]
-  const topLeft = (x > 0 && y > 0) ? [(pixels[idx - width * 4 - 4] || 0), (pixels[idx - width * 4 - 3] || 0), (pixels[idx - width * 4 - 2] || 0), (pixels[idx - width * 4 - 1] || 0)] : [0, 0, 0, 255]
+  const _top = y > 0 ? [(pixels[idx - width * 4] || 0), (pixels[idx - width * 4 + 1] || 0), (pixels[idx - width * 4 + 2] || 0), (pixels[idx - width * 4 + 3] || 0)] : [0, 0, 0, 255]
+  const _topLeft = (x > 0 && y > 0) ? [(pixels[idx - width * 4 - 4] || 0), (pixels[idx - width * 4 - 3] || 0), (pixels[idx - width * 4 - 2] || 0), (pixels[idx - width * 4 - 1] || 0)] : [0, 0, 0, 255]
 
   // Use predictor mode 1 (left pixel) for simplicity
   return left
@@ -324,6 +324,7 @@ function subtractGreen(r: number, g: number, b: number): [number, number, number
 /**
  * Encode VP8L lossless bitstream
  */
+// eslint-disable-next-line pickier/no-unused-vars
 function encodeVP8L(pixels: Uint8Array, width: number, height: number, options: WebPOptions): Uint8Array {
   const writer = new BitWriter()
 
@@ -686,7 +687,7 @@ export function decodeWebP(data: Uint8Array): { pixels: Uint8Array, width: numbe
 
   // Parse RIFF container
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
-  const fileSize = view.getUint32(4, true) + 8
+  const _fileSize = view.getUint32(4, true) + 8
 
   // Find VP8L chunk
   let offset = 12
@@ -769,7 +770,7 @@ function decodeVP8L(data: Uint8Array): { pixels: Uint8Array, width: number, heig
   const height = reader.readBits(14) + 1
 
   // Alpha flag
-  const hasAlpha = reader.readBit() === 1
+  const _hasAlpha = reader.readBit() === 1
 
   // Version
   const version = reader.readBits(3)

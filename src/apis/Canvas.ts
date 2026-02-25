@@ -438,7 +438,7 @@ export class HTMLCanvasElement {
 
   async toBlobAsync(type?: string, quality?: any): Promise<Blob> {
     return new Promise((resolve) => {
-      this.toBlob(resolve, type, quality)
+      this.toBlob((blob) => { if (blob) resolve(blob) }, type, quality)
     })
   }
 }

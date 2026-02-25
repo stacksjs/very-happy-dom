@@ -24,6 +24,7 @@ export class XMLHttpRequest {
   public withCredentials: boolean = false
 
   // Event handlers
+  // eslint-disable pickier/no-unused-vars
   public onreadystatechange: ((this: XMLHttpRequest, ev: Event) => any) | null = null
   public onload: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null = null
   public onerror: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null = null
@@ -32,6 +33,7 @@ export class XMLHttpRequest {
   public onloadend: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null = null
   public onprogress: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null = null
   public ontimeout: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null = null
+ // eslint-enable pickier/no-unused-vars
 
   private _method = ''
   private _url = ''
@@ -213,9 +215,11 @@ export class XMLHttpRequest {
  * XMLHttpRequestUpload placeholder
  */
 class XMLHttpRequestUpload {
+  // eslint-disable pickier/no-unused-vars
   public onprogress: ((this: XMLHttpRequestUpload, ev: ProgressEvent) => any) | null = null
   public onload: ((this: XMLHttpRequestUpload, ev: ProgressEvent) => any) | null = null
   public onerror: ((this: XMLHttpRequestUpload, ev: ProgressEvent) => any) | null = null
+  // eslint-enable pickier/no-unused-vars
 
   addEventListener(_type: string, _listener: EventListener): void {}
   removeEventListener(_type: string, _listener: EventListener): void {}
@@ -225,6 +229,7 @@ class XMLHttpRequestUpload {
 }
 
 type XMLHttpRequestBodyInit = Blob | BufferSource | FormData | URLSearchParams | string
+// eslint-disable-next-line pickier/no-unused-vars
 type EventListener = (event: Event) => void
 
 interface ProgressEvent extends Event {

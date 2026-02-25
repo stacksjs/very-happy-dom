@@ -22,6 +22,7 @@ export interface MutationRecord {
   oldValue: string | null
 }
 
+// eslint-disable-next-line pickier/no-unused-vars
 export type MutationCallback = (mutations: MutationRecord[], observer: MutationObserver) => void
 
 /**

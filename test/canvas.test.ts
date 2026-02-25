@@ -504,7 +504,7 @@ describe('Canvas API', () => {
     test('canvas can be added to DOM', () => {
       const window = new Window()
       const canvas = window.document.createElement('canvas')
-      window.document.body.appendChild(canvas)
+      window.document.body!.appendChild(canvas)
 
       const foundCanvas = window.document.querySelector('canvas')
       expect(foundCanvas).toBe(canvas)

@@ -10,6 +10,7 @@ export interface IBrowserPageViewport {
 }
 
 export type PageEventType = 'console' | 'request' | 'response' | 'error' | 'load' | 'domcontentloaded'
+// eslint-disable-next-line pickier/no-unused-vars
 export type PageEventHandler = (event: any) => void
 
 /**
@@ -19,6 +20,7 @@ export type PageEventHandler = (event: any) => void
 export class BrowserPage {
   public mainFrame: BrowserFrame
   public console: Console
+  // eslint-disable-next-line pickier/no-unused-vars
   public virtualConsolePrinter: ((type: string, ...args: any[]) => void) | null = null
 
   private _context: BrowserContext
@@ -113,6 +115,7 @@ export class BrowserPage {
   /**
    * Evaluates code in the page's context
    */
+  // eslint-disable-next-line pickier/no-unused-vars
   evaluate(code: string | ((...args: any[]) => any)): any {
     return this.mainFrame.evaluate(code)
   }
@@ -189,6 +192,7 @@ export class BrowserPage {
    * Waits for a function to return a truthy value
    */
   async waitForFunction(
+    // eslint-disable-next-line pickier/no-unused-vars
     fn: ((...args: any[]) => any) | string,
     options: { timeout?: number, polling?: number | 'raf' } = {},
   ): Promise<any> {

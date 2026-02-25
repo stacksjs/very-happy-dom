@@ -44,11 +44,13 @@ tests/
 ## 🚀 Running Tests
 
 ### Run All Tests
+
 ```bash
 bun test tests/*.test.ts
 ```
 
 ### Run Specific Domain
+
 ```bash
 # Storage & Timers
 bun test tests/storage.test.ts tests/timers.test.ts
@@ -67,11 +69,13 @@ bun test tests/integration.test.ts
 ```
 
 ### Run Legacy Tests
+
 ```bash
 bun test tests/legacy/*.test.ts
 ```
 
 ### Run Stress Tests
+
 ```bash
 bun test tests/browser-api.stress.test.ts
 ```
@@ -79,7 +83,9 @@ bun test tests/browser-api.stress.test.ts
 ## 📋 Test Categories
 
 ### Domain Tests (296 tests)
+
 Organized by functionality:
+
 - **Storage** - localStorage, sessionStorage, isolation
 - **Timers** - setTimeout, setInterval, requestAnimationFrame
 - **Network** - fetch, XMLHttpRequest, WebSocket, interception
@@ -92,13 +98,16 @@ Organized by functionality:
 - **Integration** - End-to-end scenarios
 
 ### Quality Assurance (27 tests)
+
 - **Error Handling** - Invalid inputs, null refs, edge cases
 - **Performance** - Regression tests, benchmarks, memory
 
 ### Stress Tests (87 tests)
+
 - **Browser API Stress** - High-load scenarios
 
 ### Legacy Tests (287+ tests)
+
 Preserved for backward compatibility in `tests/legacy/`
 
 ## 🛠️ Test Utilities
@@ -127,8 +136,8 @@ stats.exit()
 ## 📖 Documentation
 
 - **TESTING.md** - Comprehensive testing guide
-- **TEST_SUMMARY.md** - Detailed coverage report
-- **FEATURE_ROADMAP.md** - Feature status
+- **TEST*SUMMARY.md** - Detailed coverage report
+- **FEATURE*ROADMAP.md** - Feature status
 
 ## ✨ Key Features
 

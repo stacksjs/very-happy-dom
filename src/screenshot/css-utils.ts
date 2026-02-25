@@ -84,7 +84,6 @@ const NAMED_COLORS: Record<string, RGBA> = {
   chartreuse: { r: 127, g: 255, b: 0, a: 255 },
   cornflowerblue: { r: 100, g: 149, b: 237, a: 255 },
   cornsilk: { r: 255, g: 248, b: 220, a: 255 },
-  cyan: { r: 0, g: 255, b: 255, a: 255 },
   deeppink: { r: 255, g: 20, b: 147, a: 255 },
   deepskyblue: { r: 0, g: 191, b: 255, a: 255 },
   dodgerblue: { r: 30, g: 144, b: 255, a: 255 },
@@ -260,10 +259,10 @@ function parseHslColor(color: string): RGBA {
 
   const parts = match[1].split(/[\s,/]+/).map(s => s.trim()).filter(Boolean)
 
-  let h = parseAngleValue(parts[0])
+  const h = parseAngleValue(parts[0])
   let s = parseColorValue(parts[1], 100) / 100
-  let l = parseColorValue(parts[2], 100) / 100
-  let a = parts[3] !== undefined ? parseColorValue(parts[3], 1) : 1
+  const l = parseColorValue(parts[2], 100) / 100
+  const a = parts[3] !== undefined ? parseColorValue(parts[3], 1) : 1
 
   // HSL to RGB conversion
   const { r, g, b } = hslToRgb(h, s, l)

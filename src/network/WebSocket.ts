@@ -24,10 +24,12 @@ export class VeryHappyWebSocket {
   public bufferedAmount = 0
 
   // Event handlers
+  // eslint-disable pickier/no-unused-vars
   public onopen: ((event: Event) => void) | null = null
   public onmessage: ((event: MessageEvent) => void) | null = null
   public onerror: ((event: Event) => void) | null = null
   public onclose: ((event: CloseEvent) => void) | null = null
+ // eslint-enable pickier/no-unused-vars
 
   private _ws: WebSocket | null = null
   private _eventListeners = new Map<string, Set<EventListener>>()
@@ -140,6 +142,7 @@ export class VeryHappyWebSocket {
   }
 }
 
+// eslint-disable-next-line pickier/no-unused-vars
 type EventListener = (event: Event | MessageEvent | CloseEvent) => void
 
 interface MessageEvent extends Event {

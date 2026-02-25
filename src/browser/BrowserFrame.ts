@@ -106,6 +106,7 @@ export class BrowserFrame {
   /**
    * Evaluates code in the frame's context
    */
+  // eslint-disable-next-line pickier/no-unused-vars
   evaluate(code: string | ((...args: any[]) => any)): any {
     if (typeof code === 'function') {
       // Create a wrapper that provides window as a variable in the function scope

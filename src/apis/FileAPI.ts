@@ -33,12 +33,14 @@ export class VeryHappyFileReader {
   public result: string | ArrayBuffer | null = null
   public error: Error | null = null
 
+  // eslint-disable pickier/no-unused-vars
   public onload: ((event: ProgressEvent) => void) | null = null
   public onerror: ((event: ProgressEvent) => void) | null = null
   public onloadstart: ((event: ProgressEvent) => void) | null = null
   public onloadend: ((event: ProgressEvent) => void) | null = null
   public onprogress: ((event: ProgressEvent) => void) | null = null
   public onabort: ((event: ProgressEvent) => void) | null = null
+ // eslint-enable pickier/no-unused-vars
 
   private _eventListeners = new Map<string, Set<EventListener>>()
 
@@ -180,6 +182,7 @@ export class VeryHappyFileList {
   [index: number]: File
 }
 
+// eslint-disable-next-line pickier/no-unused-vars
 type EventListener = (event: Event) => void
 
 interface ProgressEvent extends Event {
