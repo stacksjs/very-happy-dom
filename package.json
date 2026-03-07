@@ -57,7 +57,7 @@
   },
   "devDependencies": {
     "better-dx": "^0.2.6",
-    "pickier": "^0.1.20"
+    "bunfig": "^0.15.6"
   },
   "git-hooks": {
     "pre-commit": {

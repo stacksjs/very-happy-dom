@@ -17,6 +17,7 @@ export class VirtualElement implements VirtualNode {
   private eventListeners: Map<string, EventListener[]> = new Map<string, EventListener[]>()
   private _customValidity: string = ''
   private _internalStyles: Map<string, string> = new Map<string, string>()
+  private _stylePriorities: Map<string, string> = new Map<string, string>()
 
   // children should only contain element nodes, per DOM spec
   get children(): VirtualNode[] {
@@ -33,16 +34,45 @@ export class VirtualElement implements VirtualNode {
     return this.attributes.get(name.toLowerCase()) ?? null
   }
 
+  getAttributeNS(_namespace: string | null, localName: string): string | null {
+    return this.getAttribute(localName)
+  }
+
   setAttribute(name: string, value: string): void {
-    this.attributes.set(name.toLowerCase(), value)
+    const normalizedName = name.toLowerCase()
+    const normalizedValue = `${value}`
+
+    this.attributes.set(normalizedName, normalizedValue)
+
+    if (normalizedName === 'style') {
+      this._setStylesFromAttribute(normalizedValue)
+    }
+  }
+
+  setAttributeNS(_namespace: string | null, qualifiedName: string, value: string): void {
+    this.setAttribute(qualifiedName, value)
   }
 
   removeAttribute(name: string): void {
-    this.attributes.delete(name.toLowerCase())
+    const normalizedName = name.toLowerCase()
+    this.attributes.delete(normalizedName)
+
+    if (normalizedName === 'style') {
+      this._internalStyles.clear()
+      this._stylePriorities.clear()
+    }
+  }
+
+  removeAttributeNS(_namespace: string | null, localName: string): void {
+    this.removeAttribute(localName)
   }
 
   hasAttribute(name: string): boolean {
     return this.attributes.has(name.toLowerCase())
+  }
+
+  hasAttributeNS(_namespace: string | null, localName: string): boolean {
+    return this.hasAttribute(localName)
   }
 
   // Child manipulation methods
@@ -162,6 +192,45 @@ export class VirtualElement implements VirtualNode {
     return null
   }
 
+  compareDocumentPosition(other: VirtualNode): number {
+    if (other === this) {
+      return 0
+    }
+
+    const thisRoot = this._rootNode(this)
+    const otherRoot = this._rootNode(other)
+
+    // DOCUMENT_POSITION_DISCONNECTED
+    if (thisRoot !== otherRoot) {
+      return 1
+    }
+
+    const thisContainsOther = this._containsNode(this, other)
+    const otherContainsThis = this._containsNode(other, this)
+
+    // DOCUMENT_POSITION_CONTAINS (8) | DOCUMENT_POSITION_FOLLOWING (4)
+    if (thisContainsOther) {
+      return 12
+    }
+
+    // DOCUMENT_POSITION_CONTAINED_BY (16) | DOCUMENT_POSITION_PRECEDING (2)
+    if (otherContainsThis) {
+      return 18
+    }
+
+    const order = this._documentOrder(thisRoot)
+    const thisIndex = order.indexOf(this)
+    const otherIndex = order.indexOf(other)
+
+    // DOCUMENT_POSITION_FOLLOWING
+    if (thisIndex < otherIndex) {
+      return 4
+    }
+
+    // DOCUMENT_POSITION_PRECEDING
+    return 2
+  }
+
   // firstChild - returns first child of any type
   get firstChild(): VirtualNode | null {
     return this.childNodes.length > 0 ? this.childNodes[0] : null
@@ -258,6 +327,34 @@ export class VirtualElement implements VirtualNode {
         textContent: value,
       }
       this.childNodes.push(textNode)
+    }
+  }
+
+  private _setStylesFromAttribute(styleText: string): void {
+    this._internalStyles.clear()
+    this._stylePriorities.clear()
+
+    for (const declaration of styleText.split(';')) {
+      const trimmed = declaration.trim()
+      if (!trimmed) continue
+
+      const separator = trimmed.indexOf(':')
+      if (separator === -1) continue
+
+      const property = trimmed.slice(0, separator).trim().toLowerCase()
+      let value = trimmed.slice(separator + 1).trim()
+      if (!property) continue
+
+      let priority = ''
+      if (/!important$/i.test(value)) {
+        value = value.replace(/!important$/i, '').trim()
+        priority = 'important'
+      }
+
+      this._internalStyles.set(property, value)
+      if (priority) {
+        this._stylePriorities.set(property, priority)
+      }
     }
   }
 
@@ -415,18 +512,35 @@ export class VirtualElement implements VirtualNode {
         getPropertyValue(property: string): string {
           return element._internalStyles.get(property) || ''
         },
-        setProperty(property: string, value: string): void {
+        getPropertyPriority(property: string): string {
+          return element._stylePriorities.get(property) || ''
+        },
+        setProperty(property: string, value: string, priority = ''): void {
+          const normalizedValue = `${value}`.trim()
+          if (normalizedValue === 'NaN' || normalizedValue.includes('NaN')) {
+            return
+          }
+
           element._internalStyles.set(property, value)
+          if (priority) {
+            element._stylePriorities.set(property, priority)
+          }
+          else {
+            element._stylePriorities.delete(property)
+          }
           element._updateStyleAttribute()
         },
-        removeProperty(property: string): void {
+        removeProperty(property: string): string {
+          const previous = element._internalStyles.get(property) || ''
           element._internalStyles.delete(property)
+          element._stylePriorities.delete(property)
           element._updateStyleAttribute()
+          return previous
         },
       } as any,
       {
         get(target, prop: string) {
-          if (prop === 'getPropertyValue' || prop === 'setProperty' || prop === 'removeProperty') {
+          if (prop === 'getPropertyValue' || prop === 'getPropertyPriority' || prop === 'setProperty' || prop === 'removeProperty') {
             return target[prop]
           }
           // Convert camelCase to kebab-case
@@ -438,6 +552,7 @@ export class VirtualElement implements VirtualNode {
           // Convert camelCase to kebab-case
           const kebabProp = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)
           element._internalStyles.set(kebabProp, value)
+          element._stylePriorities.delete(kebabProp)
           element._updateStyleAttribute()
           return true
         },
@@ -447,7 +562,10 @@ export class VirtualElement implements VirtualNode {
 
   private _updateStyleAttribute(): void {
     const styleString = Array.from(this._internalStyles.entries())
-      .map(([prop, value]) => `${prop}: ${value}`)
+      .map(([prop, value]) => {
+        const priority = this._stylePriorities.get(prop)
+        return priority ? `${prop}: ${value} !${priority}` : `${prop}: ${value}`
+      })
       .join('; ')
 
     if (styleString) {
@@ -918,5 +1036,44 @@ export class VirtualElement implements VirtualNode {
     }
     this.shadowRoot = new ShadowRoot(this, init)
     return this.shadowRoot
+  }
+
+  private _rootNode(node: VirtualNode): VirtualNode {
+    let root = node
+    while (root.parentNode) {
+      root = root.parentNode
+    }
+    return root
+  }
+
+  private _containsNode(parent: VirtualNode, target: VirtualNode): boolean {
+    if (parent === target) {
+      return false
+    }
+
+    let current: VirtualNode | null = target.parentNode
+    while (current) {
+      if (current === parent) {
+        return true
+      }
+      current = current.parentNode
+    }
+    return false
+  }
+
+  private _documentOrder(root: VirtualNode): VirtualNode[] {
+    const ordered: VirtualNode[] = []
+
+    const visit = (node: VirtualNode): void => {
+      ordered.push(node)
+
+      const children = (node as any).childNodes ?? (node as any).children ?? []
+      for (const child of children as VirtualNode[]) {
+        visit(child)
+      }
+    }
+
+    visit(root)
+    return ordered
   }
 }
