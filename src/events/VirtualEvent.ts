@@ -2,8 +2,8 @@ import type { VirtualElement } from '../nodes/VirtualElement'
 
 export class VirtualEvent {
   type: string
-  target: VirtualElement | null = null
-  currentTarget: VirtualElement | null = null
+  target: any = null
+  currentTarget: any = null
   bubbles: boolean
   cancelable: boolean
   composed: boolean
@@ -12,7 +12,7 @@ export class VirtualEvent {
   immediatePropagationStopped = false
   eventPhase = 0
   timeStamp: number
-  private _path: VirtualElement[] = []
+  private _path: any[] = []
   private _propagationStopped = false
   private _immediatePropagationStopped = false
 
@@ -42,7 +42,7 @@ export class VirtualEvent {
     this._propagationStopped = true
   }
 
-  composedPath(): VirtualElement[] {
+  composedPath(): any[] {
     return [...this._path]
   }
 

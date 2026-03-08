@@ -371,12 +371,12 @@ export class VirtualDocument extends VirtualNodeBase {
   }
 
   // Event listener methods
-  addEventListener(type: string, listener: (event: any) => void): void {
-    super.addEventListener(type, listener)
+  addEventListener(type: string, listener: (event: any) => void, options: any = {}): void {
+    super.addEventListener(type, listener, options)
   }
 
-  removeEventListener(type: string, listener: (event: any) => void): void {
-    super.removeEventListener(type, listener)
+  removeEventListener(type: string, listener: (event: any) => void, options: any = {}): void {
+    super.removeEventListener(type, listener, options)
   }
 
   dispatchEvent(event: any): boolean {

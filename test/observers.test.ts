@@ -130,8 +130,95 @@ console.log('\nTest Group 6: MutationObserver - Multiple Observers')
   await window.happyDOM.close()
 }
 
+console.log('\nTest Group 7: MutationObserver - Live childList Records')
+{
+  const window = new Window()
+  const parent = window.document.createElement('div')
+  const child = window.document.createElement('span')
+  const recordsSeen: any[] = []
+
+  const observer = new window.MutationObserver((mutations) => {
+    recordsSeen.push(...mutations)
+  })
+
+  observer.observe(parent, { childList: true })
+  parent.appendChild(child)
+  await Promise.resolve()
+
+  assert(recordsSeen.length === 1, 'childList record delivered')
+  if (recordsSeen.length > 0) {
+    assert(recordsSeen[0].type === 'childList', 'Record type is childList')
+    assert(recordsSeen[0].target === parent, 'Record target is observed parent')
+    assert(recordsSeen[0].addedNodes.length === 1, 'Added node included in record')
+    assert(recordsSeen[0].addedNodes[0] === child, 'Correct added node reported')
+  }
+
+  observer.disconnect()
+  await window.happyDOM.close()
+}
+
+console.log('\nTest Group 8: MutationObserver - Subtree Attributes & Old Value')
+{
+  const window = new Window()
+  const parent = window.document.createElement('div')
+  const child = window.document.createElement('span')
+  parent.appendChild(child)
+
+  const observer = new window.MutationObserver(() => {})
+  observer.observe(parent, {
+    attributes: true,
+    subtree: true,
+    attributeOldValue: true,
+    attributeFilter: ['data-test'],
+  })
+
+  child.setAttribute('data-test', 'first')
+  child.setAttribute('other', 'ignored')
+  child.setAttribute('data-test', 'second')
+  const records = observer.takeRecords()
+
+  assert(records.length === 2, 'attributeFilter limits delivered records')
+  if (records.length === 2) {
+    assert(records[0].target === child, 'Subtree attribute record targets descendant')
+    assert(records[0].oldValue === null, 'Initial attribute oldValue is null')
+    assert(records[1].oldValue === 'first', 'Updated attribute oldValue captured')
+    assert(records[1].attributeName === 'data-test', 'Attribute name captured')
+  }
+
+  observer.disconnect()
+  await window.happyDOM.close()
+}
+
+console.log('\nTest Group 9: MutationObserver - CharacterData Records')
+{
+  const window = new Window()
+  const parent = window.document.createElement('div')
+  const text = window.document.createTextNode('hello')
+  parent.appendChild(text)
+
+  const observer = new window.MutationObserver(() => {})
+  observer.observe(parent, {
+    characterData: true,
+    characterDataOldValue: true,
+    subtree: true,
+  })
+
+  text.textContent = 'world'
+  const records = observer.takeRecords()
+
+  assert(records.length === 1, 'characterData record captured')
+  if (records.length === 1) {
+    assert(records[0].type === 'characterData', 'Record type is characterData')
+    assert(records[0].target === text, 'CharacterData record targets text node')
+    assert(records[0].oldValue === 'hello', 'characterData oldValue captured')
+  }
+
+  observer.disconnect()
+  await window.happyDOM.close()
+}
+
 // Test 7: IntersectionObserver - basic setup
-console.log('\nTest Group 7: IntersectionObserver - Basic Setup')
+console.log('\nTest Group 10: IntersectionObserver - Basic Setup')
 {
   const window = new Window()
   let callbackExecuted = false
@@ -151,7 +238,7 @@ console.log('\nTest Group 7: IntersectionObserver - Basic Setup')
 }
 
 // Test 8: IntersectionObserver - observe element
-console.log('\nTest Group 8: IntersectionObserver - Observe Element')
+console.log('\nTest Group 11: IntersectionObserver - Observe Element')
 {
   const window = new Window()
   const element = window.document.createElement('div')
@@ -179,7 +266,7 @@ console.log('\nTest Group 8: IntersectionObserver - Observe Element')
 }
 
 // Test 9: IntersectionObserver - unobserve
-console.log('\nTest Group 9: IntersectionObserver - Unobserve')
+console.log('\nTest Group 12: IntersectionObserver - Unobserve')
 {
   const window = new Window()
   const element = window.document.createElement('div')
@@ -206,7 +293,7 @@ console.log('\nTest Group 9: IntersectionObserver - Unobserve')
 }
 
 // Test 10: IntersectionObserver - with options
-console.log('\nTest Group 10: IntersectionObserver - With Options')
+console.log('\nTest Group 13: IntersectionObserver - With Options')
 {
   const window = new Window()
 

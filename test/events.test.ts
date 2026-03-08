@@ -222,6 +222,61 @@ console.log('\nTest Group 12: Element - Event Capture')
   await window.happyDOM.close()
 }
 
+// Test 13: Propagation order across window/document/element
+console.log('\nTest Group 13: Event - Propagation Order')
+{
+  const window = new Window()
+  const parent = window.document.createElement('div')
+  const child = window.document.createElement('button')
+  const order: string[] = []
+
+  window.document.body!.appendChild(parent)
+  parent.appendChild(child)
+
+  window.addEventListener('ping', () => order.push('window-capture'), true)
+  window.document.addEventListener('ping', () => order.push('document-capture'), true)
+  parent.addEventListener('ping', () => order.push('parent-capture'), true)
+  child.addEventListener('ping', () => order.push('target-capture'), true)
+  child.addEventListener('ping', () => order.push('target-bubble'))
+  parent.addEventListener('ping', () => order.push('parent-bubble'))
+  window.document.addEventListener('ping', () => order.push('document-bubble'))
+  window.addEventListener('ping', () => order.push('window-bubble'))
+
+  const event = new window.CustomEvent('ping', { bubbles: true })
+  child.dispatchEvent(event)
+
+  assert(
+    order.join(' > ') === 'window-capture > document-capture > parent-capture > target-capture > target-bubble > parent-bubble > document-bubble > window-bubble',
+    'Capture/target/bubble order is correct across window/document/element',
+  )
+  assert(event.composedPath()[0] === child, 'composedPath starts with target')
+  assert(event.composedPath()[event.composedPath().length - 1] === window, 'composedPath ends with window')
+
+  await window.happyDOM.close()
+}
+
+// Test 14: Non-bubbling events still capture but do not bubble
+console.log('\nTest Group 14: Event - Non-bubbling Behavior')
+{
+  const window = new Window()
+  const parent = window.document.createElement('div')
+  const child = window.document.createElement('button')
+  const order: string[] = []
+
+  window.document.body!.appendChild(parent)
+  parent.appendChild(child)
+
+  parent.addEventListener('ping', () => order.push('parent-capture'), true)
+  child.addEventListener('ping', () => order.push('target'))
+  parent.addEventListener('ping', () => order.push('parent-bubble'))
+
+  child.dispatchEvent(new window.CustomEvent('ping'))
+
+  assert(order.join(' > ') === 'parent-capture > target', 'Non-bubbling event captures and reaches target without bubbling')
+
+  await window.happyDOM.close()
+}
+
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ Passed: ${passed}`)
 console.log(`❌ Failed: ${failed}`)
