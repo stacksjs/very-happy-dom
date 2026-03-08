@@ -35,10 +35,28 @@ function getOwnerDocumentForChild(parent: VirtualParentNode): any {
   return parent.nodeType === DOCUMENT_NODE ? parent : parent.ownerDocument
 }
 
+function getInternalShadowRoot(node: VirtualNode): VirtualNode | null {
+  return (node as any)._getInternalShadowRoot?.() ?? null
+}
+
+function getTemplateContent(node: VirtualNode): VirtualNode | null {
+  return (node as any).tagName === 'TEMPLATE' ? ((node as any).content ?? null) : null
+}
+
 export function setOwnerDocumentRecursive(node: VirtualNode, ownerDocument: any): void {
   const previousOwnerDocument = (node as any).ownerDocument ?? null
   if (node.nodeType !== DOCUMENT_NODE) {
     ;(node as any).ownerDocument = ownerDocument
+  }
+
+  const internalShadowRoot = getInternalShadowRoot(node)
+  if (internalShadowRoot) {
+    setOwnerDocumentRecursive(internalShadowRoot, ownerDocument)
+  }
+
+  const templateContent = getTemplateContent(node)
+  if (templateContent) {
+    ;(templateContent as any).ownerDocument = ownerDocument
   }
 
   invokeAdoptedCallback(node, previousOwnerDocument, ownerDocument)

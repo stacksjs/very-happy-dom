@@ -47,6 +47,10 @@ export class VirtualElement extends VirtualNodeBase {
     return this._shadowRoot?.mode === 'open' ? this._shadowRoot : null
   }
 
+  _getInternalShadowRoot(): ShadowRoot | null {
+    return this._shadowRoot
+  }
+
   // Attribute methods
   getAttribute(name: string): string | null {
     return this.attributes.get(name.toLowerCase()) ?? null

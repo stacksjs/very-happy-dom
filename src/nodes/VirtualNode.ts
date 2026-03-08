@@ -27,6 +27,7 @@ export interface VirtualNode {
   ownerDocument: any
   readonly isConnected: boolean
   textContent: string
+  getRootNode?: (options?: { composed?: boolean }) => VirtualNode
 }
 
 export interface EventListenerOptions {
@@ -89,6 +90,67 @@ export function isDocumentNode(node: VirtualNode | null | undefined): boolean {
 
 export function isDocumentFragmentNode(node: VirtualNode | null | undefined): boolean {
   return node?.nodeType === DOCUMENT_FRAGMENT_NODE
+}
+
+function createTextNodeForContext(context: VirtualNode, value: string): VirtualNode {
+  const ownerDocument = context.nodeType === DOCUMENT_NODE ? context : context.ownerDocument
+  const textNode = ownerDocument?.createTextNode?.(`${value}`)
+  if (textNode) {
+    return textNode
+  }
+
+  // eslint-disable-next-line ts/no-require-imports
+  const { VirtualTextNode } = require('./VirtualTextNode')
+  const fallback = new VirtualTextNode(`${value}`)
+  fallback.ownerDocument = ownerDocument ?? null
+  return fallback
+}
+
+function createFragmentForContext(context: VirtualNode): any {
+  const ownerDocument = context.nodeType === DOCUMENT_NODE ? context : context.ownerDocument
+  const fragment = ownerDocument?.createDocumentFragment?.()
+  if (fragment) {
+    return fragment
+  }
+
+  // eslint-disable-next-line ts/no-require-imports
+  const { VirtualDocumentFragment } = require('./VirtualDocumentFragment')
+  const fallback = new VirtualDocumentFragment()
+  fallback.ownerDocument = ownerDocument ?? null
+  return fallback
+}
+
+function normalizeNodeInputs(context: VirtualNode, nodes: Array<VirtualNode | string>): VirtualNode[] {
+  return nodes.map(node => typeof node === 'string' ? createTextNodeForContext(context, node) : node)
+}
+
+function nodesAreEqual(left: VirtualNode | null | undefined, right: VirtualNode | null | undefined): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right) {
+    return false
+  }
+  if (left.nodeType !== right.nodeType || left.nodeName !== right.nodeName || left.nodeValue !== right.nodeValue) {
+    return false
+  }
+  if (left.attributes.size !== right.attributes.size) {
+    return false
+  }
+  for (const [name, value] of left.attributes) {
+    if (right.attributes.get(name) !== value) {
+      return false
+    }
+  }
+  if (left.childNodes.length !== right.childNodes.length) {
+    return false
+  }
+  for (let i = 0; i < left.childNodes.length; i++) {
+    if (!nodesAreEqual(left.childNodes[i], right.childNodes[i])) {
+      return false
+    }
+  }
+  return true
 }
 
 export abstract class VirtualNodeBase extends VirtualEventTarget implements VirtualNode {
@@ -161,6 +223,148 @@ export abstract class VirtualNodeBase extends VirtualEventTarget implements Virt
 
   hasChildNodes(): boolean {
     return this.childNodes.length > 0
+  }
+
+  append(...nodes: Array<VirtualNode | string>): void {
+    const parent = this as any
+    if (typeof parent.appendChild !== 'function') {
+      throw new Error('This node type does not support append()')
+    }
+
+    const normalized = normalizeNodeInputs(this, nodes)
+    if (normalized.length === 0) {
+      return
+    }
+    if (normalized.length === 1) {
+      parent.appendChild(normalized[0])
+      return
+    }
+
+    const fragment = createFragmentForContext(this)
+    for (const node of normalized) {
+      fragment.appendChild(node)
+    }
+    parent.appendChild(fragment)
+  }
+
+  prepend(...nodes: Array<VirtualNode | string>): void {
+    const parent = this as any
+    if (typeof parent.insertBefore !== 'function') {
+      throw new Error('This node type does not support prepend()')
+    }
+
+    const normalized = normalizeNodeInputs(this, nodes)
+    if (normalized.length === 0) {
+      return
+    }
+    if (normalized.length === 1) {
+      parent.insertBefore(normalized[0], this.firstChild ?? null)
+      return
+    }
+
+    const fragment = createFragmentForContext(this)
+    for (const node of normalized) {
+      fragment.appendChild(node)
+    }
+    parent.insertBefore(fragment, this.firstChild ?? null)
+  }
+
+  before(...nodes: Array<VirtualNode | string>): void {
+    if (!this.parentNode) {
+      return
+    }
+
+    const parent = this.parentNode as any
+    const normalized = normalizeNodeInputs(this.parentNode, nodes)
+    if (normalized.length === 0) {
+      return
+    }
+    if (normalized.length === 1) {
+      parent.insertBefore(normalized[0], this)
+      return
+    }
+
+    const fragment = createFragmentForContext(this.parentNode)
+    for (const node of normalized) {
+      fragment.appendChild(node)
+    }
+    parent.insertBefore(fragment, this)
+  }
+
+  after(...nodes: Array<VirtualNode | string>): void {
+    if (!this.parentNode) {
+      return
+    }
+
+    const parent = this.parentNode as any
+    const referenceNode = this.nextSibling
+    const normalized = normalizeNodeInputs(this.parentNode, nodes)
+    if (normalized.length === 0) {
+      return
+    }
+    if (normalized.length === 1) {
+      parent.insertBefore(normalized[0], referenceNode ?? null)
+      return
+    }
+
+    const fragment = createFragmentForContext(this.parentNode)
+    for (const node of normalized) {
+      fragment.appendChild(node)
+    }
+    parent.insertBefore(fragment, referenceNode ?? null)
+  }
+
+  replaceWith(...nodes: Array<VirtualNode | string>): void {
+    if (!this.parentNode) {
+      return
+    }
+
+    const parent = this.parentNode as any
+    const normalized = normalizeNodeInputs(this.parentNode, nodes)
+    if (normalized.length === 0) {
+      parent.removeChild(this)
+      return
+    }
+    if (normalized.length === 1) {
+      parent.replaceChild(normalized[0], this)
+      return
+    }
+
+    const fragment = createFragmentForContext(this.parentNode)
+    for (const node of normalized) {
+      fragment.appendChild(node)
+    }
+    parent.replaceChild(fragment, this)
+  }
+
+  remove(): void {
+    if (this.parentNode) {
+      ;(this.parentNode as any).removeChild(this)
+    }
+  }
+
+  isSameNode(other: VirtualNode | null): boolean {
+    return this === other
+  }
+
+  isEqualNode(other: VirtualNode | null): boolean {
+    return nodesAreEqual(this, other)
+  }
+
+  getRootNode(options: { composed?: boolean } = {}): VirtualNode {
+    let current: VirtualNode = this
+    let root: VirtualNode = this
+
+    while (current.parentNode) {
+      const parent = current.parentNode
+      root = parent
+      if (parent.nodeType === DOCUMENT_FRAGMENT_NODE && (parent as any).host && options.composed !== true) {
+        return parent
+      }
+      current = parent
+    }
+
+    return root
   }
 
   contains(other: VirtualNode | null): boolean {

@@ -39,6 +39,7 @@ export { VirtualCommentNode } from './nodes/VirtualCommentNode'
 export { createDocument, VirtualDocument } from './nodes/VirtualDocument'
 // Export DOM classes
 export { VirtualElement } from './nodes/VirtualElement'
+export { VirtualTemplateElement } from './nodes/VirtualTemplateElement'
 export { VirtualSVGElement } from './nodes/VirtualSVGElement'
 // Export types
 export type { EventListener, EventListenerOptions, History, HistoryState, Location, NodeType, VirtualNode } from './nodes/VirtualNode'

@@ -8,18 +8,56 @@ function getObservedAttributes(node: any): string[] {
   return ctor.observedAttributes.map(name => `${name}`.toLowerCase())
 }
 
-function visitElementSubtree(node: VirtualNode, visitor: (node: any) => void): void {
+function getInternalShadowRoot(node: VirtualNode): VirtualNode | null {
+  return (node as any)._getInternalShadowRoot?.() ?? null
+}
+
+function getTemplateContent(node: VirtualNode): VirtualNode | null {
+  return (node as any).tagName === 'TEMPLATE' ? ((node as any).content ?? null) : null
+}
+
+function visitConnectedElementSubtree(node: VirtualNode, visitor: (node: any) => void): void {
   if (node.nodeType === ELEMENT_NODE) {
     visitor(node)
   }
 
+  const shadowRoot = getInternalShadowRoot(node)
+  if (shadowRoot) {
+    visitConnectedElementSubtree(shadowRoot, visitor)
+  }
+
+  if (getTemplateContent(node)) {
+    return
+  }
+
   for (const child of node.childNodes) {
-    visitElementSubtree(child, visitor)
+    visitConnectedElementSubtree(child, visitor)
+  }
+}
+
+function visitOwnedElementSubtree(node: VirtualNode, visitor: (node: any) => void): void {
+  if (node.nodeType === ELEMENT_NODE) {
+    visitor(node)
+  }
+
+  const shadowRoot = getInternalShadowRoot(node)
+  if (shadowRoot) {
+    visitOwnedElementSubtree(shadowRoot, visitor)
+  }
+
+  const templateContent = getTemplateContent(node)
+  if (templateContent) {
+    visitOwnedElementSubtree(templateContent, visitor)
+    return
+  }
+
+  for (const child of node.childNodes) {
+    visitOwnedElementSubtree(child, visitor)
   }
 }
 
 export function invokeConnectedCallback(node: VirtualNode): void {
-  visitElementSubtree(node, (element) => {
+  visitConnectedElementSubtree(node, (element) => {
     if (typeof element.connectedCallback === 'function' && element.isConnected) {
       element.connectedCallback()
     }
@@ -27,7 +65,7 @@ export function invokeConnectedCallback(node: VirtualNode): void {
 }
 
 export function invokeDisconnectedCallback(node: VirtualNode): void {
-  visitElementSubtree(node, (element) => {
+  visitConnectedElementSubtree(node, (element) => {
     if (typeof element.disconnectedCallback === 'function') {
       element.disconnectedCallback()
     }
@@ -39,7 +77,7 @@ export function invokeAdoptedCallback(node: VirtualNode, oldDocument: any, newDo
     return
   }
 
-  visitElementSubtree(node, (element) => {
+  visitOwnedElementSubtree(node, (element) => {
     if (typeof element.adoptedCallback === 'function') {
       element.adoptedCallback()
     }

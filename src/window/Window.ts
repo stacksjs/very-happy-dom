@@ -15,6 +15,7 @@ import { VirtualDocumentFragment } from '../nodes/VirtualDocumentFragment'
 import { VirtualElement } from '../nodes/VirtualElement'
 import { VirtualNodeBase } from '../nodes/VirtualNode'
 import { VirtualSVGElement } from '../nodes/VirtualSVGElement'
+import { VirtualTemplateElement } from '../nodes/VirtualTemplateElement'
 import { VirtualTextNode } from '../nodes/VirtualTextNode'
 import { IntersectionObserver as VeryHappyIntersectionObserver } from '../observers/IntersectionObserver'
 import { MutationObserver as VeryHappyMutationObserver } from '../observers/MutationObserver'
@@ -95,6 +96,7 @@ export class Window extends VirtualEventTarget {
 
   // DOM node constructors
   public Element: typeof VirtualElement = VirtualElement
+  public HTMLTemplateElement: typeof VirtualTemplateElement = VirtualTemplateElement
   public Node: typeof VirtualNodeBase = VirtualNodeBase
   public Text: typeof VirtualTextNode = VirtualTextNode
   public Comment: typeof VirtualCommentNode = VirtualCommentNode

@@ -204,12 +204,21 @@ console.log('\nTest Group 12: Custom Elements - Upgrade Existing DOM')
 {
   const window = new Window()
   let connected = 0
+  const attributeCalls: string[] = []
 
   window.document.body!.innerHTML = '<upgraded-el data-state="ready"></upgraded-el>'
 
   class UpgradedElement extends window.HTMLElement {
+    static get observedAttributes() {
+      return ['data-state']
+    }
+
     connectedCallback() {
       connected++
+    }
+
+    attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null) {
+      attributeCalls.push(`${name}:${oldValue ?? 'null'}:${newValue ?? 'null'}`)
     }
   }
 
@@ -218,6 +227,7 @@ console.log('\nTest Group 12: Custom Elements - Upgrade Existing DOM')
   const upgraded = window.document.querySelector('upgraded-el')
   assert(upgraded instanceof UpgradedElement, 'Existing matching element upgraded after define')
   assert(connected === 1, 'connectedCallback called during upgrade of connected element')
+  assert(attributeCalls.includes('data-state:null:ready'), 'Observed attribute initializes during upgrade')
 
   await window.happyDOM.close()
 }
@@ -268,6 +278,84 @@ console.log('\nTest Group 13: Custom Elements - Live Lifecycle')
 
   await windowA.happyDOM.close()
   await windowB.happyDOM.close()
+}
+
+// Test 14: Direct custom element constructors use the defined tag name
+console.log('\nTest Group 14: Custom Elements - Direct Construction')
+{
+  const window = new Window()
+
+  class ConstructedElement extends window.HTMLElement {}
+
+  window.customElements.define('constructed-element', ConstructedElement as any)
+  const element = new ConstructedElement()
+
+  assert(element.tagName === 'CONSTRUCTED-ELEMENT', 'Direct custom element constructor uses the registered tag name')
+
+  await window.happyDOM.close()
+}
+
+// Test 15: Custom elements in shadow roots connect with their host
+console.log('\nTest Group 15: Shadow DOM - Custom Element Connectivity')
+{
+  const window = new Window()
+  let connected = 0
+  let disconnected = 0
+
+  class ShadowChildElement extends window.HTMLElement {
+    connectedCallback() {
+      connected++
+    }
+
+    disconnectedCallback() {
+      disconnected++
+    }
+  }
+
+  window.customElements.define('shadow-child-element', ShadowChildElement as any)
+  const host = window.document.createElement('div')
+  const shadow = host.attachShadow({ mode: 'open' })
+  const child = window.document.createElement('shadow-child-element')
+  shadow.appendChild(child)
+
+  assert(connected === 0, 'Shadow custom element stays disconnected until host is connected')
+
+  window.document.body!.appendChild(host)
+  assert(connected === 1, 'Shadow custom element connects when host enters the document')
+
+  window.document.body!.removeChild(host)
+  assert(disconnected === 1, 'Shadow custom element disconnects when host is removed')
+
+  await window.happyDOM.close()
+}
+
+// Test 16: Template elements keep inert document fragments in content
+console.log('\nTest Group 16: Template Element - Content Semantics')
+{
+  const window = new Window()
+  let connected = 0
+
+  class TemplateInnerElement extends window.HTMLElement {
+    connectedCallback() {
+      connected++
+    }
+  }
+
+  window.customElements.define('template-inner-element', TemplateInnerElement as any)
+  const template = window.document.createElement('template') as any
+  template.innerHTML = '<section><template-inner-element></template-inner-element></section>'
+
+  assert(template instanceof window.HTMLTemplateElement, 'Template uses HTMLTemplateElement constructor')
+  assert(template.content instanceof window.DocumentFragment, 'Template exposes a DocumentFragment content root')
+  assert(template.content.querySelector('section') !== null, 'Template content contains parsed descendants')
+  assert(template.outerHTML.includes('<template><section>'), 'Template serializes content between opening and closing tags')
+  assert(connected === 0, 'Custom elements inside template content remain inert before insertion')
+
+  window.document.body!.appendChild(template)
+
+  assert(connected === 0, 'Custom elements inside template content remain inert after template insertion')
+
+  await window.happyDOM.close()
 }
 
 console.log(`\n${'='.repeat(50)}`)

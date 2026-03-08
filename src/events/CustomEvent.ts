@@ -3,6 +3,7 @@ import { VirtualEvent } from './VirtualEvent'
 export interface CustomEventInit {
   bubbles?: boolean
   cancelable?: boolean
+  composed?: boolean
   detail?: any
 }
 

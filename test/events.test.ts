@@ -284,17 +284,45 @@ console.log('\nTest Group 15: Event - Shadow Composed Path')
   const host = window.document.createElement('div')
   const shadow = host.attachShadow({ mode: 'open' })
   const button = window.document.createElement('button')
+  let outsideTarget: any = null
 
   window.document.body!.appendChild(host)
   shadow.appendChild(button)
+  host.addEventListener('ping', (event: any) => outsideTarget = event.target)
 
-  const event = new window.CustomEvent('ping', { bubbles: true })
+  const event = new window.CustomEvent('ping', { bubbles: true, composed: true })
   button.dispatchEvent(event)
   const path = event.composedPath()
 
   assert(path[0] === button, 'Shadow composedPath starts with target')
   assert(path.includes(shadow as any), 'Shadow composedPath includes shadow root')
   assert(path.includes(host as any), 'Shadow composedPath includes host element')
+  assert(outsideTarget === host, 'Shadow event target retargets to host outside the shadow tree')
+
+  await window.happyDOM.close()
+}
+
+// Test 16: Non-composed shadow events stop at the shadow boundary
+console.log('\nTest Group 16: Event - Shadow Boundary')
+{
+  const window = new Window()
+  const host = window.document.createElement('div')
+  const shadow = host.attachShadow({ mode: 'open' })
+  const button = window.document.createElement('button')
+  let hostSeen = false
+
+  window.document.body!.appendChild(host)
+  shadow.appendChild(button)
+  host.addEventListener('ping', () => hostSeen = true)
+
+  const event = new window.CustomEvent('ping', { bubbles: true })
+  button.dispatchEvent(event)
+  const path = event.composedPath()
+
+  assert(path[0] === button, 'Non-composed shadow event path starts with target')
+  assert(path.includes(shadow as any), 'Non-composed shadow event path includes shadow root')
+  assert(!path.includes(host as any), 'Non-composed shadow event path stops before host')
+  assert(hostSeen === false, 'Non-composed shadow event does not escape to host listeners')
 
   await window.happyDOM.close()
 }

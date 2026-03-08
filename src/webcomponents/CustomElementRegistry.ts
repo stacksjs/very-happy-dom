@@ -9,6 +9,17 @@ export interface CustomElementConstructor {
   new (): HTMLElement
 }
 
+const RESERVED_CUSTOM_ELEMENT_NAMES = new Set([
+  'annotation-xml',
+  'color-profile',
+  'font-face',
+  'font-face-src',
+  'font-face-uri',
+  'font-face-format',
+  'font-face-name',
+  'missing-glyph',
+])
+
 export class CustomElementRegistry {
   private _definitions = new Map<string, CustomElementConstructor>()
   private _document: any = null
@@ -18,7 +29,7 @@ export class CustomElementRegistry {
   }[]>()
 
   define(name: string, constructor: CustomElementConstructor, _options?: ElementDefinitionOptions): void {
-    if (!/^[a-z][\\.0-9_a-z]*-[\\.0-9_a-z]*$/.test(name)) {
+    if (!/^[a-z](?:[\.0-9_a-z-]*-)[\.0-9_a-z-]*$/.test(name) || RESERVED_CUSTOM_ELEMENT_NAMES.has(name)) {
       throw new Error(`Failed to execute 'define' on 'CustomElementRegistry': "${name}" is not a valid custom element name`)
     }
 
@@ -26,6 +37,7 @@ export class CustomElementRegistry {
       throw new Error(`Failed to execute 'define' on 'CustomElementRegistry': the name "${name}" has already been used`)
     }
 
+    ;(constructor as any).__veryHappyCustomElementName = name
     this._definitions.set(name, constructor)
     if (this._document) {
       this.upgrade(this._document)
@@ -70,6 +82,7 @@ export class CustomElementRegistry {
         const constructor = this._definitions.get(name)
         if (constructor && !(node instanceof constructor)) {
           Object.setPrototypeOf(node, constructor.prototype)
+          ;(node as any).__veryHappyCustomElementName = name
           for (const [attrName, attrValue] of node.attributes ?? []) {
             invokeAttributeChangedCallback(node, attrName, null, attrValue)
           }
@@ -77,6 +90,11 @@ export class CustomElementRegistry {
             invokeConnectedCallback(node)
           }
         }
+      }
+
+      const internalShadowRoot = node?._getInternalShadowRoot?.()
+      if (internalShadowRoot) {
+        visit(internalShadowRoot)
       }
 
       for (const child of node?.childNodes ?? []) {
@@ -94,6 +112,11 @@ interface ElementDefinitionOptions {
 
 // Simplified HTMLElement for custom elements
 export class HTMLElement extends VirtualElement {
+  constructor(tagName?: string) {
+    const ctor = new.target as any
+    super(tagName || ctor.__veryHappyCustomElementName || 'div')
+  }
+
   connectedCallback?(): void
   disconnectedCallback?(): void
   attributeChangedCallback?(name: string, oldValue: string | null, newValue: string | null): void

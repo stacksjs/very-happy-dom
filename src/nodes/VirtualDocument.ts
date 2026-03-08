@@ -10,6 +10,7 @@ import { VirtualCommentNode } from './VirtualCommentNode'
 import { VirtualDocumentFragment } from './VirtualDocumentFragment'
 import { VirtualElement } from './VirtualElement'
 import { VirtualSVGElement } from './VirtualSVGElement'
+import { VirtualTemplateElement } from './VirtualTemplateElement'
 import { VirtualTextNode } from './VirtualTextNode'
 import { DOCUMENT_NODE, ELEMENT_NODE, VirtualNodeBase } from './VirtualNode'
 import { appendNode, setOwnerDocumentRecursive } from './tree-operations'
@@ -294,6 +295,12 @@ export class VirtualDocument extends VirtualNodeBase {
       el.ownerDocument = this
       return el
     }
+    if (tagName.toLowerCase() === 'template') {
+      const el = new VirtualTemplateElement()
+      el.ownerDocument = this
+      el.content.ownerDocument = this
+      return el
+    }
     const customElement = this.defaultView?.customElements?.get?.(tagName.toLowerCase())
     const el = customElement ? new customElement(tagName) : new VirtualElement(tagName)
     el.ownerDocument = this
@@ -314,11 +321,15 @@ export class VirtualDocument extends VirtualNodeBase {
   }
 
   createTextNode(text: string): VirtualTextNode {
-    return new VirtualTextNode(text)
+    const node = new VirtualTextNode(text)
+    node.ownerDocument = this
+    return node
   }
 
   createComment(text: string): VirtualCommentNode {
-    return new VirtualCommentNode(text)
+    const node = new VirtualCommentNode(text)
+    node.ownerDocument = this
+    return node
   }
 
   createDocumentFragment(): VirtualDocumentFragment {

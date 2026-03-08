@@ -2,6 +2,76 @@ import type { VirtualElement } from '../nodes/VirtualElement'
 import { DOCUMENT_NODE, ELEMENT_NODE, TEXT_NODE, type VirtualNode } from '../nodes/VirtualNode'
 
 /**
+ * Splits a CSS selector list into individual selectors.
+ *
+ * @param selector - CSS selector list (e.g., 'div, p, .class')
+ * @returns Array of individual selectors
+ */
+function splitSelectorList(selector: string): string[] {
+  const parts: string[] = []
+  let current = ''
+  let bracketDepth = 0
+  let parenDepth = 0
+
+  for (let i = 0; i < selector.length; i++) {
+    const char = selector[i]
+    if (char === '[') {
+      bracketDepth++
+    }
+    else if (char === ']') {
+      bracketDepth = Math.max(0, bracketDepth - 1)
+    }
+    else if (char === '(') {
+      parenDepth++
+    }
+    else if (char === ')') {
+      parenDepth = Math.max(0, parenDepth - 1)
+    }
+
+    if (char === ',' && bracketDepth === 0 && parenDepth === 0) {
+      if (current.trim()) {
+        parts.push(current.trim())
+      }
+      current = ''
+      continue
+    }
+
+    current += char
+  }
+
+  if (current.trim()) {
+    parts.push(current.trim())
+  }
+
+  return parts
+}
+
+/**
+ * Checks if a CSS selector uses the :scope pseudo-class.
+ *
+ * @param selector - CSS selector to analyze
+ * @returns True if the selector uses :scope
+ */
+function selectorUsesScope(selector: string): boolean {
+  return /(^|[^\w-]):scope\b/i.test(selector)
+}
+
+/**
+ * Gets the search roots for a CSS selector.
+ * If the selector uses :scope, the root node itself is used as the search root.
+ *
+ * @param root - The root node to search from (inclusive)
+ * @param selector - CSS selector to analyze
+ * @returns Array of search roots
+ */
+function getSearchRoots(root: VirtualNode, selector: string): VirtualNode[] {
+  if (selectorUsesScope(selector) && root.nodeType === ELEMENT_NODE) {
+    return [root]
+  }
+  return [...root.children]
+}
+
+/**
  * Finds the first element matching the CSS selector starting from the given root node.
  *
  * @param root - The root node to search from (inclusive)
@@ -33,7 +103,7 @@ export function querySelectorEngine(root: VirtualNode, selector: string): Virtua
       const element = node as VirtualElement
       const matches = hasCombinators(selector)
         ? matchesComplexSelector(element, selector, root)
-        : matchesSimpleSelector(element, selector)
+        : matchesSimpleSelector(element, selector, root)
       if (matches) {
         return element
       }
@@ -49,7 +119,7 @@ export function querySelectorEngine(root: VirtualNode, selector: string): Virtua
     return null
   }
 
-  for (const child of root.children) {
+  for (const child of getSearchRoots(root, selector)) {
     const match = findFirst(child)
     if (match) {
       return match
@@ -90,7 +160,7 @@ export function querySelectorAllEngine(root: VirtualNode, selector: string): Vir
 
   // Handle comma-separated selectors
   if (selector.includes(',')) {
-    const selectors = selector.split(',').map(s => s.trim()).filter(Boolean)
+    const selectors = splitSelectorList(selector)
     const allResults: VirtualElement[] = []
     const seen = new Set<VirtualElement>()
 
@@ -120,23 +190,21 @@ export function querySelectorAllEngine(root: VirtualNode, selector: string): Vir
         traverse(child)
       }
     }
-    // Start from children, not root (querySelectorAll should only return descendants)
-    for (const child of root.children) {
+    for (const child of getSearchRoots(root, selector)) {
       traverse(child)
     }
   }
   else {
     // Simple selector - no combinators
     function traverse(node: VirtualNode) {
-      if (node.nodeType === ELEMENT_NODE && matchesSimpleSelector(node as VirtualElement, selector)) {
+      if (node.nodeType === ELEMENT_NODE && matchesSimpleSelector(node as VirtualElement, selector, root)) {
         results.push(node as VirtualElement)
       }
       for (const child of node.children) {
         traverse(child)
       }
     }
-    // Start from children, not root (querySelectorAll should only return descendants)
-    for (const child of root.children) {
+    for (const child of getSearchRoots(root, selector)) {
       traverse(child)
     }
   }
@@ -184,7 +252,7 @@ export function matchesComplexSelector(element: VirtualElement, selector: string
     const part = parts[i]
 
     // Check if current element matches this part's selector (unless we already verified it)
-    if (!skipCheck && !matchesSimpleSelector(currentElement, part.selector)) {
+    if (!skipCheck && !matchesSimpleSelector(currentElement, part.selector, root)) {
       return false
     }
     skipCheck = false
@@ -224,7 +292,7 @@ export function matchesComplexSelector(element: VirtualElement, selector: string
         let sibling: VirtualElement | null = currentElement.previousElementSibling
 
         while (sibling) {
-          if (matchesSimpleSelector(sibling, previousPart.selector)) {
+          if (matchesSimpleSelector(sibling, previousPart.selector, root)) {
             currentElement = sibling
             found = true
             break
@@ -249,14 +317,14 @@ export function matchesComplexSelector(element: VirtualElement, selector: string
         while (ancestor && ancestor.nodeType !== DOCUMENT_NODE) {
           // Stop if we've reached the root
           if (ancestor === root) {
-            if (root.nodeType === ELEMENT_NODE && matchesSimpleSelector(root as VirtualElement, previousPart.selector)) {
+            if (root.nodeType === ELEMENT_NODE && matchesSimpleSelector(root as VirtualElement, previousPart.selector, root)) {
               currentElement = root as VirtualElement
               found = true
             }
             break
           }
 
-          if (ancestor.nodeType === ELEMENT_NODE && matchesSimpleSelector(ancestor, previousPart.selector)) {
+          if (ancestor.nodeType === ELEMENT_NODE && matchesSimpleSelector(ancestor, previousPart.selector, root)) {
             currentElement = ancestor
             found = true
             break
@@ -392,6 +460,7 @@ export function parseComplexSelector(selector: string): Array<{ selector: string
  *
  * @param element - The element to test
  * @param selector - Simple CSS selector (no combinators)
+ * @param scopeRoot - Optional scope root for :scope pseudo-class
  * @returns True if the element matches all parts of the selector
  *
  * @example
@@ -399,7 +468,7 @@ export function parseComplexSelector(selector: string): Array<{ selector: string
  * matchesSimpleSelector(element, 'button.primary[disabled]')
  * ```
  */
-export function matchesSimpleSelector(element: VirtualElement, selector: string): boolean {
+export function matchesSimpleSelector(element: VirtualElement, selector: string, scopeRoot?: VirtualNode): boolean {
   // Handle universal selector
   if (selector === '*') {
     return true
@@ -416,7 +485,7 @@ export function matchesSimpleSelector(element: VirtualElement, selector: string)
   const idMatch = selectorWithoutAttr.match(/#([\w-]+)/)
   const classMatches = selectorWithoutAttr.match(/\.([\w-]+)/g)
   const attrMatches = selectorWithoutPseudo.match(/\[([^\]]+)\]/g)
-  const pseudoMatches = selector.match(/:([a-z-]+)(\([^)]*\))?/gi)
+  const pseudoMatches = selector.match(/:([a-z-]+)(\(([^)]*)\))?/gi)
 
   // Check tag name
   if (tagMatch && tagMatch[1].toLowerCase() !== element.tagName.toLowerCase()) {
@@ -452,7 +521,7 @@ export function matchesSimpleSelector(element: VirtualElement, selector: string)
   // Check pseudo-classes
   if (pseudoMatches) {
     for (const pseudoMatch of pseudoMatches) {
-      if (!matchesPseudoClass(element, pseudoMatch)) {
+      if (!matchesPseudoClass(element, pseudoMatch, scopeRoot)) {
         return false
       }
     }
@@ -476,6 +545,9 @@ export function matchesSimpleSelector(element: VirtualElement, selector: string)
  * - `:nth-of-type(n)` - Nth element of its type (supports An+B notation)
  * - `:nth-last-of-type(n)` - Nth element of its type from the end
  * - `:not(selector)` - Elements that don't match the selector
+ * - `:is(selector)` - Elements that match the selector
+ * - `:where(selector)` - Elements that match the selector
+ * - `:scope` - Elements that are the scope root
  * - `:disabled` - Elements with disabled attribute
  * - `:enabled` - Elements without disabled attribute
  * - `:checked` - Elements with checked attribute
@@ -483,9 +555,10 @@ export function matchesSimpleSelector(element: VirtualElement, selector: string)
  *
  * @param element - The element to test
  * @param pseudo - Pseudo-class selector (e.g., ':first-child', ':nth-child(2n+1)')
+ * @param scopeRoot - Optional scope root for :scope pseudo-class
  * @returns True if the element matches the pseudo-class
  */
-export function matchesPseudoClass(element: VirtualElement, pseudo: string): boolean {
+export function matchesPseudoClass(element: VirtualElement, pseudo: string, scopeRoot?: VirtualNode): boolean {
   const pseudoMatch = pseudo.match(/:([a-z-]+)(\(([^)]*)\))?/i)
   if (!pseudoMatch) {
     throw new Error(`Invalid pseudo-class selector: "${pseudo}"`)
@@ -537,8 +610,19 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string): boo
       if (!pseudoArg)
         return false
         // Recursively check if element does NOT match the selector inside :not()
-      return !matchesSimpleSelector(element, pseudoArg)
+      return !splitSelectorList(pseudoArg).some(part => matchesSimpleSelector(element, part, scopeRoot))
     }
+
+    case 'is':
+    case 'where':
+    {
+      if (!pseudoArg)
+        return false
+      return splitSelectorList(pseudoArg).some(part => matchesSimpleSelector(element, part, scopeRoot))
+    }
+
+    case 'scope':
+      return scopeRoot === element
 
     case 'disabled':
       return element.hasAttribute('disabled')
@@ -658,7 +742,7 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string): boo
       if (!pseudoArg || !element.parentNode)
         return false
       const siblings = element.parentNode.children.filter(
-        child => child.nodeType === 1 && (child as VirtualElement).tagName === element.tagName,
+        child => child.nodeType === ELEMENT_NODE && (child as VirtualElement).tagName === element.tagName,
       )
       const index = siblings.indexOf(element)
       if (index === -1)
@@ -679,7 +763,7 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string): boo
     }
 
     default:
-      throw new Error(`Unsupported pseudo-class: ":${pseudoName}". Supported pseudo-classes are: :first-child, :last-child, :first-of-type, :last-of-type, :only-child, :only-of-type, :nth-child(), :nth-last-child(), :nth-of-type(), :nth-last-of-type(), :not(), :disabled, :enabled, :checked, :empty`)
+      throw new Error(`Unsupported pseudo-class: ":${pseudoName}". Supported pseudo-classes are: :first-child, :last-child, :first-of-type, :last-of-type, :only-child, :only-of-type, :nth-child(), :nth-last-child(), :nth-of-type(), :nth-last-of-type(), :not(), :is(), :where(), :scope, :disabled, :enabled, :checked, :empty`)
   }
 }
 
@@ -693,6 +777,7 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string): boo
  * - `[attr$="value"]` - Ends with
  * - `[attr*="value"]` - Contains substring
  * - `[attr~="word"]` - Contains word (space-separated)
+ * - `[attr|="value"]` - Starts with value followed by optional hyphen
  *
  * @param element - The element to test
  * @param attrSelector - Attribute selector content (without the brackets)
@@ -709,40 +794,46 @@ export function matchesAttributeSelector(element: VirtualElement, attrSelector: 
     return element.hasAttribute(attrSelector)
   }
 
-  const parseAttributeMatch = (selector: string, operator: string): [string, string] | null => {
+  const parseAttributeMatch = (selector: string, operator: string): [string, string, string | null] | null => {
     const escapedOperator = operator.replace(/([\^$*~|])/g, '\\$1')
     const match = selector.match(new RegExp(`^([a-z0-9:-]+)${escapedOperator}(["'])(.*?)\\2(?:\\s+[is])?$`, 'i'))
     if (!match) {
       return null
     }
-    return [match[1], match[3]]
+    const flagMatch = selector.match(/\s+([is])$/i)
+    return [match[1], match[3], flagMatch ? flagMatch[1].toLowerCase() : null]
+  }
+
+  const normalizeAttributeValue = (value: string, flag: string | null): string => {
+    return flag === 'i' ? value.toLowerCase() : value
   }
 
   // [attr="value"] - exact match
   const exactMatch = parseAttributeMatch(attrSelector, '=')
   if (exactMatch) {
-    return element.getAttribute(exactMatch[0]) === exactMatch[1]
+    const value = element.getAttribute(exactMatch[0])
+    return value !== null && normalizeAttributeValue(value, exactMatch[2]) === normalizeAttributeValue(exactMatch[1], exactMatch[2])
   }
 
   // [attr^="value"] - starts with
   const startsWithMatch = parseAttributeMatch(attrSelector, '^=')
   if (startsWithMatch) {
     const value = element.getAttribute(startsWithMatch[0])
-    return value !== null && value.startsWith(startsWithMatch[1])
+    return value !== null && normalizeAttributeValue(value, startsWithMatch[2]).startsWith(normalizeAttributeValue(startsWithMatch[1], startsWithMatch[2]))
   }
 
   // [attr$="value"] - ends with
   const endsWithMatch = parseAttributeMatch(attrSelector, '$=')
   if (endsWithMatch) {
     const value = element.getAttribute(endsWithMatch[0])
-    return value !== null && value.endsWith(endsWithMatch[1])
+    return value !== null && normalizeAttributeValue(value, endsWithMatch[2]).endsWith(normalizeAttributeValue(endsWithMatch[1], endsWithMatch[2]))
   }
 
   // [attr*="value"] - contains
   const containsMatch = parseAttributeMatch(attrSelector, '*=')
   if (containsMatch) {
     const value = element.getAttribute(containsMatch[0])
-    return value !== null && value.includes(containsMatch[1])
+    return value !== null && normalizeAttributeValue(value, containsMatch[2]).includes(normalizeAttributeValue(containsMatch[1], containsMatch[2]))
   }
 
   // [attr~="value"] - contains word
@@ -751,14 +842,19 @@ export function matchesAttributeSelector(element: VirtualElement, attrSelector: 
     const value = element.getAttribute(wordMatch[0])
     if (value === null)
       return false
-    const words = value.split(/\s+/)
-    return words.includes(wordMatch[1])
+    const words = normalizeAttributeValue(value, wordMatch[2]).split(/\s+/)
+    return words.includes(normalizeAttributeValue(wordMatch[1], wordMatch[2]))
   }
 
   const dashMatch = parseAttributeMatch(attrSelector, '|=')
   if (dashMatch) {
     const value = element.getAttribute(dashMatch[0])
-    return value !== null && (value === dashMatch[1] || value.startsWith(`${dashMatch[1]}-`))
+    if (value === null) {
+      return false
+    }
+    const normalizedValue = normalizeAttributeValue(value, dashMatch[2])
+    const normalizedExpected = normalizeAttributeValue(dashMatch[1], dashMatch[2])
+    return normalizedValue === normalizedExpected || normalizedValue.startsWith(`${normalizedExpected}-`)
   }
 
   return false
