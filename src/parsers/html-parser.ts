@@ -1,6 +1,7 @@
 import type { VirtualNode } from '../nodes/VirtualNode'
 import { VirtualCommentNode } from '../nodes/VirtualCommentNode'
 import { VirtualElement } from '../nodes/VirtualElement'
+import { VirtualSVGElement } from '../nodes/VirtualSVGElement'
 import { VirtualTextNode } from '../nodes/VirtualTextNode'
 
 /**
@@ -23,7 +24,7 @@ export function parseHTML(html: string): VirtualNode[] {
     }
   }
 
-  function parseTag(): VirtualElement | VirtualCommentNode | null {
+  function parseTag(inSvg = false): VirtualElement | VirtualCommentNode | null {
     if (peek() !== '<')
       return null
 
@@ -72,7 +73,8 @@ export function parseHTML(html: string): VirtualNode[] {
       throw new Error('Invalid tag name')
     }
 
-    const element = new VirtualElement(tagName)
+    const isSvgElement = inSvg || tagName.toLowerCase() === 'svg'
+    const element = isSvgElement ? new VirtualSVGElement(tagName) : new VirtualElement(tagName)
 
     // Parse attributes
     while (peek() && peek() !== '>' && peek() !== '/') {
@@ -139,7 +141,7 @@ export function parseHTML(html: string): VirtualNode[] {
     }
 
     // Parse children
-    const children = parseNodes(tagName)
+    const children = parseNodes(tagName, isSvgElement)
     for (const child of children) {
       element.appendChild(child)
     }
@@ -159,7 +161,7 @@ export function parseHTML(html: string): VirtualNode[] {
     return new VirtualTextNode(text)
   }
 
-  function parseNodes(closingTag?: string): VirtualNode[] {
+  function parseNodes(closingTag?: string, inSvg = false): VirtualNode[] {
     const children: VirtualNode[] = []
 
     while (pos < html.length) {
@@ -170,7 +172,7 @@ export function parseHTML(html: string): VirtualNode[] {
       }
 
       if (peek() === '<') {
-        const node = parseTag()
+        const node = parseTag(inSvg)
         if (node === null) {
           // DOCTYPE or closing tag - skip it and continue
           // (expected closing tags are already handled above)

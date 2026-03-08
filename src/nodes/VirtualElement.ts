@@ -234,6 +234,14 @@ export class VirtualElement implements VirtualNode {
     return 2
   }
 
+  // parentElement - returns parent if it's an element
+  get parentElement(): VirtualElement | null {
+    if (this.parentNode && this.parentNode.nodeType === 'element') {
+      return this.parentNode as VirtualElement
+    }
+    return null
+  }
+
   // firstChild - returns first child of any type
   get firstChild(): VirtualNode | null {
     return this.childNodes.length > 0 ? this.childNodes[0] : null
