@@ -151,8 +151,59 @@ console.log('\nTest Group 5: Advanced Pseudo-Class Scenarios')
   await cleanupWindow(window)
 }
 
-// Test 6: Complex DOM manipulation
-console.log('\nTest Group 6: Complex DOM Manipulation')
+// Test 6: Attribute selector flags
+console.log('\nTest Group 6: Attribute Selector Flags')
+{
+  const window = createTestWindow()
+  window.document.body!.innerHTML = `
+    <div data-state="READY"></div>
+    <div data-state="idle"></div>
+  `
+
+  const exactInsensitive = window.document.querySelectorAll('[data-state="ready" i]')
+  const containsInsensitive = window.document.querySelectorAll('[data-state*="ead" i]')
+
+  assert(exactInsensitive.length === 1, 'Case-insensitive exact attribute selector works')
+  assert(containsInsensitive.length === 1, 'Case-insensitive contains attribute selector works')
+
+  await cleanupWindow(window)
+}
+
+// Test 7: Parser recovery and namespace handling
+console.log('\nTest Group 7: Parser Recovery and Namespaces')
+{
+  const window = createTestWindow()
+  window.document.body!.innerHTML = `
+    <ul><li>One<li>Two</ul>
+    <table id="t1"><tr><td>A</td></tr></table>
+    <table id="t2"><td>B</td></table>
+    <svg><circle></circle></svg>
+    <math><mi>x</mi></math>
+  `
+
+  const listItems = window.document.querySelectorAll('li')
+  const tableOne = window.document.getElementById('t1')
+  const tableTwo = window.document.getElementById('t2')
+  const svg = window.document.querySelector('svg')
+  const circle = window.document.querySelector('circle')
+  const math = window.document.querySelector('math')
+  const mi = window.document.querySelector('mi')
+
+  assert(listItems.length === 2, 'Implicit li end tags recover into sibling list items')
+  assert(listItems[0]?.textContent === 'One', 'First implicit list item parsed correctly')
+  assert(listItems[1]?.textContent === 'Two', 'Second implicit list item parsed correctly')
+  assert(tableOne?.querySelector('tbody > tr > td')?.textContent === 'A', 'Table rows are wrapped in tbody during parsing')
+  assert(tableTwo?.querySelector('tbody > tr > td')?.textContent === 'B', 'Direct table cells are normalized into tbody and tr wrappers')
+  assert(svg?.namespaceURI === 'http://www.w3.org/2000/svg', 'SVG root uses SVG namespace')
+  assert(circle?.namespaceURI === 'http://www.w3.org/2000/svg', 'SVG descendants keep SVG namespace')
+  assert(math?.namespaceURI === 'http://www.w3.org/1998/Math/MathML', 'Math root uses MathML namespace')
+  assert(mi?.namespaceURI === 'http://www.w3.org/1998/Math/MathML', 'Math descendants keep MathML namespace')
+
+  await cleanupWindow(window)
+}
+
+// Test 8: Complex DOM manipulation
+console.log('\nTest Group 8: Complex DOM Manipulation')
 {
   const window = createTestWindow()
   const parent = window.document.createElement('div')
@@ -188,8 +239,8 @@ console.log('\nTest Group 6: Complex DOM Manipulation')
   await cleanupWindow(window)
 }
 
-// Test 7: Browser context edge cases
-console.log('\nTest Group 7: Browser Context Operations')
+// Test 9: Browser context edge cases
+console.log('\nTest Group 9: Browser Context Operations')
 {
   const browser = createTestBrowser()
   const page1 = browser.newPage()
@@ -213,8 +264,8 @@ console.log('\nTest Group 7: Browser Context Operations')
   await browser.close()
 }
 
-// Test 8: Event propagation with multiple listeners
-console.log('\nTest Group 8: Event Propagation Edge Cases')
+// Test 10: Event propagation with multiple listeners
+console.log('\nTest Group 10: Event Propagation Edge Cases')
 {
   const window = createTestWindow()
   const parent = window.document.createElement('div')
@@ -250,8 +301,8 @@ console.log('\nTest Group 8: Event Propagation Edge Cases')
   await cleanupWindow(window)
 }
 
-// Test 9: Memory-intensive operations
-console.log('\nTest Group 9: Performance and Memory')
+// Test 11: Memory-intensive operations
+console.log('\nTest Group 11: Performance and Memory')
 {
   const window = createTestWindow()
 
@@ -277,8 +328,8 @@ console.log('\nTest Group 9: Performance and Memory')
   await cleanupWindow(window)
 }
 
-// Test 10: XPath with complex expressions
-console.log('\nTest Group 10: Advanced XPath Expressions')
+// Test 12: XPath with complex expressions
+console.log('\nTest Group 12: Advanced XPath Expressions')
 {
   const window = createTestWindow()
   window.document.body!.innerHTML = `

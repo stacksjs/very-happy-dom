@@ -9,11 +9,33 @@ export interface ICookie {
   value?: string
   originURL: string
   domain?: string
+  hostOnly?: boolean
   path?: string
   expires?: Date
   httpOnly?: boolean
   secure?: boolean
   sameSite?: CookieSameSiteEnum
+}
+
+function domainMatches(hostname: string, cookieDomain: string, hostOnly: boolean): boolean {
+  if (hostOnly) {
+    return hostname === cookieDomain
+  }
+
+  return hostname === cookieDomain || hostname.endsWith(`.${cookieDomain}`)
+}
+
+function pathMatches(pathname: string, cookiePath: string): boolean {
+  if (pathname === cookiePath) {
+    return true
+  }
+  if (!pathname.startsWith(cookiePath)) {
+    return false
+  }
+  if (cookiePath.endsWith('/')) {
+    return true
+  }
+  return pathname[cookiePath.length] === '/'
 }
 
 /**
@@ -27,19 +49,27 @@ export class CookieContainer {
    */
   addCookies(cookies: ICookie[]): void {
     for (const cookie of cookies) {
+      const normalizedDomain = (cookie.domain || new URL(cookie.originURL).hostname).replace(/^\./, '').toLowerCase()
+      const normalizedPath = cookie.path || '/'
+
       // Remove existing cookie with same key, domain, and path
       this._cookies = this._cookies.filter(c =>
         !(c.key === cookie.key
-          && (c.domain || new URL(c.originURL).hostname) === (cookie.domain || new URL(cookie.originURL).hostname)
-          && (c.path || '/') === (cookie.path || '/')),
+          && (c.domain || new URL(c.originURL).hostname).toLowerCase() === normalizedDomain
+          && (c.path || '/') === normalizedPath),
       )
+
+      if (cookie.expires && cookie.expires <= new Date()) {
+        continue
+      }
 
       // Add new cookie
       this._cookies.push({
         ...cookie,
         value: cookie.value || '',
-        domain: cookie.domain || new URL(cookie.originURL).hostname,
-        path: cookie.path || '/',
+        domain: normalizedDomain,
+        hostOnly: cookie.hostOnly ?? !cookie.domain,
+        path: normalizedPath,
         expires: cookie.expires,
         httpOnly: cookie.httpOnly || false,
         secure: cookie.secure || false,
@@ -53,7 +83,7 @@ export class CookieContainer {
    */
   getCookies(url: string, includeHttpOnly = false): ICookie[] {
     const parsedURL = new URL(url)
-    const hostname = parsedURL.hostname
+    const hostname = parsedURL.hostname.toLowerCase()
     const pathname = parsedURL.pathname
     const isSecure = parsedURL.protocol === 'https:'
     const now = new Date()
@@ -75,19 +105,19 @@ export class CookieContainer {
       }
 
       // Check domain match
-      const cookieDomain = cookie.domain || new URL(cookie.originURL).hostname
-      if (!hostname.endsWith(cookieDomain) && hostname !== cookieDomain) {
+      const cookieDomain = (cookie.domain || new URL(cookie.originURL).hostname).toLowerCase()
+      if (!domainMatches(hostname, cookieDomain, cookie.hostOnly === true)) {
         return false
       }
 
       // Check path match
       const cookiePath = cookie.path || '/'
-      if (!pathname.startsWith(cookiePath)) {
+      if (!pathMatches(pathname, cookiePath)) {
         return false
       }
 
       return true
-    })
+    }).sort((left, right) => (right.path?.length || 0) - (left.path?.length || 0))
   }
 
   /**

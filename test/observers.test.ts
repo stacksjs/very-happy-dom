@@ -217,6 +217,88 @@ console.log('\nTest Group 9: MutationObserver - CharacterData Records')
   await window.happyDOM.close()
 }
 
+console.log('\nTest Group 9b: MutationObserver - Option Normalization & Microtask Batching')
+{
+  const window = new Window()
+  const element = window.document.createElement('div')
+  let callbackCount = 0
+  let delivered: any[] = []
+
+  const observer = new window.MutationObserver((mutations) => {
+    callbackCount++
+    delivered = mutations
+  })
+
+  observer.observe(element, {
+    attributeOldValue: true,
+    attributeFilter: ['data-test'],
+  })
+
+  element.setAttribute('data-test', 'one')
+  element.setAttribute('data-test', 'two')
+  await Promise.resolve()
+
+  assert(callbackCount === 1, 'Mutations batch into a single microtask callback')
+  assert(delivered.length === 2, 'Normalized attribute observation records filtered mutations')
+  assert(delivered[1]?.oldValue === 'one', 'attributeOldValue is preserved after normalization')
+
+  observer.disconnect()
+  await window.happyDOM.close()
+}
+
+console.log('\nTest Group 9c: MutationObserver - Invalid Observe Options')
+{
+  const window = new Window()
+  const element = window.document.createElement('div')
+  const observer = new window.MutationObserver(() => {})
+
+  let emptyOptionsThrew = false
+  let invalidAttributeOldValueThrew = false
+
+  try {
+    observer.observe(element, {})
+  }
+  catch {
+    emptyOptionsThrew = true
+  }
+
+  try {
+    observer.observe(element, { attributes: false, attributeOldValue: true })
+  }
+  catch {
+    invalidAttributeOldValueThrew = true
+  }
+
+  assert(emptyOptionsThrew === true, 'observe() rejects empty option sets')
+  assert(invalidAttributeOldValueThrew === true, 'observe() rejects attributeOldValue when attributes is false')
+
+  observer.disconnect()
+  await window.happyDOM.close()
+}
+
+console.log('\nTest Group 9d: MutationObserver - takeRecords Drains Pending Callback Queue')
+{
+  const window = new Window()
+  const element = window.document.createElement('div')
+  let callbackCount = 0
+
+  const observer = new window.MutationObserver(() => {
+    callbackCount++
+  })
+
+  observer.observe(element, { attributes: true })
+  element.setAttribute('data-test', 'value')
+
+  const records = observer.takeRecords()
+  await Promise.resolve()
+
+  assert(records.length === 1, 'takeRecords synchronously returns queued mutation')
+  assert(callbackCount === 0, 'Scheduled callback sees drained queue and does not fire with empty records')
+
+  observer.disconnect()
+  await window.happyDOM.close()
+}
+
 // Test 7: IntersectionObserver - basic setup
 console.log('\nTest Group 10: IntersectionObserver - Basic Setup')
 {

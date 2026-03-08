@@ -69,6 +69,22 @@ export {
 export { createStorage, Storage } from './storage/Storage'
 
 export { TimerManager } from './timers/TimerManager'
+export {
+  FILTER_ACCEPT,
+  FILTER_REJECT,
+  FILTER_SKIP,
+  NodeFilter,
+  NodeIterator,
+  Range,
+  SHOW_ALL,
+  SHOW_COMMENT,
+  SHOW_DOCUMENT,
+  SHOW_DOCUMENT_FRAGMENT,
+  SHOW_ELEMENT,
+  SHOW_TEXT,
+  TreeWalker,
+} from './traversal'
+export type { NodeFilterConstants, NodeFilterInput } from './traversal'
 // Export Web Components
 export { CustomElementRegistry, HTMLElement } from './webcomponents/CustomElementRegistry'
 

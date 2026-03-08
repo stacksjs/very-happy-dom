@@ -225,6 +225,10 @@ export abstract class VirtualNodeBase extends VirtualEventTarget implements Virt
     return this.childNodes.length > 0
   }
 
+  get baseURI(): string {
+    return this.ownerDocument?.baseURI || ''
+  }
+
   append(...nodes: Array<VirtualNode | string>): void {
     const parent = this as any
     if (typeof parent.appendChild !== 'function') {

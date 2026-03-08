@@ -4,6 +4,7 @@ import { CookieContainer, CookieSameSiteEnum } from '../browser/CookieContainer'
 import { VirtualEvent } from '../events/VirtualEvent'
 import type { History, HistoryState, Location, NodeKind, NodeType, VirtualNode } from './VirtualNode'
 import { parseHTML } from '../parsers/html-parser'
+import { NodeIterator, Range, TreeWalker, type NodeFilterInput } from '../traversal'
 import { XPathEvaluator } from '../xpath/XPathEvaluator'
 import { XPathResultType } from '../xpath/XPathResult'
 import { VirtualCommentNode } from './VirtualCommentNode'
@@ -27,6 +28,20 @@ export class VirtualDocument extends VirtualNodeBase {
   location: Location
   history: History
   title = ''
+
+  get URL(): string {
+    return this.location.href
+  }
+
+  get documentURI(): string {
+    return this.URL
+  }
+
+  get baseURI(): string {
+    const baseElement = this.head?.querySelector('base[href]') || this.querySelector('base[href]')
+    const href = baseElement?.getAttribute('href')
+    return href ? this._resolveAgainstDocumentURL(href) : this._getDocumentURLForResolution()
+  }
 
   private _historyStack: HistoryState[] = []
   private _historyIndex = -1
@@ -153,6 +168,12 @@ export class VirtualDocument extends VirtualNodeBase {
   private _createLocation(): Location {
     const location = {} as Location
 
+    const mutateLocation = (mutator: (url: URL) => void): void => {
+      const parsed = new URL(this._getDocumentURLForResolution(), 'http://localhost/')
+      mutator(parsed)
+      this._updateLocation(parsed.href)
+    }
+
     Object.defineProperties(location, {
       href: {
         enumerable: true,
@@ -161,13 +182,41 @@ export class VirtualDocument extends VirtualNodeBase {
           this._updateLocation(`${value}`)
         },
       },
-      protocol: { enumerable: true, get: () => this._locationState.protocol },
-      host: { enumerable: true, get: () => this._locationState.host },
-      hostname: { enumerable: true, get: () => this._locationState.hostname },
-      port: { enumerable: true, get: () => this._locationState.port },
-      pathname: { enumerable: true, get: () => this._locationState.pathname },
-      search: { enumerable: true, get: () => this._locationState.search },
-      hash: { enumerable: true, get: () => this._locationState.hash },
+      protocol: {
+        enumerable: true,
+        get: () => this._locationState.protocol,
+        set: (value: string) => mutateLocation(url => { url.protocol = value.endsWith(':') ? value : `${value}:` }),
+      },
+      host: {
+        enumerable: true,
+        get: () => this._locationState.host,
+        set: (value: string) => mutateLocation(url => { url.host = value }),
+      },
+      hostname: {
+        enumerable: true,
+        get: () => this._locationState.hostname,
+        set: (value: string) => mutateLocation(url => { url.hostname = value }),
+      },
+      port: {
+        enumerable: true,
+        get: () => this._locationState.port,
+        set: (value: string) => mutateLocation(url => { url.port = value }),
+      },
+      pathname: {
+        enumerable: true,
+        get: () => this._locationState.pathname,
+        set: (value: string) => mutateLocation(url => { url.pathname = value.startsWith('/') ? value : `/${value}` }),
+      },
+      search: {
+        enumerable: true,
+        get: () => this._locationState.search,
+        set: (value: string) => mutateLocation(url => { url.search = value ? (value.startsWith('?') ? value : `?${value}`) : '' }),
+      },
+      hash: {
+        enumerable: true,
+        get: () => this._locationState.hash,
+        set: (value: string) => mutateLocation(url => { url.hash = value ? (value.startsWith('#') ? value : `#${value}`) : '' }),
+      },
       origin: { enumerable: true, get: () => this._locationState.origin },
     })
 
@@ -183,10 +232,22 @@ export class VirtualDocument extends VirtualNodeBase {
     return location
   }
 
+  private _getDocumentURLForResolution(): string {
+    return this.location.href || this.defaultView?.location?.href || 'http://localhost/'
+  }
+
+  private _resolveAgainstDocumentURL(url: string): string {
+    try {
+      return new URL(url, this._getDocumentURLForResolution()).href
+    }
+    catch {
+      return url
+    }
+  }
+
   private _resolveLocationString(url: string): string {
     try {
-      const base = this.location.href || this.defaultView?.location?.href || 'http://localhost/'
-      return new URL(url, base).href
+      return new URL(url, this._getDocumentURLForResolution()).href
     }
     catch {
       return url
@@ -253,7 +314,7 @@ export class VirtualDocument extends VirtualNodeBase {
   }
 
   private _getCookieOrigin(): string {
-    const href = this.location.href || this.defaultView?.location?.href || 'http://localhost/'
+    const href = this._getDocumentURLForResolution()
     if (!href || href === 'about:blank' || href.startsWith('about:')) {
       return 'http://localhost/'
     }
@@ -267,6 +328,30 @@ export class VirtualDocument extends VirtualNodeBase {
     catch {
       return 'http://localhost/'
     }
+  }
+
+  private _getDefaultCookiePath(): string {
+    let pathname = '/'
+    try {
+      pathname = new URL(this._getDocumentURLForResolution(), 'http://localhost/').pathname || '/'
+    }
+    catch {
+      pathname = this.location.pathname || '/'
+    }
+
+    if (!pathname.startsWith('/')) {
+      return '/'
+    }
+    if (pathname === '/') {
+      return '/'
+    }
+
+    const lastSlash = pathname.lastIndexOf('/')
+    if (lastSlash <= 0) {
+      return '/'
+    }
+
+    return pathname.slice(0, lastSlash + 1)
   }
 
   get textContent(): string {
@@ -336,6 +421,18 @@ export class VirtualDocument extends VirtualNodeBase {
     const fragment = new VirtualDocumentFragment()
     fragment.ownerDocument = this
     return fragment
+  }
+
+  createTreeWalker(root: VirtualNode, whatToShow = 0xFFFFFFFF, filter: NodeFilterInput = null): TreeWalker {
+    return new TreeWalker(root, whatToShow, filter)
+  }
+
+  createNodeIterator(root: VirtualNode, whatToShow = 0xFFFFFFFF, filter: NodeFilterInput = null): NodeIterator {
+    return new NodeIterator(root, whatToShow, filter)
+  }
+
+  createRange(): Range {
+    return new Range(this)
   }
 
   querySelector(selector: string): VirtualElement | null {
@@ -551,6 +648,8 @@ export class VirtualDocument extends VirtualNodeBase {
       key: name,
       value: cookieValue,
       originURL: this._getCookieOrigin(),
+      path: this._getDefaultCookiePath(),
+      hostOnly: true,
     }
 
     for (const attribute of attributes) {
@@ -575,6 +674,7 @@ export class VirtualDocument extends VirtualNodeBase {
       }
       else if (attributeName === 'domain') {
         cookie.domain = attributeValue.replace(/^\./, '')
+        cookie.hostOnly = false
       }
       else if (attributeName === 'secure') {
         cookie.secure = true

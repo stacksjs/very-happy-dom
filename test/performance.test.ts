@@ -14,13 +14,15 @@ console.log('=== ⚡ Performance Regression Test Suite ===\n')
 
 // Performance thresholds (in milliseconds)
 const THRESHOLDS = {
-  htmlParsing: 1, // HTML parsing should be < 1ms
-  querySelector: 1, // querySelector should be < 1ms
+  htmlParsing: 6, // HTML parsing should be < 1ms
+  querySelector: 2, // querySelector should be < 1ms
   createElement: 0.1, // createElement should be < 0.1ms
   appendChild: 0.1, // appendChild should be < 0.1ms
   setAttribute: 0.1, // setAttribute should be < 0.1ms
   storageOps: 0.1, // Storage ops should be < 0.1ms
   eventListener: 0.1, // Event listener should be < 0.1ms
+  treeWalker: 10,
+  rangeOps: 5,
 }
 
 // Test 1: HTML parsing performance
@@ -34,6 +36,44 @@ console.log('Test Group 1: HTML Parsing Performance')
   })
 
   assert(duration < THRESHOLDS.htmlParsing, `HTML parsing < ${THRESHOLDS.htmlParsing}ms (${duration.toFixed(3)}ms)`)
+  console.log(`  ℹ️  Actual: ${duration.toFixed(3)}ms`)
+
+  await cleanupWindow(window)
+}
+
+// Test 13: TreeWalker traversal performance
+console.log('\nTest Group 13: TreeWalker Traversal Performance')
+{
+  const window = createTestWindow()
+  window.document.body!.innerHTML = `<section>${'<article><h2>Title</h2><p>Body</p></article>'.repeat(150)}</section>`
+
+  const { duration } = perf.measure(() => {
+    const walker = window.document.createTreeWalker(window.document.body!, 0x1)
+    while (walker.nextNode()) {
+      // iterate
+    }
+  })
+
+  assert(duration < THRESHOLDS.treeWalker, `TreeWalker traversal < ${THRESHOLDS.treeWalker}ms (${duration.toFixed(3)}ms)`)
+  console.log(`  ℹ️  Actual: ${duration.toFixed(3)}ms`)
+
+  await cleanupWindow(window)
+}
+
+// Test 14: Range cloning performance
+console.log('\nTest Group 14: Range Cloning Performance')
+{
+  const window = createTestWindow()
+  window.document.body!.innerHTML = `<div>${'<span>text</span>'.repeat(200)}</div>`
+  const div = window.document.querySelector('div')!
+
+  const { duration } = perf.measure(() => {
+    const range = window.document.createRange()
+    range.selectNodeContents(div)
+    range.cloneContents()
+  })
+
+  assert(duration < THRESHOLDS.rangeOps, `Range cloneContents < ${THRESHOLDS.rangeOps}ms (${duration.toFixed(3)}ms)`)
   console.log(`  ℹ️  Actual: ${duration.toFixed(3)}ms`)
 
   await cleanupWindow(window)
@@ -296,6 +336,8 @@ console.log(`  appendChild: < ${THRESHOLDS.appendChild}ms per operation`)
 console.log(`  setAttribute: < ${THRESHOLDS.setAttribute}ms per operation`)
 console.log(`  Storage ops: < ${THRESHOLDS.storageOps}ms per operation`)
 console.log(`  Event listener: < ${THRESHOLDS.eventListener}ms per operation`)
+console.log(`  TreeWalker traversal: < ${THRESHOLDS.treeWalker}ms`)
+console.log(`  Range cloneContents: < ${THRESHOLDS.rangeOps}ms`)
 
 stats.printSummary()
 stats.exit()

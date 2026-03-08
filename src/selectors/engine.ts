@@ -93,7 +93,7 @@ export function querySelectorEngine(root: VirtualNode, selector: string): Virtua
     return null
   }
 
-  if (selector.includes(',')) {
+  if (splitSelectorList(selector).length > 1) {
     const results = querySelectorAllEngine(root, selector)
     return results.length > 0 ? results[0] : null
   }
@@ -159,7 +159,7 @@ export function querySelectorAllEngine(root: VirtualNode, selector: string): Vir
   }
 
   // Handle comma-separated selectors
-  if (selector.includes(',')) {
+  if (splitSelectorList(selector).length > 1) {
     const selectors = splitSelectorList(selector)
     const allResults: VirtualElement[] = []
     const seen = new Set<VirtualElement>()
@@ -224,8 +224,7 @@ export function hasCombinators(selector: string): boolean {
   // Remove content within brackets and pseudo-classes to avoid false positives
   const cleaned = selector
     .replace(/\[[^\]]*\]/g, '') // Remove attribute selectors
-    .replace(/:not\([^)]*\)/g, '') // Remove :not() pseudo-class
-    .replace(/:nth-child\([^)]*\)/g, '') // Remove :nth-child()
+    .replace(/:[a-z-]+\([^)]*\)/gi, '') // Remove functional pseudo-classes
 
   return /[>+~\s]/.test(cleaned)
 }

@@ -225,4 +225,43 @@ describe('Pseudo-class Selectors', () => {
       expect(firstItem?.textContent).toBe('Item 1')
     })
   })
+
+  describe(':scope, :is(), and :where()', () => {
+    test('should match the scoped root element', () => {
+      const doc = createDocument()
+      doc.body!.innerHTML = `
+        <section id="scope-root">
+          <div class="item primary">One</div>
+          <div class="item secondary">Two</div>
+        </section>
+      `
+
+      const root = doc.querySelector('#scope-root')!
+      expect(root.querySelector(':scope > .item.primary')?.textContent).toBe('One')
+      expect(root.querySelectorAll(':scope > .item').length).toBe(2)
+    })
+
+    test('should support grouped selectors in :is()', () => {
+      const doc = createDocument()
+      doc.body!.innerHTML = `
+        <div class="card selected">Card</div>
+        <div class="panel">Panel</div>
+      `
+
+      const result = doc.querySelector('div:is(.selected, .active)')
+      expect(result?.textContent).toBe('Card')
+    })
+
+    test('should support grouped selectors in :where()', () => {
+      const doc = createDocument()
+      doc.body!.innerHTML = `
+        <button class="ghost">Ghost</button>
+        <button class="solid">Solid</button>
+      `
+
+      const results = doc.querySelectorAll('button:where(.ghost, .outline)')
+      expect(results.length).toBe(1)
+      expect(results[0].textContent).toBe('Ghost')
+    })
+  })
 })

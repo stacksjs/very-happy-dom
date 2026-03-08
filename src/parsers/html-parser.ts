@@ -5,6 +5,9 @@ import { VirtualElement } from '../nodes/VirtualElement'
 import { VirtualSVGElement } from '../nodes/VirtualSVGElement'
 import { VirtualTextNode } from '../nodes/VirtualTextNode'
 
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+const MATHML_NAMESPACE = 'http://www.w3.org/1998/Math/MathML'
+
 /**
  * Parse HTML string into virtual DOM nodes
  */
@@ -26,16 +29,17 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
     }
   }
 
-  function createElementNode(tagName: string, inSvg = false): any {
+  function createElementNode(tagName: string, namespaceURI: string | null = null): any {
     if (ownerDocument) {
-      return inSvg
-        ? ownerDocument.createElementNS?.('http://www.w3.org/2000/svg', tagName)
-        : ownerDocument.createElement(tagName)
+      if (namespaceURI) {
+        return ownerDocument.createElementNS?.(namespaceURI, tagName)
+      }
+      return ownerDocument.createElement(tagName)
     }
 
-    const element = inSvg ? new VirtualSVGElement(tagName) : new VirtualElement(tagName)
-    if (ownerDocument) {
-      element.ownerDocument = ownerDocument
+    const element = namespaceURI === SVG_NAMESPACE ? new VirtualSVGElement(tagName) : new VirtualElement(tagName)
+    if (namespaceURI && namespaceURI !== SVG_NAMESPACE) {
+      element.namespaceURI = namespaceURI
     }
     return element
   }
@@ -89,7 +93,105 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
     return text
   }
 
-  function parseTag(inSvg = false): VirtualElement | VirtualCommentNode | null {
+  function peekStartTagName(): string | null {
+    if (peek() !== '<' || html.slice(pos, pos + 2) === '</' || html.slice(pos, pos + 4) === '<!--' || html.slice(pos, pos + 2) === '<!') {
+      return null
+    }
+
+    let index = pos + 1
+    let name = ''
+    while (html[index] && /[a-z0-9-]/i.test(html[index])) {
+      name += html[index]
+      index++
+    }
+    return name ? name.toLowerCase() : null
+  }
+
+  function peekClosingTagName(): string | null {
+    if (html.slice(pos, pos + 2) !== '</') {
+      return null
+    }
+
+    let index = pos + 2
+    let name = ''
+    while (html[index] && /[a-z0-9-]/i.test(html[index])) {
+      name += html[index]
+      index++
+    }
+
+    return name ? name.toLowerCase() : null
+  }
+
+  function shouldImplicitlyClose(currentTag: string, upcomingTag: string | null): boolean {
+    if (!upcomingTag) {
+      return false
+    }
+
+    const closingRules: Record<string, string[]> = {
+      li: ['li'],
+      p: ['address', 'article', 'aside', 'blockquote', 'details', 'div', 'dl', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hgroup', 'hr', 'main', 'menu', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'ul'],
+      dt: ['dt', 'dd'],
+      dd: ['dt', 'dd'],
+      option: ['option', 'optgroup'],
+      thead: ['tbody', 'tfoot'],
+      tbody: ['tbody', 'tfoot'],
+      tr: ['tr', 'tbody', 'thead', 'tfoot'],
+      td: ['td', 'th', 'tr', 'tbody', 'thead', 'tfoot'],
+      th: ['td', 'th', 'tr', 'tbody', 'thead', 'tfoot'],
+    }
+
+    return closingRules[currentTag]?.includes(upcomingTag) ?? false
+  }
+
+  function appendParsedChild(parent: VirtualElement, child: VirtualNode): void {
+    if (child.nodeType !== 1) {
+      parent.appendChild(child)
+      return
+    }
+
+    const parentTag = parent.tagName.toLowerCase()
+    const childElement = child as VirtualElement
+    const childTag = childElement.tagName.toLowerCase()
+
+    if (parentTag === 'table' && childTag === 'tr') {
+      let tbody = parent.lastChild as VirtualElement | null
+      if (!tbody || tbody.nodeType !== 1 || (tbody as VirtualElement).tagName !== 'TBODY') {
+        tbody = createElementNode('tbody', parent.namespaceURI) as VirtualElement
+        parent.appendChild(tbody)
+      }
+      tbody.appendChild(child)
+      return
+    }
+
+    if (parentTag === 'table' && (childTag === 'td' || childTag === 'th')) {
+      let tbody = parent.lastChild as VirtualElement | null
+      if (!tbody || tbody.nodeType !== 1 || (tbody as VirtualElement).tagName !== 'TBODY') {
+        tbody = createElementNode('tbody', parent.namespaceURI) as VirtualElement
+        parent.appendChild(tbody)
+      }
+      let row = tbody.lastChild as VirtualElement | null
+      if (!row || row.nodeType !== 1 || (row as VirtualElement).tagName !== 'TR') {
+        row = createElementNode('tr', parent.namespaceURI) as VirtualElement
+        tbody.appendChild(row)
+      }
+      row.appendChild(child)
+      return
+    }
+
+    if ((parentTag === 'tbody' || parentTag === 'thead' || parentTag === 'tfoot') && (childTag === 'td' || childTag === 'th')) {
+      let row = parent.lastChild as VirtualElement | null
+      if (!row || row.nodeType !== 1 || (row as VirtualElement).tagName !== 'TR') {
+        row = createElementNode('tr', parent.namespaceURI) as VirtualElement
+        parent.appendChild(row)
+      }
+      row.appendChild(child)
+      return
+    }
+
+    parent.appendChild(child)
+  }
+
+  function parseTag(namespaceURI: string | null = null): VirtualElement | VirtualCommentNode | null {
     if (peek() !== '<')
       return null
 
@@ -138,9 +240,15 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
       throw new Error('Invalid tag name')
     }
 
-    const isSvgElement = inSvg || tagName.toLowerCase() === 'svg'
-    const element = createElementNode(tagName, isSvgElement)
     const tagNameLower = tagName.toLowerCase()
+    const elementNamespace = namespaceURI === SVG_NAMESPACE || namespaceURI === MATHML_NAMESPACE
+      ? namespaceURI
+      : tagNameLower === 'svg'
+        ? SVG_NAMESPACE
+        : tagNameLower === 'math'
+          ? MATHML_NAMESPACE
+          : null
+    const element = createElementNode(tagName, elementNamespace)
 
     // Parse attributes
     while (peek() && peek() !== '>' && peek() !== '/') {
@@ -218,9 +326,9 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
     }
 
     // Parse children
-    const children = parseNodes(tagName, isSvgElement)
+    const children = parseNodes(tagNameLower, elementNamespace)
     for (const child of children) {
-      element.appendChild(child)
+      appendParsedChild(element, child)
     }
 
     return element
@@ -238,7 +346,7 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
     return createTextNode(decodeHtmlEntities(text))
   }
 
-  function parseNodes(closingTag?: string, inSvg = false): VirtualNode[] {
+  function parseNodes(closingTag?: string, namespaceURI: string | null = null): VirtualNode[] {
     const children: VirtualNode[] = []
 
     while (pos < html.length) {
@@ -247,8 +355,16 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
         break
       }
 
+      if (closingTag && peekClosingTagName()) {
+        break
+      }
+
+      if (closingTag && shouldImplicitlyClose(closingTag, peekStartTagName())) {
+        break
+      }
+
       if (peek() === '<') {
-        const node = parseTag(inSvg)
+        const node = parseTag(namespaceURI)
         if (node === null) {
           // DOCTYPE or closing tag - skip it and continue
           // (expected closing tags are already handled above)

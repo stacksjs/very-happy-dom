@@ -22,6 +22,7 @@ import { MutationObserver as VeryHappyMutationObserver } from '../observers/Muta
 import { ResizeObserver as VeryHappyResizeObserver } from '../observers/ResizeObserver'
 import { createStorage } from '../storage/Storage'
 import { TimerManager } from '../timers/TimerManager'
+import { NodeFilter, NodeIterator, Range, TreeWalker } from '../traversal'
 import { CustomElementRegistry, HTMLElement } from '../webcomponents/CustomElementRegistry'
 
 export interface WindowOptions {
@@ -98,7 +99,11 @@ export class Window extends VirtualEventTarget {
   public Element: typeof VirtualElement = VirtualElement
   public HTMLTemplateElement: typeof VirtualTemplateElement = VirtualTemplateElement
   public Node: typeof VirtualNodeBase = VirtualNodeBase
+  public NodeFilter: typeof NodeFilter = NodeFilter
+  public NodeIterator: typeof NodeIterator = NodeIterator
+  public Range: typeof Range = Range
   public Text: typeof VirtualTextNode = VirtualTextNode
+  public TreeWalker: typeof TreeWalker = TreeWalker
   public Comment: typeof VirtualCommentNode = VirtualCommentNode
   public DocumentFragment: typeof VirtualDocumentFragment = VirtualDocumentFragment
   public Event: typeof VirtualEvent = VirtualEvent

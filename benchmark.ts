@@ -6,7 +6,7 @@
  */
 
 import { bench, group, run } from 'mitata'
-import { Window, createDocument } from './src'
+import { SHOW_ELEMENT, Window, createDocument } from './src'
 
 // Benchmark: Document Creation
 group('Document Creation', () => {
@@ -428,6 +428,32 @@ group('DOM Traversal', () => {
       }
     }
     walk(doc.body)
+  })
+
+  bench('TreeWalker nextNode()', () => {
+    const walker = doc.createTreeWalker(doc.body!, SHOW_ELEMENT)
+    while (walker.nextNode()) {
+      // iterate
+    }
+  })
+})
+
+group('Advanced Selector & Range Operations', () => {
+  const doc = createDocument()
+  doc.body!.innerHTML = `
+    <section class="cards">
+      ${Array.from({ length: 200 }).map((_, i) => `<article class="card" data-state="${i % 2 === 0 ? 'READY' : 'idle'}"><span class="title">${i}</span></article>`).join('')}
+    </section>
+  `
+
+  bench('querySelectorAll :is/:where/[i]', () => {
+    doc.body!.querySelectorAll(':scope .card:is(article, .missing)[data-state="ready" i]')
+  }).baseline()
+
+  bench('Range selectNodeContents + cloneContents', () => {
+    const range = doc.createRange()
+    range.selectNodeContents(doc.body!)
+    range.cloneContents()
   })
 })
 

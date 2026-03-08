@@ -150,6 +150,18 @@ console.log('\nTest 8: document.cookie API')
   assert(cookies.includes('test=value1'), 'Cookie test=value1 set')
   assert(cookies.includes('foo=bar'), 'Cookie foo=bar set')
 
+  const scopedWindow = new Window({ url: 'https://example.com/app/page.html' })
+  scopedWindow.document.cookie = 'scoped=value'
+  assert(scopedWindow.document.cookie.includes('scoped=value'), 'Default-path cookie is visible on matching path')
+
+  scopedWindow.location.href = 'https://example.com/'
+  assert(!scopedWindow.document.cookie.includes('scoped=value'), 'Default-path cookie is hidden outside its path scope')
+
+  scopedWindow.location.href = 'https://sub.example.com/app/page.html'
+  assert(!scopedWindow.document.cookie.includes('scoped=value'), 'Host-only cookie is hidden from subdomains')
+
+  await scopedWindow.happyDOM.close()
+
   await window.happyDOM.close()
 }
 

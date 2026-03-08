@@ -31,6 +31,12 @@ export class VirtualElement extends VirtualNodeBase {
   private _customValidity: string = ''
   private _internalStyles: Map<string, string> = new Map<string, string>()
   private _stylePriorities: Map<string, string> = new Map<string, string>()
+  private _valueState: string | null = null
+  private _valueDirty = false
+  private _checkedState: boolean | null = null
+  private _checkedDirty = false
+  private _selectedState: boolean | null = null
+  private _selectedDirty = false
 
   // children should only contain element nodes, per DOM spec
   get children(): VirtualNode[] {
@@ -628,6 +634,293 @@ export class VirtualElement extends VirtualNodeBase {
     })
   }
 
+  private _isInputElement(): boolean {
+    return this.tagName === 'INPUT'
+  }
+
+  private _isTextareaElement(): boolean {
+    return this.tagName === 'TEXTAREA'
+  }
+
+  private _isSelectElement(): boolean {
+    return this.tagName === 'SELECT'
+  }
+
+  private _isOptionElement(): boolean {
+    return this.tagName === 'OPTION'
+  }
+
+  private _getInputType(): string {
+    return this._isInputElement() ? (this.getAttribute('type') || 'text').toLowerCase() : ''
+  }
+
+  private _getOptionValue(): string {
+    const attributeValue = this.getAttribute('value')
+    return attributeValue !== null ? attributeValue : this.textContent
+  }
+
+  private _getSelectOptions(): VirtualElement[] {
+    return this._isSelectElement() ? this.querySelectorAll('option') : []
+  }
+
+  private _getSelectedOptionsInternal(): VirtualElement[] {
+    const options = this._getSelectOptions()
+    if (options.length === 0) {
+      return []
+    }
+
+    const selected = options.filter(option => option.selected)
+    if (this.hasAttribute('multiple')) {
+      return selected
+    }
+
+    return selected.length > 0 ? [selected[0]] : [options[0]]
+  }
+
+  private _getOwningSelect(): VirtualElement | null {
+    let current = this.parentNode
+    while (current) {
+      if ((current as any).tagName === 'SELECT') {
+        return current as VirtualElement
+      }
+      current = current.parentNode
+    }
+    return null
+  }
+
+  private _syncRadioGroupSelection(): void {
+    if (!this._isInputElement() || this._getInputType() !== 'radio' || !this.checked) {
+      return
+    }
+
+    const name = this.getAttribute('name')
+    if (!name) {
+      return
+    }
+
+    const root = (this.form ?? this.ownerDocument?.documentElement ?? this.parentNode) as VirtualElement | null
+    const radios = root?.querySelectorAll?.('input') ?? []
+
+    for (const radio of radios) {
+      if (radio === this) {
+        continue
+      }
+      if ((radio.getAttribute('type') || 'text').toLowerCase() !== 'radio' || radio.getAttribute('name') !== name) {
+        continue
+      }
+      if (this.form ? radio.form !== this.form : radio.form !== null) {
+        continue
+      }
+      radio._checkedDirty = true
+      radio._checkedState = false
+    }
+  }
+
+  get form(): VirtualElement | null {
+    if (this._isOptionElement()) {
+      return this._getOwningSelect()?.form ?? null
+    }
+
+    return ['BUTTON', 'FIELDSET', 'INPUT', 'OBJECT', 'OUTPUT', 'SELECT', 'TEXTAREA'].includes(this.tagName)
+      ? this.closest('form')
+      : null
+  }
+
+  get type(): string {
+    if (this._isInputElement()) {
+      return this._getInputType()
+    }
+    return this.getAttribute('type') || ''
+  }
+
+  set type(value: string) {
+    this.setAttribute('type', value)
+  }
+
+  get name(): string {
+    return this.getAttribute('name') || ''
+  }
+
+  set name(value: string) {
+    this.setAttribute('name', value)
+  }
+
+  get value(): string {
+    if (this._isOptionElement()) {
+      return this._getOptionValue()
+    }
+    if (this._isTextareaElement()) {
+      return this._valueDirty ? (this._valueState ?? '') : getNodeTextContent(this)
+    }
+    if (this._isInputElement()) {
+      if (this._valueDirty) {
+        return this._valueState ?? ''
+      }
+      const attributeValue = this.getAttribute('value')
+      if (attributeValue !== null) {
+        return attributeValue
+      }
+      const type = this._getInputType()
+      return type === 'checkbox' || type === 'radio' ? 'on' : ''
+    }
+    if (this._isSelectElement()) {
+      return this._getSelectedOptionsInternal()[0]?.value ?? ''
+    }
+    return this.getAttribute('value') || ''
+  }
+
+  set value(value: string) {
+    const normalizedValue = `${value}`
+    if (this._isTextareaElement() || this._isInputElement()) {
+      this._valueDirty = true
+      this._valueState = normalizedValue
+      return
+    }
+    if (this._isSelectElement()) {
+      let matched = false
+      for (const option of this._getSelectOptions()) {
+        const shouldSelect = !matched && option.value === normalizedValue
+        option.selected = shouldSelect
+        if (shouldSelect) {
+          matched = true
+        }
+      }
+      if (!matched) {
+        this.selectedIndex = -1
+      }
+      return
+    }
+    this.setAttribute('value', normalizedValue)
+  }
+
+  get defaultValue(): string {
+    if (this._isTextareaElement()) {
+      return getNodeTextContent(this)
+    }
+    return this.getAttribute('value') || ''
+  }
+
+  set defaultValue(value: string) {
+    const normalizedValue = `${value}`
+    if (this._isTextareaElement()) {
+      this.textContent = normalizedValue
+      if (!this._valueDirty) {
+        this._valueState = null
+      }
+      return
+    }
+    this.setAttribute('value', normalizedValue)
+    if (!this._valueDirty) {
+      this._valueState = null
+    }
+  }
+
+  get checked(): boolean {
+    if (!this._isInputElement()) {
+      return false
+    }
+    const type = this._getInputType()
+    if (type !== 'checkbox' && type !== 'radio') {
+      return false
+    }
+    return this._checkedDirty ? Boolean(this._checkedState) : this.hasAttribute('checked')
+  }
+
+  set checked(value: boolean) {
+    if (!this._isInputElement()) {
+      return
+    }
+    const type = this._getInputType()
+    if (type !== 'checkbox' && type !== 'radio') {
+      return
+    }
+    this._checkedDirty = true
+    this._checkedState = Boolean(value)
+    this._syncRadioGroupSelection()
+  }
+
+  get defaultChecked(): boolean {
+    return this.hasAttribute('checked')
+  }
+
+  set defaultChecked(value: boolean) {
+    if (value) {
+      this.setAttribute('checked', '')
+    }
+    else {
+      this.removeAttribute('checked')
+    }
+  }
+
+  get selected(): boolean {
+    if (!this._isOptionElement()) {
+      return false
+    }
+    return this._selectedDirty ? Boolean(this._selectedState) : this.hasAttribute('selected')
+  }
+
+  set selected(value: boolean) {
+    if (!this._isOptionElement()) {
+      return
+    }
+    const normalizedValue = Boolean(value)
+    const select = this._getOwningSelect()
+    if (normalizedValue && select && !select.hasAttribute('multiple')) {
+      for (const option of select._getSelectOptions()) {
+        if (option === this) {
+          continue
+        }
+        option._selectedDirty = true
+        option._selectedState = false
+      }
+    }
+    this._selectedDirty = true
+    this._selectedState = normalizedValue
+  }
+
+  get defaultSelected(): boolean {
+    return this.hasAttribute('selected')
+  }
+
+  set defaultSelected(value: boolean) {
+    if (value) {
+      this.setAttribute('selected', '')
+    }
+    else {
+      this.removeAttribute('selected')
+    }
+  }
+
+  get options(): VirtualElement[] {
+    return this._getSelectOptions()
+  }
+
+  get selectedOptions(): VirtualElement[] {
+    if (this._isSelectElement()) {
+      return this._getSelectedOptionsInternal()
+    }
+    return this._isOptionElement() && this.selected ? [this] : []
+  }
+
+  get selectedIndex(): number {
+    if (!this._isSelectElement()) {
+      return -1
+    }
+    const options = this._getSelectOptions()
+    const selected = this._getSelectedOptionsInternal()[0]
+    return selected ? options.indexOf(selected) : -1
+  }
+
+  set selectedIndex(value: number) {
+    if (!this._isSelectElement()) {
+      return
+    }
+    const options = this._getSelectOptions()
+    for (let index = 0; index < options.length; index++) {
+      options[index].selected = value >= 0 && index === value
+    }
+  }
+
   // Form validation
   get validity(): {
     valid: boolean
@@ -642,8 +935,8 @@ export class VirtualElement extends VirtualNodeBase {
     badInput: boolean
     customError: boolean
   } {
-    const value = this.getAttribute('value') || ''
-    const type = this.getAttribute('type') || 'text'
+    const value = this.value
+    const type = this.type || 'text'
     const required = this.hasAttribute('required')
     const pattern = this.getAttribute('pattern')
     const minlength = this.getAttribute('minlength')
@@ -666,7 +959,7 @@ export class VirtualElement extends VirtualNodeBase {
     }
 
     // Check required
-    if (required && !value) {
+    if (required && ((type === 'checkbox' || type === 'radio') ? !this.checked : !value)) {
       validity.valueMissing = true
       validity.valid = false
     }
@@ -843,6 +1136,15 @@ export class VirtualElement extends VirtualNodeBase {
 
   // Click simulation
   click(): void {
+    if (this._isInputElement()) {
+      const type = this._getInputType()
+      if (type === 'checkbox') {
+        this.checked = !this.checked
+      }
+      else if (type === 'radio') {
+        this.checked = true
+      }
+    }
     const event = new VirtualEvent('click', { bubbles: true, cancelable: true })
     this.dispatchEvent(event)
   }

@@ -116,6 +116,54 @@ describe('DOM Manipulation Methods', () => {
     expect(prev).not.toBeNull()
     expect(prev?.getAttribute('id')).toBe('second')
   })
+
+  test('append and prepend should support strings and nodes', () => {
+    const doc = createDocument()
+    const parent = doc.createElement('div')
+    const middle = doc.createElement('span')
+    middle.textContent = 'middle'
+
+    parent.append('tail')
+    parent.prepend('head', middle)
+
+    expect(parent.childNodes.length).toBe(3)
+    expect(parent.textContent).toBe('headmiddletail')
+  })
+
+  test('before, after, replaceWith, and remove should mutate siblings correctly', () => {
+    const doc = createDocument()
+    const container = doc.createElement('div')
+    const anchor = doc.createElement('span')
+    const replacement = doc.createElement('strong')
+
+    anchor.textContent = 'anchor'
+    replacement.textContent = 'replacement'
+    container.appendChild(anchor)
+
+    anchor.before('before-')
+    anchor.after('-after')
+    anchor.replaceWith(replacement)
+
+    expect(container.textContent).toBe('before-replacement-after')
+
+    replacement.remove()
+    expect(container.textContent).toBe('before--after')
+  })
+
+  test('isEqualNode and isSameNode should distinguish structural equality from identity', () => {
+    const doc = createDocument()
+    const first = doc.createElement('article')
+    const second = doc.createElement('article')
+
+    first.setAttribute('data-kind', 'demo')
+    second.setAttribute('data-kind', 'demo')
+    first.append('text')
+    second.append('text')
+
+    expect(first.isSameNode(second)).toBe(false)
+    expect(first.isEqualNode(second)).toBe(true)
+    expect(first.isSameNode(first)).toBe(true)
+  })
 })
 
 describe('Form Validation', () => {
@@ -297,6 +345,102 @@ describe('History API', () => {
 
     doc.history.go(1)
     expect(doc.location.pathname).toBe('/page2')
+  })
+})
+
+describe('Document URL Surface', () => {
+  test('baseURI should resolve from a base element', () => {
+    const doc = createDocument()
+    doc.location.href = 'https://example.com/root/page.html'
+    doc.head!.innerHTML = '<base href="/assets/">'
+
+    const div = doc.createElement('div')
+    doc.body!.appendChild(div)
+
+    expect(doc.baseURI).toBe('https://example.com/assets/')
+    expect(div.baseURI).toBe('https://example.com/assets/')
+    expect(doc.URL).toBe('https://example.com/root/page.html')
+  })
+
+  test('location component setters should update href cohesively', () => {
+    const doc = createDocument()
+    doc.location.href = 'https://example.com/start'
+
+    doc.location.pathname = 'nested/page'
+    doc.location.search = 'q=1'
+    doc.location.hash = 'section'
+
+    expect(doc.location.href).toBe('https://example.com/nested/page?q=1#section')
+  })
+})
+
+describe('Form Control State', () => {
+  test('input value should diverge from defaultValue once dirty', () => {
+    const doc = createDocument()
+    const input = doc.createElement('input')
+
+    input.defaultValue = 'initial'
+    expect(input.value).toBe('initial')
+
+    input.value = 'edited'
+    expect(input.value).toBe('edited')
+    expect(input.defaultValue).toBe('initial')
+    expect(input.getAttribute('value')).toBe('initial')
+  })
+
+  test('textarea value should diverge from defaultValue once dirty', () => {
+    const doc = createDocument()
+    const textarea = doc.createElement('textarea')
+
+    textarea.defaultValue = 'hello'
+    expect(textarea.value).toBe('hello')
+
+    textarea.value = 'world'
+    expect(textarea.value).toBe('world')
+    expect(textarea.defaultValue).toBe('hello')
+  })
+
+  test('checkbox validity and click should use checked state', () => {
+    const doc = createDocument()
+    const input = doc.createElement('input')
+    input.type = 'checkbox'
+    input.setAttribute('required', '')
+
+    expect(input.checkValidity()).toBe(false)
+    input.click()
+    expect(input.checked).toBe(true)
+    expect(input.checkValidity()).toBe(true)
+  })
+
+  test('radio groups and select state should follow property changes', () => {
+    const doc = createDocument()
+    const form = doc.createElement('form')
+    const radioA = doc.createElement('input')
+    const radioB = doc.createElement('input')
+    const select = doc.createElement('select')
+
+    radioA.type = 'radio'
+    radioA.name = 'choice'
+    radioB.type = 'radio'
+    radioB.name = 'choice'
+    select.innerHTML = '<option value="a">A</option><option value="b" selected>B</option>'
+
+    form.append(radioA, radioB, select)
+    doc.body!.appendChild(form)
+
+    radioA.checked = true
+    radioB.checked = true
+
+    expect(radioA.checked).toBe(false)
+    expect(radioB.checked).toBe(true)
+    expect(radioA.form).toBe(form)
+    expect(select.value).toBe('b')
+    expect(select.selectedIndex).toBe(1)
+
+    select.value = 'a'
+    expect(select.selectedIndex).toBe(0)
+    expect(select.selectedOptions[0]?.value).toBe('a')
+    expect(select.options.length).toBe(2)
   })
 })
 

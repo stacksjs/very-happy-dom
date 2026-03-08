@@ -64,6 +64,30 @@ function shouldReceiveRecord(record: MutationRecord, options: MutationObserverIn
   return false
 }
 
+function normalizeObserveOptions(options: MutationObserverInit): MutationObserverInit {
+  const normalized: MutationObserverInit = { ...options }
+
+  if (normalized.attributeOldValue === true || normalized.attributeFilter) {
+    if (normalized.attributes === false) {
+      throw new TypeError('Failed to execute observe: attributeOldValue/attributeFilter requires attributes to be true')
+    }
+    normalized.attributes = true
+  }
+
+  if (normalized.characterDataOldValue === true) {
+    if (normalized.characterData === false) {
+      throw new TypeError('Failed to execute observe: characterDataOldValue requires characterData to be true')
+    }
+    normalized.characterData = true
+  }
+
+  if (normalized.childList !== true && normalized.attributes !== true && normalized.characterData !== true) {
+    throw new TypeError('Failed to execute observe: at least one of childList, attributes, or characterData must be true')
+  }
+
+  return normalized
+}
+
 /**
  * MutationObserver implementation
  */
@@ -79,7 +103,7 @@ export class MutationObserver {
   }
 
   observe(target: VirtualNode, options: MutationObserverInit = {}): void {
-    this._observations.set(target, { ...options })
+    this._observations.set(target, normalizeObserveOptions(options))
     MutationObserver._observers.add(this)
   }
 
