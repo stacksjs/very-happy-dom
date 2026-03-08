@@ -76,6 +76,7 @@ export {
   NodeFilter,
   NodeIterator,
   Range,
+  Selection,
   SHOW_ALL,
   SHOW_COMMENT,
   SHOW_DOCUMENT,

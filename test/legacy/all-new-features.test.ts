@@ -442,6 +442,81 @@ describe('Form Control State', () => {
     expect(select.selectedOptions[0]?.value).toBe('a')
     expect(select.options.length).toBe(2)
   })
+
+  test('labels and form.elements should reflect associated controls', () => {
+    const doc = createDocument()
+    doc.body!.innerHTML = '<form><label for="name">Name</label><input id="name"><label>Wrapped<input id="wrapped"></label></form>'
+
+    const form = doc.querySelector('form')!
+    const input = doc.getElementById('name')!
+    const wrapped = doc.getElementById('wrapped')!
+
+    expect(form.elements.length).toBe(2)
+    expect(form.elements[0]).toBe(input)
+    expect(input.labels.map(label => label.textContent)).toEqual(['Name'])
+    expect(wrapped.labels.length).toBe(1)
+    expect(wrapped.labels[0].tagName).toBe('LABEL')
+  })
+
+  test('disabled fieldsets should disable descendant controls except the first legend subtree', () => {
+    const doc = createDocument()
+    doc.body!.innerHTML = '<form><fieldset disabled><legend><input id="legend-control"></legend><input id="inner-control" required></fieldset></form>'
+
+    const legendControl = doc.getElementById('legend-control')!
+    const innerControl = doc.getElementById('inner-control')!
+
+    expect(legendControl.disabled).toBe(false)
+    expect(innerControl.disabled).toBe(true)
+    expect(innerControl.willValidate).toBe(false)
+    expect(innerControl.checkValidity()).toBe(true)
+  })
+
+  test('form reset should restore default control state', () => {
+    const doc = createDocument()
+    const form = doc.createElement('form')
+    const input = doc.createElement('input')
+    const checkbox = doc.createElement('input')
+
+    input.defaultValue = 'initial'
+    checkbox.type = 'checkbox'
+    checkbox.defaultChecked = true
+
+    form.append(input, checkbox)
+    doc.body!.appendChild(form)
+
+    input.value = 'edited'
+    checkbox.checked = false
+    form.reset()
+
+    expect(input.value).toBe('initial')
+    expect(checkbox.checked).toBe(true)
+  })
+
+  test('requestSubmit should validate controls and expose submitter', () => {
+    const doc = createDocument()
+    const form = doc.createElement('form')
+    const input = doc.createElement('input')
+    const button = doc.createElement('button')
+    let submitCount = 0
+    let lastSubmitter: any = null
+
+    input.setAttribute('required', '')
+    button.type = 'submit'
+    form.append(input, button)
+    doc.body!.appendChild(form)
+    form.addEventListener('submit', (event: any) => {
+      submitCount++
+      lastSubmitter = event.submitter
+    })
+
+    form.requestSubmit(button)
+    expect(submitCount).toBe(0)
+
+    input.value = 'ok'
+    form.requestSubmit(button)
+    expect(submitCount).toBe(1)
+    expect(lastSubmitter).toBe(button)
+  })
 })
 
 describe('Computed Styles', () => {

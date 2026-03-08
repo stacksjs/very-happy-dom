@@ -1,3 +1,4 @@
+import { nodeContains } from '../nodes/tree-operations'
 import type { VirtualNode } from '../nodes/VirtualNode'
 
 export interface MutationObserverInit {
@@ -25,7 +26,7 @@ export interface MutationRecord {
 // eslint-disable-next-line pickier/no-unused-vars
 export type MutationCallback = (mutations: MutationRecord[], observer: MutationObserver) => void
 
-function isObservedWithinScope(target: VirtualNode, observedTarget: VirtualNode, subtree: boolean): boolean {
+function isObservedWithinScope(target: VirtualNode, observedTarget: VirtualNode, subtree: boolean, transientRoots: Set<VirtualNode>): boolean {
   if (target === observedTarget) {
     return true
   }
@@ -40,6 +41,12 @@ function isObservedWithinScope(target: VirtualNode, observedTarget: VirtualNode,
       return true
     }
     current = current.parentNode
+  }
+
+  for (const transientRoot of transientRoots) {
+    if (target === transientRoot || nodeContains(transientRoot, target)) {
+      return true
+    }
   }
 
   return false
@@ -97,6 +104,7 @@ export class MutationObserver {
   private _records: MutationRecord[] = []
   private _observations = new Map<VirtualNode, MutationObserverInit>()
   private _scheduled = false
+  private _transientRoots = new Set<VirtualNode>()
 
   constructor(callback: MutationCallback) {
     this._callback = callback
@@ -112,6 +120,7 @@ export class MutationObserver {
     MutationObserver._observers.delete(this)
     this._records = []
     this._scheduled = false
+    this._transientRoots.clear()
   }
 
   takeRecords(): MutationRecord[] {
@@ -136,14 +145,22 @@ export class MutationObserver {
         const records = this.takeRecords()
         this._callback(records, this)
       }
+      this._transientRoots.clear()
     })
   }
 
   static _queueMutationRecord(record: MutationRecord): void {
     for (const observer of MutationObserver._observers) {
       for (const [observedTarget, options] of observer._observations) {
-        if (!isObservedWithinScope(record.target, observedTarget, options.subtree === true)) {
+        const withinScope = isObservedWithinScope(record.target, observedTarget, options.subtree === true, observer._transientRoots)
+        if (!withinScope) {
           continue
+        }
+
+        if (record.type === 'childList' && record.removedNodes.length > 0 && options.subtree === true) {
+          for (const removedNode of record.removedNodes) {
+            observer._transientRoots.add(removedNode)
+          }
         }
 
         if (!shouldReceiveRecord(record, options)) {

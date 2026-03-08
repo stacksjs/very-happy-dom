@@ -6,8 +6,8 @@
 
 ## 📁 Directory Structure
 
-```
-tests/
+```text
+test/
 ├── Core Domain Tests (296 tests)
 │   ├── storage.test.ts         # 50 - localStorage, sessionStorage
 │   ├── timers.test.ts          # 29 - setTimeout, setInterval, rAF
@@ -20,9 +20,8 @@ tests/
 │   ├── browser-apis.test.ts    # 31 - Performance, Clipboard, etc.
 │   └── integration.test.ts     # 24 - End-to-end scenarios
 │
-├── Quality Assurance (27 tests)
-│   ├── error-handling.test.ts  # 15 - Error scenarios
-│   └── performance.test.ts     # 12 - Performance regression
+├── Quality Assurance
+│   └── error-handling.test.ts  # Error scenarios
 │
 ├── Stress Tests (87 tests)
 │   └── browser-api.stress.test.ts
@@ -41,43 +40,48 @@ tests/
         └── pseudo-class-selectors.test.ts
 ```
 
+Performance benchmarks now live in `benchmark/index.ts` and are run with `bun run bench`.
+
 ## 🚀 Running Tests
 
 ### Run All Tests
 
 ```bash
-bun test tests/*.test.ts
+bun test test/*.test.ts
 ```
 
 ### Run Specific Domain
 
 ```bash
 # Storage & Timers
-bun test tests/storage.test.ts tests/timers.test.ts
+bun test test/storage.test.ts test/timers.test.ts
 
 # Network & APIs
-bun test tests/network.test.ts tests/browser-apis.test.ts
+bun test test/network.test.ts test/browser-apis.test.ts
 
 # Advanced Features
-bun test tests/observers.test.ts tests/xpath.test.ts tests/webcomponents.test.ts
+bun test test/observers.test.ts test/xpath.test.ts test/webcomponents.test.ts
 
 # Quality Assurance
-bun test tests/error-handling.test.ts tests/performance.test.ts
+bun test test/error-handling.test.ts
+
+# Benchmarks
+bun run bench
 
 # Integration
-bun test tests/integration.test.ts
+bun test test/integration.test.ts
 ```
 
 ### Run Legacy Tests
 
 ```bash
-bun test tests/legacy/*.test.ts
+bun test test/legacy/*.test.ts
 ```
 
 ### Run Stress Tests
 
 ```bash
-bun test tests/browser-api.stress.test.ts
+bun test test/browser-api.stress.test.ts
 ```
 
 ## 📋 Test Categories
@@ -97,10 +101,10 @@ Organized by functionality:
 - **Browser APIs** - Performance, Clipboard, Geolocation, File API
 - **Integration** - End-to-end scenarios
 
-### Quality Assurance (27 tests)
+### Quality Assurance
 
 - **Error Handling** - Invalid inputs, null refs, edge cases
-- **Performance** - Regression tests, benchmarks, memory
+- **Benchmarks** - `mitata` suites under `benchmark/`
 
 ### Stress Tests (87 tests)
 
@@ -108,7 +112,7 @@ Organized by functionality:
 
 ### Legacy Tests (287+ tests)
 
-Preserved for backward compatibility in `tests/legacy/`
+Preserved for backward compatibility in `test/legacy/`
 
 ## 🛠️ Test Utilities
 

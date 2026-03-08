@@ -195,8 +195,14 @@ console.log('\nTest Group 9: Observer Error Handling')
   const observer = new window.MutationObserver(() => {})
 
   // Observe non-existent options
-  observer.observe(element, {})
-  assert(true, 'observe() with empty options does not throw')
+  let observeThrew = false
+  try {
+    observer.observe(element, {})
+  }
+  catch {
+    observeThrew = true
+  }
+  assert(observeThrew, 'observe() with empty options throws')
 
   // Disconnect twice
   observer.disconnect()

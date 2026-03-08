@@ -4,7 +4,7 @@ import { CookieContainer, CookieSameSiteEnum } from '../browser/CookieContainer'
 import { VirtualEvent } from '../events/VirtualEvent'
 import type { History, HistoryState, Location, NodeKind, NodeType, VirtualNode } from './VirtualNode'
 import { parseHTML } from '../parsers/html-parser'
-import { NodeIterator, Range, TreeWalker, type NodeFilterInput } from '../traversal'
+import { NodeIterator, Range, Selection, TreeWalker, type NodeFilterInput } from '../traversal'
 import { XPathEvaluator } from '../xpath/XPathEvaluator'
 import { XPathResultType } from '../xpath/XPathResult'
 import { VirtualCommentNode } from './VirtualCommentNode'
@@ -47,6 +47,7 @@ export class VirtualDocument extends VirtualNodeBase {
   private _historyIndex = -1
   private _xpathEvaluator = new XPathEvaluator()
   private _cookieContainer = new CookieContainer()
+  private _selection: Selection | null = null
   private _locationState: {
     href: string
     protocol: string
@@ -433,6 +434,13 @@ export class VirtualDocument extends VirtualNodeBase {
 
   createRange(): Range {
     return new Range(this)
+  }
+
+  getSelection(): Selection {
+    if (!this._selection) {
+      this._selection = new Selection(this)
+    }
+    return this._selection
   }
 
   querySelector(selector: string): VirtualElement | null {

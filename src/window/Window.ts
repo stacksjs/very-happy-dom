@@ -22,7 +22,7 @@ import { MutationObserver as VeryHappyMutationObserver } from '../observers/Muta
 import { ResizeObserver as VeryHappyResizeObserver } from '../observers/ResizeObserver'
 import { createStorage } from '../storage/Storage'
 import { TimerManager } from '../timers/TimerManager'
-import { NodeFilter, NodeIterator, Range, TreeWalker } from '../traversal'
+import { NodeFilter, NodeIterator, Range, Selection, TreeWalker } from '../traversal'
 import { CustomElementRegistry, HTMLElement } from '../webcomponents/CustomElementRegistry'
 
 export interface WindowOptions {
@@ -102,6 +102,7 @@ export class Window extends VirtualEventTarget {
   public NodeFilter: typeof NodeFilter = NodeFilter
   public NodeIterator: typeof NodeIterator = NodeIterator
   public Range: typeof Range = Range
+  public Selection: typeof Selection = Selection
   public Text: typeof VirtualTextNode = VirtualTextNode
   public TreeWalker: typeof TreeWalker = TreeWalker
   public Comment: typeof VirtualCommentNode = VirtualCommentNode
@@ -195,6 +196,10 @@ export class Window extends VirtualEventTarget {
 
   get outerHeight(): number {
     return this._height
+  }
+
+  getSelection(): Selection {
+    return this.document.getSelection()
   }
 
   private _createLocation(url: string): Location {

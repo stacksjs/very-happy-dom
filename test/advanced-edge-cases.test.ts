@@ -186,8 +186,13 @@ console.log('\nTest Group 7: Parser Recovery and Namespaces')
   const tableTwo = window.document.getElementById('t2')
   const svg = window.document.querySelector('svg')
   const circle = window.document.querySelector('circle')
+  const foreignObjectHost = window.document.createElement('div')
   const math = window.document.querySelector('math')
   const mi = window.document.querySelector('mi')
+
+  foreignObjectHost.innerHTML = '<svg><foreignObject><div class="html-child">HTML</div></foreignObject><circle class="after"></circle></svg>'
+  const htmlChild = foreignObjectHost.querySelector('.html-child')
+  const afterCircle = foreignObjectHost.querySelector('.after')
 
   assert(listItems.length === 2, 'Implicit li end tags recover into sibling list items')
   assert(listItems[0]?.textContent === 'One', 'First implicit list item parsed correctly')
@@ -196,6 +201,8 @@ console.log('\nTest Group 7: Parser Recovery and Namespaces')
   assert(tableTwo?.querySelector('tbody > tr > td')?.textContent === 'B', 'Direct table cells are normalized into tbody and tr wrappers')
   assert(svg?.namespaceURI === 'http://www.w3.org/2000/svg', 'SVG root uses SVG namespace')
   assert(circle?.namespaceURI === 'http://www.w3.org/2000/svg', 'SVG descendants keep SVG namespace')
+  assert(htmlChild?.namespaceURI === 'http://www.w3.org/1999/xhtml', 'foreignObject descendants switch back to HTML namespace')
+  assert(afterCircle?.namespaceURI === 'http://www.w3.org/2000/svg', 'SVG namespace resumes after foreignObject content')
   assert(math?.namespaceURI === 'http://www.w3.org/1998/Math/MathML', 'Math root uses MathML namespace')
   assert(mi?.namespaceURI === 'http://www.w3.org/1998/Math/MathML', 'Math descendants keep MathML namespace')
 

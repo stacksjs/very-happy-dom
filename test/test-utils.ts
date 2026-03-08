@@ -266,6 +266,32 @@ export class PerformanceMeasure {
     const duration = this.end()
     return { result, duration }
   }
+
+  measureRepeated<T>(iterations: number, fn: () => T): { result: T, duration: number, average: number, median: number, p95: number, min: number, max: number } {
+    const durations: number[] = []
+    let result!: T
+
+    for (let index = 0; index < iterations; index++) {
+      const measured = this.measure(fn)
+      result = measured.result
+      durations.push(measured.duration)
+    }
+
+    const sorted = [...durations].sort((left, right) => left - right)
+    const total = durations.reduce((sum, value) => sum + value, 0)
+    const medianIndex = Math.floor(sorted.length / 2)
+    const p95Index = Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)
+
+    return {
+      result,
+      duration: sorted[medianIndex] ?? 0,
+      average: durations.length > 0 ? total / durations.length : 0,
+      median: sorted[medianIndex] ?? 0,
+      p95: sorted[p95Index] ?? 0,
+      min: sorted[0] ?? 0,
+      max: sorted[sorted.length - 1] ?? 0,
+    }
+  }
 }
 
 /**

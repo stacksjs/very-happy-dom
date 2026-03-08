@@ -249,6 +249,9 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
           ? MATHML_NAMESPACE
           : null
     const element = createElementNode(tagName, elementNamespace)
+    const childNamespace = elementNamespace === SVG_NAMESPACE && tagNameLower === 'foreignobject'
+      ? null
+      : elementNamespace
 
     // Parse attributes
     while (peek() && peek() !== '>' && peek() !== '/') {
@@ -326,7 +329,7 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
     }
 
     // Parse children
-    const children = parseNodes(tagNameLower, elementNamespace)
+    const children = parseNodes(tagNameLower, childNamespace)
     for (const child of children) {
       appendParsedChild(element, child)
     }

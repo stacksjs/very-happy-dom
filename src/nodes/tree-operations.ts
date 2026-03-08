@@ -43,6 +43,14 @@ function getTemplateContent(node: VirtualNode): VirtualNode | null {
   return (node as any).tagName === 'TEMPLATE' ? ((node as any).content ?? null) : null
 }
 
+function clearRemovalTraversalHints(node: VirtualNode): void {
+  ;(node as any)._lastTraversalParent = null
+  ;(node as any)._lastTraversalNextSibling = null
+  for (const child of node.childNodes) {
+    clearRemovalTraversalHints(child)
+  }
+}
+
 export function setOwnerDocumentRecursive(node: VirtualNode, ownerDocument: any): void {
   const previousOwnerDocument = (node as any).ownerDocument ?? null
   if (node.nodeType !== DOCUMENT_NODE) {
@@ -83,11 +91,15 @@ export function detachNode(node: VirtualNode): void {
     return
   }
 
-  const siblings = node.parentNode.childNodes
+  const parent = node.parentNode
+  const siblings = parent.childNodes
   const index = siblings.indexOf(node)
+  const nextSibling = index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : null
   if (index !== -1) {
     siblings.splice(index, 1)
   }
+  ;(node as any)._lastTraversalParent = parent
+  ;(node as any)._lastTraversalNextSibling = nextSibling
   node.parentNode = null
   if (wasConnected) {
     invokeDisconnectedCallback(node)
@@ -104,6 +116,7 @@ function normalizeInsertedNodes(parent: VirtualParentNode, node: VirtualNode): V
     node.childNodes = []
     for (const child of fragmentChildren) {
       detachNode(child)
+      clearRemovalTraversalHints(child)
       child.parentNode = parent
       setOwnerDocumentRecursive(child, getOwnerDocumentForChild(parent))
     }
@@ -111,6 +124,7 @@ function normalizeInsertedNodes(parent: VirtualParentNode, node: VirtualNode): V
   }
 
   detachNode(node)
+  clearRemovalTraversalHints(node)
   node.parentNode = parent
   setOwnerDocumentRecursive(node, getOwnerDocumentForChild(parent))
   return [node]
@@ -161,6 +175,8 @@ export function removeNode(parent: VirtualParentNode, child: VirtualNode): Virtu
   const previousSibling = index > 0 ? parent.childNodes[index - 1] : null
   const nextSibling = index < parent.childNodes.length - 1 ? parent.childNodes[index + 1] : null
   parent.childNodes.splice(index, 1)
+  ;(child as any)._lastTraversalParent = parent
+  ;(child as any)._lastTraversalNextSibling = nextSibling
   child.parentNode = null
   if (wasConnected) {
     invokeDisconnectedCallback(child)
@@ -180,6 +196,8 @@ export function replaceNode(parent: VirtualParentNode, node: VirtualNode, oldNod
   const previousSibling = index > 0 ? parent.childNodes[index - 1] : null
   const nextSibling = index < parent.childNodes.length - 1 ? parent.childNodes[index + 1] : null
   parent.childNodes.splice(index, 1, ...normalized)
+  ;(oldNode as any)._lastTraversalParent = parent
+  ;(oldNode as any)._lastTraversalNextSibling = nextSibling
   oldNode.parentNode = null
   if (oldWasConnected) {
     invokeDisconnectedCallback(oldNode)

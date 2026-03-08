@@ -299,6 +299,37 @@ console.log('\nTest Group 9d: MutationObserver - takeRecords Drains Pending Call
   await window.happyDOM.close()
 }
 
+console.log('\nTest Group 9e: MutationObserver - Detached Subtree Remains Observable Until Flush')
+{
+  const window = new Window()
+  const parent = window.document.createElement('div')
+  const child = window.document.createElement('section')
+  const grandchild = window.document.createElement('span')
+  child.appendChild(grandchild)
+  parent.appendChild(child)
+  const delivered: any[] = []
+
+  const observer = new window.MutationObserver((mutations) => {
+    delivered.push(...mutations)
+  })
+
+  observer.observe(parent, { childList: true, attributes: true, subtree: true, attributeOldValue: true })
+  parent.removeChild(child)
+  grandchild.setAttribute('data-detached', 'yes')
+  await Promise.resolve()
+
+  assert(delivered.length === 2, 'Detached subtree mutations are still delivered before the removal flush completes')
+  if (delivered.length === 2) {
+    assert(delivered[0].type === 'childList', 'Removal record delivered first')
+    assert(delivered[0].removedNodes[0] === child, 'Removed subtree root captured in childList record')
+    assert(delivered[1].type === 'attributes', 'Detached descendant attribute mutation is delivered')
+    assert(delivered[1].target === grandchild, 'Detached descendant remains observable until flush')
+  }
+
+  observer.disconnect()
+  await window.happyDOM.close()
+}
+
 // Test 7: IntersectionObserver - basic setup
 console.log('\nTest Group 10: IntersectionObserver - Basic Setup')
 {

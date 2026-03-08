@@ -231,6 +231,17 @@ function getCommonAncestor(startContainer: VirtualNode, endContainer: VirtualNod
 }
 
 function getNextTraversalCandidate(current: VirtualNode, root: VirtualNode, skipChildren: boolean): VirtualNode | null {
+  if (!current.parentNode && current !== root) {
+    const hintedParent = (current as any)._lastTraversalParent as VirtualNode | null | undefined
+    const hintedNextSibling = (current as any)._lastTraversalNextSibling as VirtualNode | null | undefined
+    if (hintedParent && isWithinRoot(hintedParent, root)) {
+      if (hintedNextSibling && hintedNextSibling.parentNode === hintedParent) {
+        return hintedNextSibling
+      }
+      return getNextTraversalCandidate(hintedParent, root, true)
+    }
+  }
+
   if (!skipChildren && current.childNodes.length > 0) {
     return current.childNodes[0]
   }
@@ -594,6 +605,28 @@ export class Range {
     return fragment
   }
 
+  surroundContents(newParent: VirtualNode): void {
+    if (this.collapsed) {
+      this.insertNode(newParent)
+      this.selectNode(newParent)
+      return
+    }
+
+    if (this.startContainer !== this.endContainer && (this.startContainer.nodeType !== TEXT_NODE || this.endContainer.nodeType !== TEXT_NODE)) {
+      throw new Error('Failed to execute surroundContents on Range: unsupported partially selected non-Text nodes')
+    }
+
+    const fragment = this.extractContents()
+    while (newParent.childNodes.length > 0) {
+      ;(newParent as any).removeChild(newParent.childNodes[0])
+    }
+    this.insertNode(newParent)
+    while (fragment.childNodes.length > 0) {
+      ;(newParent as any).appendChild(fragment.childNodes[0])
+    }
+    this.selectNode(newParent)
+  }
+
   insertNode(node: VirtualNode): void {
     if (this.startContainer.nodeType === TEXT_NODE && this.startContainer.parentNode) {
       const value = this.startContainer.nodeValue || ''
@@ -632,5 +665,95 @@ export class Range {
     }
 
     return this.cloneContents().textContent || ''
+  }
+
+  detach(): void {}
+}
+
+export class Selection {
+  private _document: any
+  private _range: Range | null = null
+
+  constructor(document: any) {
+    this._document = document
+  }
+
+  get anchorNode(): VirtualNode | null {
+    return this._range?.startContainer ?? null
+  }
+
+  get anchorOffset(): number {
+    return this._range?.startOffset ?? 0
+  }
+
+  get focusNode(): VirtualNode | null {
+    return this._range?.endContainer ?? null
+  }
+
+  get focusOffset(): number {
+    return this._range?.endOffset ?? 0
+  }
+
+  get isCollapsed(): boolean {
+    return this._range?.collapsed ?? true
+  }
+
+  get rangeCount(): number {
+    return this._range ? 1 : 0
+  }
+
+  get type(): string {
+    if (!this._range) {
+      return 'None'
+    }
+    return this._range.collapsed ? 'Caret' : 'Range'
+  }
+
+  addRange(range: Range): void {
+    this._range = range
+  }
+
+  getRangeAt(index: number): Range {
+    if (index !== 0 || !this._range) {
+      throw new Error('Failed to execute getRangeAt on Selection: index is out of range')
+    }
+    return this._range
+  }
+
+  removeAllRanges(): void {
+    this._range = null
+  }
+
+  empty(): void {
+    this.removeAllRanges()
+  }
+
+  collapse(node: VirtualNode | null, offset = 0): void {
+    if (node === null) {
+      this.removeAllRanges()
+      return
+    }
+    const range = this._document.createRange()
+    range.setStart(node, offset)
+    range.collapse(true)
+    this._range = range
+  }
+
+  setPosition(node: VirtualNode | null, offset = 0): void {
+    this.collapse(node, offset)
+  }
+
+  selectAllChildren(node: VirtualNode): void {
+    const range = this._document.createRange()
+    range.selectNodeContents(node)
+    this._range = range
+  }
+
+  deleteFromDocument(): void {
+    this._range?.deleteContents()
+  }
+
+  toString(): string {
+    return this._range?.toString() ?? ''
   }
 }

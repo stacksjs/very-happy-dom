@@ -49,6 +49,20 @@ describe('Traversal APIs', () => {
     expect(walker.nextNode()).toBeNull()
   })
 
+  test('TreeWalker should continue across sibling removal during traversal', () => {
+    const doc = createDocument()
+    doc.body!.innerHTML = '<div><span id="a">A</span><span id="b">B</span><span id="c">C</span></div>'
+    const root = doc.querySelector('div')!
+    const walker = doc.createTreeWalker(root, SHOW_ELEMENT)
+
+    expect((walker.nextNode() as any).id).toBe('a')
+    root.removeChild(doc.getElementById('a')!)
+
+    expect((walker.nextNode() as any).id).toBe('b')
+    expect((walker.nextNode() as any).id).toBe('c')
+    expect(walker.nextNode()).toBeNull()
+  })
+
   test('Range should support text selection, cloning, and deletion', () => {
     const doc = createDocument()
     const text = doc.createTextNode('hello world')
@@ -84,5 +98,61 @@ describe('Traversal APIs', () => {
 
     rangeB.extractContents()
     expect(div.textContent).toBe('AC')
+  })
+
+  test('Range should support surroundContents for text selections', () => {
+    const doc = createDocument()
+    doc.body!.innerHTML = '<div>hello world</div>'
+    const div = doc.querySelector('div')!
+    const text = div.firstChild as any
+    const range = doc.createRange()
+    const strong = doc.createElement('strong')
+
+    range.setStart(text, 6)
+    range.setEnd(text, 11)
+    range.surroundContents(strong)
+
+    expect(div.textContent).toBe('hello world')
+    expect(div.querySelector('strong')?.textContent).toBe('world')
+    expect(range.toString()).toBe('world')
+  })
+
+  test('Range surroundContents should reject unsupported partial non-text selections', () => {
+    const doc = createDocument()
+    doc.body!.innerHTML = '<div><em>hello</em><strong>world</strong></div>'
+    const div = doc.querySelector('div')!
+    const emText = doc.querySelector('em')!.firstChild as any
+    const wrapper = doc.createElement('span')
+    const range = doc.createRange()
+
+    range.setStart(emText, 2)
+    range.setEnd(div, 2)
+
+    expect(() => range.surroundContents(wrapper)).toThrow()
+  })
+
+  test('Document selection should track added and collapsed ranges', () => {
+    const doc = createDocument()
+    doc.body!.innerHTML = '<p>Hello <span>world</span></p>'
+    const selection = doc.getSelection()
+    const span = doc.querySelector('span')!
+    const range = doc.createRange()
+
+    range.selectNodeContents(span)
+    selection.addRange(range)
+
+    expect(selection.rangeCount).toBe(1)
+    expect(selection.type).toBe('Range')
+    expect(selection.toString()).toBe('world')
+    expect(selection.getRangeAt(0)).toBe(range)
+
+    selection.collapse(span.firstChild as any, 3)
+
+    expect(selection.type).toBe('Caret')
+    expect(selection.isCollapsed).toBe(true)
+    expect(selection.anchorOffset).toBe(3)
+
+    selection.removeAllRanges()
+    expect(selection.rangeCount).toBe(0)
   })
 })

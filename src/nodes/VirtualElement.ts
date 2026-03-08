@@ -688,6 +688,113 @@ export class VirtualElement extends VirtualNodeBase {
     return null
   }
 
+  private _isButtonElement(): boolean {
+    return this.tagName === 'BUTTON'
+  }
+
+  private _isFormElement(): boolean {
+    return this.tagName === 'FORM'
+  }
+
+  private _isFieldsetElement(): boolean {
+    return this.tagName === 'FIELDSET'
+  }
+
+  private _isLegendElement(): boolean {
+    return this.tagName === 'LEGEND'
+  }
+
+  private _isLabelElement(): boolean {
+    return this.tagName === 'LABEL'
+  }
+
+  private _isLabelableElement(): boolean {
+    if (this._isInputElement()) {
+      return this._getInputType() !== 'hidden'
+    }
+    return this._isButtonElement() || this._isSelectElement() || this._isTextareaElement() || this.tagName === 'METER' || this.tagName === 'OUTPUT' || this.tagName === 'PROGRESS'
+  }
+
+  private _isListedFormAssociatedElement(): boolean {
+    return ['BUTTON', 'FIELDSET', 'INPUT', 'OBJECT', 'OUTPUT', 'SELECT', 'TEXTAREA'].includes(this.tagName)
+  }
+
+  private _collectDescendantElements(root: VirtualNode = this): VirtualElement[] {
+    const elements: VirtualElement[] = []
+    const visit = (node: VirtualNode): void => {
+      for (const child of node.childNodes) {
+        if (child.nodeType === ELEMENT_NODE) {
+          const element = child as VirtualElement
+          elements.push(element)
+          visit(element)
+        }
+      }
+    }
+    visit(root)
+    return elements
+  }
+
+  private _isWithinFirstLegendOfFieldset(fieldset: VirtualElement): boolean {
+    const firstLegend = fieldset.children.find(child => (child as any).tagName === 'LEGEND') as VirtualElement | undefined
+    if (!firstLegend) {
+      return false
+    }
+    return firstLegend === this || nodeContains(firstLegend, this)
+  }
+
+  private _isActuallyDisabled(): boolean {
+    if (this.hasAttribute('disabled')) {
+      return true
+    }
+
+    if (this._isOptionElement()) {
+      const parentElement = this.parentElement as VirtualElement | null
+      if (parentElement?.tagName === 'OPTGROUP' && parentElement.disabled) {
+        return true
+      }
+    }
+
+    if (!['BUTTON', 'INPUT', 'OPTION', 'OPTGROUP', 'SELECT', 'TEXTAREA'].includes(this.tagName)) {
+      return false
+    }
+
+    let current = this.parentNode
+    while (current) {
+      if ((current as any).tagName === 'FIELDSET' && (current as VirtualElement).hasAttribute('disabled')) {
+        if (!this._isWithinFirstLegendOfFieldset(current as VirtualElement)) {
+          return true
+        }
+      }
+      current = current.parentNode
+    }
+
+    return false
+  }
+
+  private _resetFormControlState(): void {
+    if (this._isInputElement() || this._isTextareaElement()) {
+      this._valueDirty = false
+      this._valueState = null
+    }
+
+    if (this._isInputElement()) {
+      this._checkedDirty = false
+      this._checkedState = null
+    }
+
+    if (this._isOptionElement()) {
+      this._selectedDirty = false
+      this._selectedState = null
+    }
+
+    if (this._isSelectElement()) {
+      for (const option of this._getSelectOptions()) {
+        option._selectedDirty = false
+        option._selectedState = null
+      }
+    }
+  }
+
   private _syncRadioGroupSelection(): void {
     if (!this._isInputElement() || this._getInputType() !== 'radio' || !this.checked) {
       return
@@ -726,9 +833,48 @@ export class VirtualElement extends VirtualNodeBase {
       : null
   }
 
+  get elements(): VirtualElement[] {
+    if (this._isFormElement()) {
+      return this._collectDescendantElements().filter(element => element._isListedFormAssociatedElement() && element.form === this)
+    }
+    if (this._isFieldsetElement()) {
+      return this._collectDescendantElements().filter(element => element._isListedFormAssociatedElement())
+    }
+    return []
+  }
+
+  get labels(): VirtualElement[] {
+    if (!this._isLabelableElement()) {
+      return []
+    }
+
+    const labels: VirtualElement[] = []
+    let current = this.parentNode
+    while (current) {
+      if ((current as any).tagName === 'LABEL') {
+        labels.push(current as VirtualElement)
+      }
+      current = current.parentNode
+    }
+
+    const id = this.id
+    if (id && this.ownerDocument) {
+      for (const label of this.ownerDocument.querySelectorAll('label')) {
+        if (label.getAttribute('for') === id && !labels.includes(label)) {
+          labels.push(label)
+        }
+      }
+    }
+
+    return labels
+  }
+
   get type(): string {
     if (this._isInputElement()) {
       return this._getInputType()
+    }
+    if (this._isButtonElement()) {
+      return (this.getAttribute('type') || 'submit').toLowerCase()
     }
     return this.getAttribute('type') || ''
   }
@@ -743,6 +889,38 @@ export class VirtualElement extends VirtualNodeBase {
 
   set name(value: string) {
     this.setAttribute('name', value)
+  }
+
+  get id(): string {
+    return this.getAttribute('id') || ''
+  }
+
+  set id(value: string) {
+    this.setAttribute('id', value)
+  }
+
+  get htmlFor(): string {
+    return this.getAttribute('for') || ''
+  }
+
+  set htmlFor(value: string) {
+    this.setAttribute('for', value)
+  }
+
+  get willValidate(): boolean {
+    if (!this._isListedFormAssociatedElement() || this.disabled) {
+      return false
+    }
+    if (this._isFieldsetElement() || this.tagName === 'OUTPUT') {
+      return false
+    }
+    if (this._isInputElement()) {
+      return !['button', 'hidden', 'image', 'reset', 'submit'].includes(this._getInputType())
+    }
+    if (this._isButtonElement()) {
+      return false
+    }
+    return this._isSelectElement() || this._isTextareaElement()
   }
 
   get value(): string {
@@ -958,6 +1136,10 @@ export class VirtualElement extends VirtualNodeBase {
       customError: false,
     }
 
+    if (!this.willValidate) {
+      return validity
+    }
+
     // Check required
     if (required && ((type === 'checkbox' || type === 'radio') ? !this.checked : !value)) {
       validity.valueMissing = true
@@ -1077,10 +1259,16 @@ export class VirtualElement extends VirtualNodeBase {
   }
 
   checkValidity(): boolean {
+    if (this._isFormElement() || this._isFieldsetElement()) {
+      return this.elements.every(element => element.checkValidity())
+    }
     return this.validity.valid
   }
 
   reportValidity(): boolean {
+    if (this._isFormElement() || this._isFieldsetElement()) {
+      return this.elements.every(element => element.reportValidity())
+    }
     const isValid = this.checkValidity()
     if (!isValid) {
       const event = new VirtualEvent('invalid', { bubbles: false, cancelable: true })
@@ -1136,6 +1324,15 @@ export class VirtualElement extends VirtualNodeBase {
 
   // Click simulation
   click(): void {
+    if (this.disabled) {
+      return
+    }
+    const event = new VirtualEvent('click', { bubbles: true, cancelable: true })
+    const shouldContinue = this.dispatchEvent(event)
+    if (!shouldContinue) {
+      return
+    }
+
     if (this._isInputElement()) {
       const type = this._getInputType()
       if (type === 'checkbox') {
@@ -1144,9 +1341,60 @@ export class VirtualElement extends VirtualNodeBase {
       else if (type === 'radio') {
         this.checked = true
       }
+      else if ((type === 'submit' || type === 'image') && this.form) {
+        this.form.requestSubmit(this)
+      }
+      else if (type === 'reset' && this.form) {
+        this.form.reset()
+      }
     }
-    const event = new VirtualEvent('click', { bubbles: true, cancelable: true })
+
+    if (this._isButtonElement() && this.form) {
+      if (this.type === 'reset') {
+        this.form.reset()
+      }
+      else if (this.type === 'submit') {
+        this.form.requestSubmit(this)
+      }
+    }
+  }
+
+  submit(): void {
+    if (!this._isFormElement()) {
+      return
+    }
+    const event = new VirtualEvent('submit', { bubbles: true, cancelable: true })
+    ;(event as any).submitter = null
     this.dispatchEvent(event)
+  }
+
+  requestSubmit(submitter?: VirtualElement): void {
+    if (!this._isFormElement()) {
+      return
+    }
+    if (submitter && submitter.form !== this) {
+      throw new Error('The specified element is not owned by this form element')
+    }
+    if (!this.reportValidity()) {
+      return
+    }
+    const event = new VirtualEvent('submit', { bubbles: true, cancelable: true })
+    ;(event as any).submitter = submitter ?? null
+    this.dispatchEvent(event)
+  }
+
+  reset(): void {
+    if (!this._isFormElement()) {
+      return
+    }
+    const event = new VirtualEvent('reset', { bubbles: true, cancelable: true })
+    const shouldContinue = this.dispatchEvent(event)
+    if (!shouldContinue) {
+      return
+    }
+    for (const element of this.elements) {
+      element._resetFormControlState()
+    }
   }
 
   // Form element properties
@@ -1174,7 +1422,10 @@ export class VirtualElement extends VirtualNodeBase {
   }
 
   get disabled(): boolean {
-    return this.hasAttribute('disabled')
+    if (!['BUTTON', 'FIELDSET', 'INPUT', 'OPTION', 'OPTGROUP', 'SELECT', 'TEXTAREA'].includes(this.tagName)) {
+      return this.hasAttribute('disabled')
+    }
+    return this._isActuallyDisabled()
   }
 
   set disabled(value: boolean) {
