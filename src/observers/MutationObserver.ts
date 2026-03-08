@@ -25,29 +25,69 @@ export interface MutationRecord {
 // eslint-disable-next-line pickier/no-unused-vars
 export type MutationCallback = (mutations: MutationRecord[], observer: MutationObserver) => void
 
+function isObservedWithinScope(target: VirtualNode, observedTarget: VirtualNode, subtree: boolean): boolean {
+  if (target === observedTarget) {
+    return true
+  }
+
+  if (!subtree) {
+    return false
+  }
+
+  let current: VirtualNode | null = target.parentNode
+  while (current) {
+    if (current === observedTarget) {
+      return true
+    }
+    current = current.parentNode
+  }
+
+  return false
+}
+
+function shouldReceiveRecord(record: MutationRecord, options: MutationObserverInit): boolean {
+  if (record.type === 'childList') {
+    return options.childList === true
+  }
+  if (record.type === 'attributes') {
+    if (options.attributes !== true) {
+      return false
+    }
+    if (options.attributeFilter && record.attributeName) {
+      return options.attributeFilter.map(name => name.toLowerCase()).includes(record.attributeName.toLowerCase())
+    }
+    return true
+  }
+  if (record.type === 'characterData') {
+    return options.characterData === true
+  }
+  return false
+}
+
 /**
  * MutationObserver implementation
- * Note: This is a simplified implementation for testing
- * It doesn't actually observe live changes, but provides the API
  */
 export class MutationObserver {
+  private static _observers = new Set<MutationObserver>()
   private _callback: MutationCallback
   private _records: MutationRecord[] = []
-  private _observing = false
+  private _observations = new Map<VirtualNode, MutationObserverInit>()
+  private _scheduled = false
 
   constructor(callback: MutationCallback) {
     this._callback = callback
   }
 
-  observe(_target: VirtualNode, _options: MutationObserverInit = {}): void {
-    this._observing = true
-    // In a full implementation, this would hook into DOM mutation events
-    // For now, it's a no-op that provides the API
+  observe(target: VirtualNode, options: MutationObserverInit = {}): void {
+    this._observations.set(target, { ...options })
+    MutationObserver._observers.add(this)
   }
 
   disconnect(): void {
-    this._observing = false
+    this._observations.clear()
+    MutationObserver._observers.delete(this)
     this._records = []
+    this._scheduled = false
   }
 
   takeRecords(): MutationRecord[] {
@@ -61,17 +101,40 @@ export class MutationObserver {
    * @internal
    */
   _addRecord(record: MutationRecord): void {
-    if (!this._observing)
+    this._records.push(record)
+    if (this._scheduled)
       return
 
-    this._records.push(record)
-
-    // Call callback asynchronously
-    setTimeout(() => {
+    this._scheduled = true
+    queueMicrotask(() => {
+      this._scheduled = false
       if (this._records.length > 0) {
         const records = this.takeRecords()
         this._callback(records, this)
       }
-    }, 0)
+    })
+  }
+
+  static _queueMutationRecord(record: MutationRecord): void {
+    for (const observer of MutationObserver._observers) {
+      for (const [observedTarget, options] of observer._observations) {
+        if (!isObservedWithinScope(record.target, observedTarget, options.subtree === true)) {
+          continue
+        }
+
+        if (!shouldReceiveRecord(record, options)) {
+          continue
+        }
+
+        observer._addRecord({
+          ...record,
+          oldValue: record.type === 'attributes'
+            ? (options.attributeOldValue ? record.oldValue : null)
+            : record.type === 'characterData'
+              ? (options.characterDataOldValue ? record.oldValue : null)
+              : null,
+        })
+      }
+    }
   }
 }

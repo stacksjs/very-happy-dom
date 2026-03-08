@@ -3,7 +3,7 @@
  */
 
 import type { VirtualElement } from '../nodes/VirtualElement'
-import type { VirtualNode } from '../nodes/VirtualNode'
+import { ELEMENT_NODE, type VirtualNode } from '../nodes/VirtualNode'
 
 export type ShadowRootMode = 'open' | 'closed'
 
@@ -31,7 +31,7 @@ export class ShadowRoot {
   querySelector(selector: string): VirtualElement | null {
     // Simple implementation - traverse children
     for (const child of this.children) {
-      if (child.nodeType === 'element') {
+      if (child.nodeType === ELEMENT_NODE) {
         const element = child as VirtualElement
         // Check if this element matches first
         if (element.matches?.(selector)) {
@@ -49,7 +49,7 @@ export class ShadowRoot {
   querySelectorAll(selector: string): VirtualElement[] {
     const results: VirtualElement[] = []
     for (const child of this.children) {
-      if (child.nodeType === 'element') {
+      if (child.nodeType === ELEMENT_NODE) {
         const element = child as VirtualElement
         // Check if this element matches first
         if (element.matches?.(selector)) {

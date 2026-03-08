@@ -57,16 +57,16 @@ console.log('\nTest Group 3: Type Mismatch Handling')
   const window = createTestWindow()
   const element = window.document.createElement('div')
 
-  // Setting non-string attributes - implementation stores as-is
+  // Setting non-string attributes coerces to strings
   element.setAttribute('test', 123 as any)
-  assert(element.getAttribute('test') as any === 123, 'Attribute stored as number')
+  assert(element.getAttribute('test') === '123', 'Attribute coerced to string')
 
-  // Setting null/undefined - both return null
+  // Setting null/undefined coerces to strings
   element.setAttribute('nullable', null as any)
-  assert(element.getAttribute('nullable') === null, 'Null attribute returns null')
+  assert(element.getAttribute('nullable') === 'null', 'Null attribute coerced to string')
 
   element.setAttribute('undef', undefined as any)
-  assert(element.getAttribute('undef') === null, 'Undefined attribute returns null')
+  assert(element.getAttribute('undef') === 'undefined', 'Undefined attribute coerced to string')
 
   await cleanupWindow(window)
 }

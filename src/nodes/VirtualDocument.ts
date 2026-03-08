@@ -1,20 +1,20 @@
 import type { XPathResult } from '../xpath/XPathResult'
-import type { History, HistoryState, Location, NodeType, VirtualNode } from './VirtualNode'
+import type { History, HistoryState, Location, NodeKind, NodeType, VirtualNode } from './VirtualNode'
 import { parseHTML } from '../parsers/html-parser'
 import { XPathEvaluator } from '../xpath/XPathEvaluator'
 import { XPathResultType } from '../xpath/XPathResult'
 import { VirtualCommentNode } from './VirtualCommentNode'
+import { VirtualDocumentFragment } from './VirtualDocumentFragment'
 import { VirtualElement } from './VirtualElement'
 import { VirtualSVGElement } from './VirtualSVGElement'
 import { VirtualTextNode } from './VirtualTextNode'
+import { DOCUMENT_NODE, ELEMENT_NODE, VirtualNodeBase } from './VirtualNode'
+import { appendNode, setOwnerDocumentRecursive } from './tree-operations'
 
-export class VirtualDocument implements VirtualNode {
-  nodeType: NodeType = 'document'
+export class VirtualDocument extends VirtualNodeBase {
+  nodeType: NodeType = DOCUMENT_NODE
+  nodeKind: NodeKind = 'document'
   nodeName: string = '#document'
-  nodeValue: string | null = null
-  attributes: Map<string, string> = new Map<string, string>()
-  children: VirtualNode[] = []
-  parentNode: VirtualNode | null = null
   defaultView: any = null
 
   documentElement: VirtualElement | null = null
@@ -26,18 +26,15 @@ export class VirtualDocument implements VirtualNode {
 
   private _historyStack: HistoryState[] = []
   private _historyIndex = -1
-  private _eventListeners = new Map<string, Array<(event: any) => void>>()
   private _xpathEvaluator = new XPathEvaluator()
   private _cookies: Record<string, string> = {}
 
   constructor() {
+    super()
     // Initialize with basic structure
     this.documentElement = new VirtualElement('html')
-    this.documentElement.ownerDocument = this
     this.head = new VirtualElement('head')
-    this.head.ownerDocument = this
     this.body = new VirtualElement('body')
-    this.body.ownerDocument = this
 
     this.documentElement.appendChild(this.head)
     this.documentElement.appendChild(this.body)
@@ -174,23 +171,11 @@ export class VirtualDocument implements VirtualNode {
   }
 
   appendChild(child: VirtualNode): VirtualNode {
-    this.children.push(child)
-    child.parentNode = this
-    // Set ownerDocument on the child and its descendants
-    if ((child as any).ownerDocument !== undefined) {
-      this._setOwnerDocumentRecursive(child, this)
-    }
-    return child
+    return appendNode(this, child)
   }
 
   private _setOwnerDocumentRecursive(node: VirtualNode, doc: VirtualDocument): void {
-    if ('ownerDocument' in node) {
-      (node as any).ownerDocument = doc
-    }
-    const children = (node as any).childNodes ?? (node as any).children ?? []
-    for (const child of children as VirtualNode[]) {
-      this._setOwnerDocumentRecursive(child, doc)
-    }
+    setOwnerDocumentRecursive(node, doc)
   }
 
   createElement(tagName: string): VirtualElement | any {
@@ -201,7 +186,8 @@ export class VirtualDocument implements VirtualNode {
       el.ownerDocument = this
       return el
     }
-    const el = new VirtualElement(tagName)
+    const customElement = this.defaultView?.customElements?.get?.(tagName.toLowerCase())
+    const el = customElement ? new customElement(tagName) : new VirtualElement(tagName)
     el.ownerDocument = this
     return el
   }
@@ -227,12 +213,9 @@ export class VirtualDocument implements VirtualNode {
     return new VirtualCommentNode(text)
   }
 
-  createDocumentFragment(): VirtualElement {
-    // DocumentFragment is similar to a VirtualElement but doesn't get serialized
-    // For simplicity, we use a VirtualElement with a special tag
-    const fragment = new VirtualElement('document-fragment')
-    // Mark it as a fragment internally
-    ;(fragment as any)._isFragment = true
+  createDocumentFragment(): VirtualDocumentFragment {
+    const fragment = new VirtualDocumentFragment()
+    fragment.ownerDocument = this
     return fragment
   }
 
@@ -253,7 +236,10 @@ export class VirtualDocument implements VirtualNode {
   }
 
   getElementsByClassName(className: string): VirtualElement[] {
-    return this.querySelectorAll(`.${className}`)
+    const tokens = className.trim().split(/\s+/).filter(Boolean)
+    if (tokens.length === 0)
+      return []
+    return this.querySelectorAll(tokens.map(token => `.${token}`).join(''))
   }
 
   // Parse and set body HTML
@@ -279,16 +265,17 @@ export class VirtualDocument implements VirtualNode {
 
     // If the HTML contains a full document structure, replace documentElement
     for (const node of nodes) {
-      if (node.nodeType === 'element') {
+      if (node.nodeType === ELEMENT_NODE) {
         const element = node as VirtualElement
         if (element.tagName === 'HTML') {
           // Replace the entire document structure
+          this.childNodes = []
           this.documentElement = element
-          element.parentNode = this
+          this.appendChild(element)
 
           // Update head and body references
           for (const child of element.children) {
-            if (child.nodeType === 'element') {
+            if (child.nodeType === ELEMENT_NODE) {
               const childEl = child as VirtualElement
               if (childEl.tagName === 'HEAD') {
                 this.head = childEl
@@ -385,30 +372,15 @@ export class VirtualDocument implements VirtualNode {
 
   // Event listener methods
   addEventListener(type: string, listener: (event: any) => void): void {
-    if (!this._eventListeners.has(type)) {
-      this._eventListeners.set(type, [])
-    }
-    this._eventListeners.get(type)!.push(listener)
+    super.addEventListener(type, listener)
   }
 
   removeEventListener(type: string, listener: (event: any) => void): void {
-    const listeners = this._eventListeners.get(type)
-    if (listeners) {
-      const index = listeners.indexOf(listener)
-      if (index !== -1) {
-        listeners.splice(index, 1)
-      }
-    }
+    super.removeEventListener(type, listener)
   }
 
   dispatchEvent(event: any): boolean {
-    const listeners = this._eventListeners.get(event.type)
-    if (listeners) {
-      for (const listener of listeners) {
-        listener(event)
-      }
-    }
-    return true
+    return super.dispatchEvent(event)
   }
 
   // XPath support

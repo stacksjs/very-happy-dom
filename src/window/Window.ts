@@ -5,12 +5,15 @@ import { CanvasRenderingContext2D, HTMLCanvasElement } from '../apis/Canvas'
 import { Navigator as VeryHappyNavigator } from '../apis/Clipboard'
 import { VeryHappyFile, VeryHappyFileList, VeryHappyFileReader } from '../apis/FileAPI'
 import { CustomEvent as VeryHappyCustomEvent } from '../events/CustomEvent'
+import { VirtualEventTarget } from '../events/VirtualEventTarget'
 import { VirtualEvent } from '../events/VirtualEvent'
 import { XMLHttpRequest as VeryHappyXMLHttpRequest } from '../http/XMLHttpRequest'
 import { VeryHappyWebSocket } from '../network/WebSocket'
 import { VirtualCommentNode } from '../nodes/VirtualCommentNode'
 import { VirtualDocument } from '../nodes/VirtualDocument'
+import { VirtualDocumentFragment } from '../nodes/VirtualDocumentFragment'
 import { VirtualElement } from '../nodes/VirtualElement'
+import { VirtualNodeBase } from '../nodes/VirtualNode'
 import { VirtualSVGElement } from '../nodes/VirtualSVGElement'
 import { VirtualTextNode } from '../nodes/VirtualTextNode'
 import { IntersectionObserver as VeryHappyIntersectionObserver } from '../observers/IntersectionObserver'
@@ -50,7 +53,7 @@ export interface IBrowserSettings {
  * Window represents a browser window instance
  * Compatible with Happy DOM's Window API
  */
-export class Window {
+export class Window extends VirtualEventTarget {
   public document: VirtualDocument
   public happyDOM: DetachedWindowAPI
   public console: Console
@@ -92,10 +95,10 @@ export class Window {
 
   // DOM node constructors
   public Element: typeof VirtualElement = VirtualElement
-  public Node: typeof VirtualElement = VirtualElement
+  public Node: typeof VirtualNodeBase = VirtualNodeBase
   public Text: typeof VirtualTextNode = VirtualTextNode
   public Comment: typeof VirtualCommentNode = VirtualCommentNode
-  public DocumentFragment: typeof VirtualElement = VirtualElement
+  public DocumentFragment: typeof VirtualDocumentFragment = VirtualDocumentFragment
   public Event: typeof VirtualEvent = VirtualEvent
   public SVGElement: typeof VirtualSVGElement = VirtualSVGElement
 
@@ -111,6 +114,7 @@ export class Window {
   private _timerManager: TimerManager
 
   constructor(options: WindowOptions = {}) {
+    super()
     const {
       url = 'about:blank',
       width = 1024,

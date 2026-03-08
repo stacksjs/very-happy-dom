@@ -1,5 +1,6 @@
 import type { VirtualElement } from '../nodes/VirtualElement'
-import type { VirtualNode } from '../nodes/VirtualNode'
+import { ELEMENT_NODE, TEXT_NODE, type VirtualNode } from '../nodes/VirtualNode'
+import { VirtualTextNode } from '../nodes/VirtualTextNode'
 import { XPathResult, XPathResultType } from './XPathResult'
 
 /**
@@ -58,11 +59,10 @@ export class XPathEvaluator {
     // Handle attribute access (@attr)
     if (trimmed.startsWith('@')) {
       const attrName = trimmed.substring(1)
-      if (contextNode.nodeType === 'element') {
+      if (contextNode.nodeType === ELEMENT_NODE) {
         const value = (contextNode as VirtualElement).getAttribute(attrName)
         if (value !== null) {
-          // Return text node with attribute value
-          return [{ nodeType: 'text', nodeValue: value, nodeName: '#text' } as any]
+          return [new VirtualTextNode(value)]
         }
       }
       return []
@@ -139,12 +139,12 @@ export class XPathEvaluator {
   private _matchesExpression(node: VirtualNode, expression: string): boolean {
     // Handle wildcard
     if (expression === '*') {
-      return node.nodeType === 'element'
+      return node.nodeType === ELEMENT_NODE
     }
 
     // Handle text() function
     if (expression === 'text()') {
-      return node.nodeType === 'text'
+      return node.nodeType === TEXT_NODE
     }
 
     // Handle node() function
@@ -156,7 +156,7 @@ export class XPathEvaluator {
     const predicateMatch = expression.match(/^(\w+)\[(.+)\]$/)
     if (predicateMatch) {
       const [, tagName, predicate] = predicateMatch
-      if (node.nodeType !== 'element')
+      if (node.nodeType !== ELEMENT_NODE)
         return false
       const element = node as VirtualElement
 
@@ -168,7 +168,7 @@ export class XPathEvaluator {
     }
 
     // Handle simple tag name
-    if (node.nodeType === 'element') {
+    if (node.nodeType === ELEMENT_NODE) {
       const element = node as VirtualElement
       return element.tagName === expression.toUpperCase()
     }
@@ -199,7 +199,7 @@ export class XPathEvaluator {
       const index = Number.parseInt(indexMatch[1])
       const parent = element.parentNode
       if (parent) {
-        const siblings = parent.children.filter(c => c.nodeType === 'element')
+        const siblings = parent.children.filter(c => c.nodeType === ELEMENT_NODE)
         return siblings.indexOf(element) === index - 1
       }
     }

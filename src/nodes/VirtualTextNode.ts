@@ -1,14 +1,14 @@
-import type { NodeType, VirtualNode } from './VirtualNode'
+import { MutationObserver } from '../observers/MutationObserver'
+import { TEXT_NODE, VirtualNodeBase, type NodeKind, type NodeType } from './VirtualNode'
 
-export class VirtualTextNode implements VirtualNode {
-  nodeType: NodeType = 'text'
+export class VirtualTextNode extends VirtualNodeBase {
+  nodeType: NodeType = TEXT_NODE
+  nodeKind: NodeKind = 'text'
   nodeName: string = '#text'
   nodeValue: string
-  attributes: Map<string, string> = new Map<string, string>()
-  children: VirtualNode[] = []
-  parentNode: VirtualNode | null = null
 
   constructor(text: string) {
+    super()
     this.nodeValue = text
   }
 
@@ -17,6 +17,22 @@ export class VirtualTextNode implements VirtualNode {
   }
 
   set textContent(value: string) {
+    const oldValue = this.nodeValue || ''
     this.nodeValue = value
+    MutationObserver._queueMutationRecord({
+      type: 'characterData',
+      target: this,
+      addedNodes: [],
+      removedNodes: [],
+      previousSibling: null,
+      nextSibling: null,
+      attributeName: null,
+      attributeNamespace: null,
+      oldValue,
+    })
+  }
+
+  cloneNode(): VirtualTextNode {
+    return new VirtualTextNode(this.nodeValue)
   }
 }

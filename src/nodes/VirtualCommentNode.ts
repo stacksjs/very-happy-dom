@@ -1,14 +1,13 @@
-import type { NodeType, VirtualNode } from './VirtualNode'
+import { COMMENT_NODE, VirtualNodeBase, type NodeKind, type NodeType } from './VirtualNode'
 
-export class VirtualCommentNode implements VirtualNode {
-  nodeType: NodeType = 'comment'
+export class VirtualCommentNode extends VirtualNodeBase {
+  nodeType: NodeType = COMMENT_NODE
+  nodeKind: NodeKind = 'comment'
   nodeName: string = '#comment'
   nodeValue: string
-  attributes: Map<string, string> = new Map<string, string>()
-  children: VirtualNode[] = []
-  parentNode: VirtualNode | null = null
 
   constructor(text: string) {
+    super()
     this.nodeValue = text
   }
 
@@ -18,5 +17,9 @@ export class VirtualCommentNode implements VirtualNode {
 
   set textContent(_value: string) {
     // Comments don't have text content
+  }
+
+  cloneNode(): VirtualCommentNode {
+    return new VirtualCommentNode(this.nodeValue)
   }
 }

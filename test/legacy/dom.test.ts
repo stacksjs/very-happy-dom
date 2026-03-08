@@ -14,7 +14,7 @@ describe('Virtual DOM', () => {
     const doc = createDocument()
     const div = doc.createElement('div')
     expect(div.nodeName).toBe('DIV')
-    expect(div.nodeType).toBe('element')
+    expect(div.nodeType).toBe(1)
   })
 
   test('should set and get attributes', () => {

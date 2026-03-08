@@ -91,7 +91,7 @@ describe('DOM Edge Cases', () => {
       expect(div.textContent).toBe('<script>alert("xss")</script>')
       expect(div.children.length).toBe(0)
       expect(div.childNodes.length).toBe(1)
-      expect(div.childNodes[0].nodeType).toBe('text')
+      expect(div.childNodes[0].nodeType).toBe(3)
     })
 
     test('should handle textContent with newlines and whitespace', () => {
@@ -123,7 +123,7 @@ describe('DOM Edge Cases', () => {
       div.textContent = 'new text'
       expect(div.children.length).toBe(0)
       expect(div.childNodes.length).toBe(1)
-      expect(div.childNodes[0].nodeType).toBe('text')
+      expect(div.childNodes[0].nodeType).toBe(3)
     })
   })
 
@@ -238,8 +238,7 @@ describe('DOM Edge Cases', () => {
       const parent = doc.createElement('div')
       const child = doc.createElement('span')
 
-      const result = parent.removeChild(child)
-      expect(result).toBe(child)
+      expect(() => parent.removeChild(child)).toThrow('Child node not found')
       expect(parent.children.length).toBe(0)
     })
 
@@ -252,7 +251,8 @@ describe('DOM Edge Cases', () => {
       parent.appendChild(child)
       parent.appendChild(child)
 
-      expect(parent.children.length).toBe(3)
+      expect(parent.children.length).toBe(1)
+      expect(parent.children[0]).toBe(child)
     })
 
     test('should handle deeply nested elements', () => {
@@ -403,7 +403,7 @@ describe('DOM Edge Cases', () => {
       const doc = createDocument()
       const comment = doc.createComment('test comment')
 
-      expect(comment.nodeType).toBe('comment')
+      expect(comment.nodeType).toBe(8)
       expect(comment.nodeName).toBe('#comment')
       expect(comment.nodeValue).toBe('test comment')
     })
@@ -423,7 +423,7 @@ describe('DOM Edge Cases', () => {
       const doc = createDocument()
       const text = doc.createTextNode('hello world')
 
-      expect(text.nodeType).toBe('text')
+      expect(text.nodeType).toBe(3)
       expect(text.nodeName).toBe('#text')
       expect(text.nodeValue).toBe('hello world')
       expect(text.textContent).toBe('hello world')

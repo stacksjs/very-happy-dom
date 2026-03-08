@@ -1,7 +1,7 @@
-import { CAC } from 'cac'
+import { CLI } from '@stacksjs/clapp'
 import { version } from '../package.json'
 
-const cli = new CAC('my-cli')
+const cli = new CLI('my-cli')
 
 interface CliOption {
   from: string

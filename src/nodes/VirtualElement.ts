@@ -1,32 +1,42 @@
 import type { ShadowRootInit } from '../webcomponents/ShadowRoot'
-import type { EventListener, EventListenerOptions, NodeType, VirtualNode } from './VirtualNode'
 import { VirtualEvent } from '../events/VirtualEvent'
 import { parseHTML } from '../parsers/html-parser'
 import { hasCombinators, matchesComplexSelector, matchesSimpleSelector, querySelectorAllEngine, querySelectorEngine } from '../selectors/engine'
 import { ShadowRoot } from '../webcomponents/ShadowRoot'
+import { MutationObserver } from '../observers/MutationObserver'
+import {
+  COMMENT_NODE,
+  DOCUMENT_NODE,
+  ELEMENT_NODE,
+  TEXT_NODE,
+  VirtualNodeBase,
+  isElementNode,
+  type EventListenerOptions,
+  type NodeKind,
+  type NodeType,
+  type VirtualNode,
+} from './VirtualNode'
+import { appendNode, getNodeTextContent, insertNodeBefore, nodeContains, removeNode, replaceNode, setOwnerDocumentRecursive } from './tree-operations'
+import { VirtualTextNode } from './VirtualTextNode'
 
-export class VirtualElement implements VirtualNode {
-  nodeType: NodeType = 'element'
+export class VirtualElement extends VirtualNodeBase {
+  nodeType: NodeType = ELEMENT_NODE
+  nodeKind: NodeKind = 'element'
   nodeName: string
-  nodeValue: string | null = null
   tagName: string
   namespaceURI: string | null = 'http://www.w3.org/1999/xhtml'
-  attributes: Map<string, string> = new Map<string, string>()
-  childNodes: VirtualNode[] = []
-  parentNode: VirtualNode | null = null
-  ownerDocument: any = null
   shadowRoot: ShadowRoot | null = null
-  private eventListeners: Map<string, EventListener[]> = new Map<string, EventListener[]>()
   private _customValidity: string = ''
   private _internalStyles: Map<string, string> = new Map<string, string>()
   private _stylePriorities: Map<string, string> = new Map<string, string>()
 
   // children should only contain element nodes, per DOM spec
   get children(): VirtualNode[] {
-    return this.childNodes.filter(node => node.nodeType === 'element')
+    return this.childNodes.filter(node => node.nodeType === ELEMENT_NODE)
   }
 
   constructor(tagName: string) {
+    super()
     this.tagName = tagName.toUpperCase()
     this.nodeName = this.tagName
   }
@@ -43,12 +53,25 @@ export class VirtualElement implements VirtualNode {
   setAttribute(name: string, value: string): void {
     const normalizedName = name.toLowerCase()
     const normalizedValue = `${value}`
+    const oldValue = this.attributes.get(normalizedName) ?? null
 
     this.attributes.set(normalizedName, normalizedValue)
 
     if (normalizedName === 'style') {
       this._setStylesFromAttribute(normalizedValue)
     }
+
+    MutationObserver._queueMutationRecord({
+      type: 'attributes',
+      target: this,
+      addedNodes: [],
+      removedNodes: [],
+      previousSibling: null,
+      nextSibling: null,
+      attributeName: normalizedName,
+      attributeNamespace: null,
+      oldValue,
+    })
   }
 
   setAttributeNS(_namespace: string | null, qualifiedName: string, value: string): void {
@@ -57,12 +80,28 @@ export class VirtualElement implements VirtualNode {
 
   removeAttribute(name: string): void {
     const normalizedName = name.toLowerCase()
+    const oldValue = this.attributes.get(normalizedName) ?? null
+    if (oldValue === null) {
+      return
+    }
     this.attributes.delete(normalizedName)
 
     if (normalizedName === 'style') {
       this._internalStyles.clear()
       this._stylePriorities.clear()
     }
+
+    MutationObserver._queueMutationRecord({
+      type: 'attributes',
+      target: this,
+      addedNodes: [],
+      removedNodes: [],
+      previousSibling: null,
+      nextSibling: null,
+      attributeName: normalizedName,
+      attributeNamespace: null,
+      oldValue,
+    })
   }
 
   removeAttributeNS(_namespace: string | null, localName: string): void {
@@ -79,80 +118,28 @@ export class VirtualElement implements VirtualNode {
 
   // Child manipulation methods
   appendChild(child: VirtualNode): VirtualNode {
-    this.childNodes.push(child)
-    child.parentNode = this
-    // Propagate ownerDocument to child
-    if (this.ownerDocument && (child as any).ownerDocument !== this.ownerDocument) {
-      this._setOwnerDocument(child, this.ownerDocument)
-    }
-    return child
+    return appendNode(this, child)
   }
 
   removeChild(child: VirtualNode): VirtualNode {
-    const index = this.childNodes.indexOf(child)
-    if (index === -1) {
-      // Don't throw - just return the child
-      return child
-    }
-
-    this.childNodes.splice(index, 1)
-    child.parentNode = null
-    return child
+    return removeNode(this, child)
   }
 
   insertBefore(newNode: VirtualNode, referenceNode: VirtualNode | null): VirtualNode {
-    if (referenceNode === null) {
-      return this.appendChild(newNode)
-    }
-
-    const index = this.childNodes.indexOf(referenceNode)
-    if (index === -1) {
-      throw new Error('Reference node not found')
-    }
-
-    // Remove from previous parent if any
-    if (newNode.parentNode) {
-      const prevParent = newNode.parentNode as VirtualElement
-      const prevIndex = prevParent.childNodes.indexOf(newNode)
-      if (prevIndex !== -1) {
-        prevParent.childNodes.splice(prevIndex, 1)
-      }
-    }
-
-    this.childNodes.splice(index, 0, newNode)
-    newNode.parentNode = this
-    if (this.ownerDocument && (newNode as any).ownerDocument !== this.ownerDocument) {
-      this._setOwnerDocument(newNode, this.ownerDocument)
-    }
-    return newNode
+    return insertNodeBefore(this, newNode, referenceNode)
   }
 
   replaceChild(newNode: VirtualNode, oldNode: VirtualNode): VirtualNode {
-    const index = this.childNodes.indexOf(oldNode)
-    if (index === -1) {
-      throw new Error('Old node not found')
-    }
-
-    // Remove from previous parent if any
-    if (newNode.parentNode) {
-      const prevParent = newNode.parentNode as VirtualElement
-      const prevIndex = prevParent.childNodes.indexOf(newNode)
-      if (prevIndex !== -1) {
-        prevParent.childNodes.splice(prevIndex, 1)
-      }
-    }
-
-    this.childNodes.splice(index, 1, newNode)
-    oldNode.parentNode = null
-    newNode.parentNode = this
-    if (this.ownerDocument && (newNode as any).ownerDocument !== this.ownerDocument) {
-      this._setOwnerDocument(newNode, this.ownerDocument)
-    }
-    return oldNode
+    return replaceNode(this, newNode, oldNode)
   }
 
   cloneNode(deep = false): VirtualElement {
-    const clone = new VirtualElement(this.tagName)
+    const clone = this.namespaceURI === 'http://www.w3.org/2000/svg'
+      ? new (require('./VirtualSVGElement').VirtualSVGElement)(this.tagName)
+      : new VirtualElement(this.tagName)
+    clone.namespaceURI = this.namespaceURI
+    clone.nodeName = this.nodeName
+    clone.tagName = this.tagName
 
     // Copy attributes
     for (const [name, value] of this.attributes) {
@@ -162,13 +149,8 @@ export class VirtualElement implements VirtualNode {
     // Deep clone children
     if (deep) {
       for (const child of this.childNodes) {
-        if (child.nodeType === 'element') {
-          const childClone = (child as VirtualElement).cloneNode(true)
-          clone.appendChild(childClone)
-        }
-        else {
-          // Clone text/comment nodes
-          const childClone = { ...child, parentNode: null }
+        const childClone = (child as any).cloneNode?.(true)
+        if (childClone) {
           clone.appendChild(childClone)
         }
       }
@@ -183,13 +165,10 @@ export class VirtualElement implements VirtualNode {
     let element: VirtualElement | null = this
 
     while (element) {
-      if (matchesSimpleSelector(element, selector)) {
+      if (element.matches(selector)) {
         return element
       }
-      element = element.parentNode as VirtualElement | null
-      if (element?.nodeType !== 'element') {
-        element = null
-      }
+      element = element.parentElement
     }
 
     return null
@@ -236,7 +215,7 @@ export class VirtualElement implements VirtualNode {
 
   // parentElement - returns parent if it's an element
   get parentElement(): VirtualElement | null {
-    if (this.parentNode && this.parentNode.nodeType === 'element') {
+    if (isElementNode(this.parentNode)) {
       return this.parentNode as VirtualElement
     }
     return null
@@ -288,7 +267,7 @@ export class VirtualElement implements VirtualNode {
       return null
 
     for (let i = index + 1; i < siblings.length; i++) {
-      if (siblings[i].nodeType === 'element') {
+      if (siblings[i].nodeType === ELEMENT_NODE) {
         return siblings[i] as VirtualElement
       }
     }
@@ -306,7 +285,7 @@ export class VirtualElement implements VirtualNode {
       return null
 
     for (let i = index - 1; i >= 0; i--) {
-      if (siblings[i].nodeType === 'element') {
+      if (siblings[i].nodeType === ELEMENT_NODE) {
         return siblings[i] as VirtualElement
       }
     }
@@ -316,28 +295,16 @@ export class VirtualElement implements VirtualNode {
 
   // Text content
   get textContent(): string {
-    let text = ''
-    for (const child of this.childNodes) {
-      text += child.textContent
-    }
-    return text
+    return getNodeTextContent(this)
   }
 
   set textContent(value: string) {
-    this.childNodes = []
+    while (this.childNodes.length > 0) {
+      this.removeChild(this.childNodes[0])
+    }
     if (value) {
-      // We need to import VirtualTextNode but avoid circular dependency
-      // For now, create a simple text node object
-      const textNode: VirtualNode = {
-        nodeType: 'text',
-        nodeName: '#text',
-        nodeValue: value,
-        attributes: new Map(),
-        children: [],
-        parentNode: this,
-        textContent: value,
-      }
-      this.childNodes.push(textNode)
+      const textNode = new VirtualTextNode(value)
+      this.appendChild(textNode)
     }
   }
 
@@ -374,7 +341,9 @@ export class VirtualElement implements VirtualNode {
   }
 
   set innerHTML(html: string) {
-    this.childNodes = []
+    while (this.childNodes.length > 0) {
+      this.removeChild(this.childNodes[0])
+    }
     if (html) {
       const nodes = parseHTML(html)
 
@@ -383,11 +352,11 @@ export class VirtualElement implements VirtualNode {
       if (this.tagName === 'HTML' && nodes.length > 0) {
         // Look for an <html> element in the parsed nodes
         for (const node of nodes) {
-          if (node.nodeType === 'element') {
+          if (node.nodeType === ELEMENT_NODE) {
             const element = node as VirtualElement
             if (element.tagName === 'HTML') {
               // Extract the <html> element's children (head, body, etc.)
-              for (const child of element.children) {
+              for (const child of [...element.childNodes]) {
                 this.appendChild(child)
               }
               // Continue to process any remaining nodes
@@ -479,13 +448,13 @@ export class VirtualElement implements VirtualNode {
   }
 
   private _serializeNode(node: VirtualNode): string {
-    if (node.nodeType === 'text') {
+    if (node.nodeType === TEXT_NODE) {
       return node.nodeValue || ''
     }
-    if (node.nodeType === 'comment') {
+    if (node.nodeType === COMMENT_NODE) {
       return `<!--${node.nodeValue}-->`
     }
-    if (node.nodeType === 'element') {
+    if (node.nodeType === ELEMENT_NODE) {
       const element = node as VirtualElement
       const tagName = element.tagName.toLowerCase()
       let html = `<${tagName}`
@@ -825,11 +794,11 @@ export class VirtualElement implements VirtualNode {
       // Navigate to the document root or highest ancestor
       // eslint-disable-next-line ts/no-this-alias
       let root: VirtualNode = this
-      while (root.parentNode && root.parentNode.nodeType !== 'document') {
+      while (root.parentNode && root.parentNode.nodeType !== DOCUMENT_NODE) {
         root = root.parentNode
       }
       // If we have a document parent, use the document as root
-      if (root.parentNode && root.parentNode.nodeType === 'document') {
+      if (root.parentNode && root.parentNode.nodeType === DOCUMENT_NODE) {
         root = root.parentNode
       }
 
@@ -843,139 +812,15 @@ export class VirtualElement implements VirtualNode {
 
   // Event handling
   addEventListener(type: string, listener: (event: VirtualEvent) => void, options: EventListenerOptions | boolean = {}): void {
-    const opts: EventListenerOptions = typeof options === 'boolean'
-      ? { capture: options }
-      : { capture: options.capture ?? false, once: options.once, passive: options.passive }
-
-    if (!this.eventListeners.has(type)) {
-      this.eventListeners.set(type, [])
-    }
-
-    const listeners = this.eventListeners.get(type)!
-
-    // Don't add duplicate listeners - check if same listener with same capture option already exists
-    const isDuplicate = listeners.some(
-      l => l.listener === listener && l.options.capture === opts.capture,
-    )
-
-    if (!isDuplicate) {
-      listeners.push({
-        listener,
-        options: opts,
-      })
-    }
+    super.addEventListener(type, listener, options)
   }
 
   removeEventListener(type: string, listener: (event: VirtualEvent) => void, options: EventListenerOptions | boolean = {}): void {
-    const opts: EventListenerOptions = typeof options === 'boolean'
-      ? { capture: options }
-      : { capture: options.capture ?? false }
-    const listeners = this.eventListeners.get(type)
-
-    if (!listeners)
-      return
-
-    const index = listeners.findIndex(
-      l => l.listener === listener && l.options.capture === opts.capture,
-    )
-
-    if (index !== -1) {
-      listeners.splice(index, 1)
-    }
+    super.removeEventListener(type, listener, options)
   }
 
   dispatchEvent(event: any): boolean {
-    // Try to set target and currentTarget if they're writable
-    // Native Event objects have readonly properties, so we need to handle that
-    try {
-      event.target = this
-      event.currentTarget = this
-    }
-    catch {
-      // If properties are readonly, that's okay - native Events set these automatically
-    }
-
-    // Capture phase - traverse from root to target
-    const path: VirtualElement[] = []
-    // eslint-disable-next-line ts/no-this-alias
-    let current: VirtualNode | null = this
-    while (current && current.nodeType === 'element') {
-      path.unshift(current as VirtualElement)
-      current = current.parentNode
-    }
-
-    // Get event properties safely
-    const isPropagationStopped = () => event.propagationStopped || event._propagationStopped || false
-
-    // Capture phase
-    for (let i = 0; i < path.length - 1 && !isPropagationStopped(); i++) {
-      const element = path[i]
-      try {
-        event.currentTarget = element
-      }
-      catch {
-        // Ignore if readonly
-      }
-      this._invokeEventListeners(element, event, true)
-    }
-
-    // Target phase
-    if (!isPropagationStopped()) {
-      try {
-        event.currentTarget = this
-      }
-      catch {
-        // Ignore if readonly
-      }
-      this._invokeEventListeners(this, event, false)
-      this._invokeEventListeners(this, event, true)
-    }
-
-    // Bubble phase
-    const bubbles = event.bubbles ?? true
-    if (bubbles && !isPropagationStopped()) {
-      for (let i = path.length - 2; i >= 0 && !isPropagationStopped(); i--) {
-        const element = path[i]
-        try {
-          event.currentTarget = element
-        }
-        catch {
-          // Ignore if readonly
-        }
-        this._invokeEventListeners(element, event, false)
-      }
-    }
-
-    return !(event.defaultPrevented ?? false)
-  }
-
-  private _invokeEventListeners(element: VirtualElement, event: VirtualEvent, capture: boolean): void {
-    const listeners = element.eventListeners.get(event.type)
-    if (!listeners)
-      return
-
-    // Create a copy to avoid issues if listeners are removed during iteration
-    const listenersCopy = [...listeners]
-
-    for (const { listener, options } of listenersCopy) {
-      if (options.capture !== capture)
-        continue
-
-      if (event.immediatePropagationStopped)
-        break
-
-      try {
-        listener.call(element, event)
-      }
-      catch (error) {
-        // Log error but continue executing other listeners
-        console.error('Error in event listener:', error)
-      }
-
-      if (options.once) {
-        element.removeEventListener(event.type, listener, options)
-      }
-    }
+    return super.dispatchEvent(event)
   }
 
   // Click simulation
@@ -1080,13 +925,7 @@ export class VirtualElement implements VirtualNode {
   }
 
   private _setOwnerDocument(node: VirtualNode, doc: any): void {
-    if ('ownerDocument' in node) {
-      (node as any).ownerDocument = doc
-    }
-    const children = (node as any).childNodes ?? (node as any).children ?? []
-    for (const child of children as VirtualNode[]) {
-      this._setOwnerDocument(child, doc)
-    }
+    setOwnerDocumentRecursive(node, doc)
   }
 
   private _rootNode(node: VirtualNode): VirtualNode {
@@ -1098,18 +937,7 @@ export class VirtualElement implements VirtualNode {
   }
 
   private _containsNode(parent: VirtualNode, target: VirtualNode): boolean {
-    if (parent === target) {
-      return false
-    }
-
-    let current: VirtualNode | null = target.parentNode
-    while (current) {
-      if (current === parent) {
-        return true
-      }
-      current = current.parentNode
-    }
-    return false
+    return parent !== target && nodeContains(parent, target)
   }
 
   private _documentOrder(root: VirtualNode): VirtualNode[] {

@@ -26,7 +26,7 @@ console.log('Test Group 1: Script Injection Prevention')
   div.textContent = '<script>alert("XSS")</script>'
   assert(div.children.length === 0, 'textContent creates text node, not elements')
   assert(div.childNodes.length === 1, 'One text node created')
-  assert(div.childNodes[0].nodeType === 'text', 'Child is text node')
+  assert(div.childNodes[0].nodeType === 3, 'Child is text node')
 
   await cleanupWindow(window)
 }
@@ -268,7 +268,7 @@ console.log('\nTest Group 12: Comment Injection')
 
   // Test HTML comments with scripts
   window.document.body!.innerHTML = '<!-- <script>alert("XSS")</script> --><div>Content</div>'
-  const comments = window.document.body!.childNodes.filter(child => child.nodeType === 'comment')
+  const comments = window.document.body!.childNodes.filter(child => child.nodeType === 8)
   assert(comments.length > 0, 'Comments parsed')
 
   // Test conditional comments (IE-specific)

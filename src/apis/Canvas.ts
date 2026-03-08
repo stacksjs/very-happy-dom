@@ -379,16 +379,29 @@ export class HTMLCanvasElement {
   public height = 150
   public tagName = 'CANVAS'
   public nodeName = 'CANVAS'
-  public nodeType: 'element' = 'element'
+  public nodeType = 1
+  public nodeKind = 'element'
   public nodeValue: string | null = null
   public parentNode: any = null
   public childNodes: any[] = []
   public attributes: Map<string, string> = new Map()
+  public ownerDocument: any = null
   private context2d: CanvasRenderingContext2D | null = null
 
   // children should only contain element nodes, per DOM spec
   get children(): any[] {
-    return this.childNodes.filter(node => node.nodeType === 'element')
+    return this.childNodes.filter(node => node.nodeType === 1)
+  }
+
+  get isConnected(): boolean {
+    let current: any = this
+    while (current) {
+      if (current.nodeType === 9) {
+        return true
+      }
+      current = current.parentNode
+    }
+    return false
   }
 
   // Add minimal methods to make it compatible with VirtualElement for queries

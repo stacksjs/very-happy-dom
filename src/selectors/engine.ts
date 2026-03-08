@@ -1,5 +1,5 @@
 import type { VirtualElement } from '../nodes/VirtualElement'
-import type { VirtualNode } from '../nodes/VirtualNode'
+import { DOCUMENT_NODE, ELEMENT_NODE, TEXT_NODE, type VirtualNode } from '../nodes/VirtualNode'
 
 /**
  * Finds the first element matching the CSS selector starting from the given root node.
@@ -23,8 +23,40 @@ export function querySelectorEngine(root: VirtualNode, selector: string): Virtua
     return null
   }
 
-  const results = querySelectorAllEngine(root, selector)
-  return results.length > 0 ? results[0] : null
+  if (selector.includes(',')) {
+    const results = querySelectorAllEngine(root, selector)
+    return results.length > 0 ? results[0] : null
+  }
+
+  const findFirst = (node: VirtualNode): VirtualElement | null => {
+    if (node.nodeType === ELEMENT_NODE) {
+      const element = node as VirtualElement
+      const matches = hasCombinators(selector)
+        ? matchesComplexSelector(element, selector, root)
+        : matchesSimpleSelector(element, selector)
+      if (matches) {
+        return element
+      }
+    }
+
+    for (const child of node.children) {
+      const match = findFirst(child)
+      if (match) {
+        return match
+      }
+    }
+
+    return null
+  }
+
+  for (const child of root.children) {
+    const match = findFirst(child)
+    if (match) {
+      return match
+    }
+  }
+
+  return null
 }
 
 /**
@@ -81,7 +113,7 @@ export function querySelectorAllEngine(root: VirtualNode, selector: string): Vir
   if (hasCombinators(selector)) {
     // Handle complex selectors with combinators
     function traverse(node: VirtualNode) {
-      if (node.nodeType === 'element' && matchesComplexSelector(node as VirtualElement, selector, root)) {
+      if (node.nodeType === ELEMENT_NODE && matchesComplexSelector(node as VirtualElement, selector, root)) {
         results.push(node as VirtualElement)
       }
       for (const child of node.children) {
@@ -96,7 +128,7 @@ export function querySelectorAllEngine(root: VirtualNode, selector: string): Vir
   else {
     // Simple selector - no combinators
     function traverse(node: VirtualNode) {
-      if (node.nodeType === 'element' && matchesSimpleSelector(node as VirtualElement, selector)) {
+      if (node.nodeType === ELEMENT_NODE && matchesSimpleSelector(node as VirtualElement, selector)) {
         results.push(node as VirtualElement)
       }
       for (const child of node.children) {
@@ -171,7 +203,7 @@ export function matchesComplexSelector(element: VirtualElement, selector: string
       case '>': {
         // Child combinator - current element must be direct parent of what we just matched
         currentElement = currentElement.parentNode as VirtualElement | null
-        if (!currentElement || currentElement.nodeType !== 'element') {
+        if (!currentElement || currentElement.nodeType !== ELEMENT_NODE) {
           return false
         }
         break
@@ -214,17 +246,17 @@ export function matchesComplexSelector(element: VirtualElement, selector: string
         let found = false
         let ancestor = currentElement.parentNode as VirtualElement | null
 
-        while (ancestor && ancestor.nodeType !== 'document') {
+        while (ancestor && ancestor.nodeType !== DOCUMENT_NODE) {
           // Stop if we've reached the root
           if (ancestor === root) {
-            if (root.nodeType === 'element' && matchesSimpleSelector(root as VirtualElement, previousPart.selector)) {
+            if (root.nodeType === ELEMENT_NODE && matchesSimpleSelector(root as VirtualElement, previousPart.selector)) {
               currentElement = root as VirtualElement
               found = true
             }
             break
           }
 
-          if (ancestor.nodeType === 'element' && matchesSimpleSelector(ancestor, previousPart.selector)) {
+          if (ancestor.nodeType === ELEMENT_NODE && matchesSimpleSelector(ancestor, previousPart.selector)) {
             currentElement = ancestor
             found = true
             break
@@ -466,14 +498,14 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string): boo
     case 'first-child':
     {
       // Only consider element children (not text nodes)
-      const siblings = element.parentNode?.children.filter(child => child.nodeType === 'element') || []
+      const siblings = element.parentNode?.children.filter(child => child.nodeType === ELEMENT_NODE) || []
       return siblings[0] === element
     }
 
     case 'last-child':
     {
       // Only consider element children (not text nodes)
-      const siblings = element.parentNode?.children.filter(child => child.nodeType === 'element') || []
+      const siblings = element.parentNode?.children.filter(child => child.nodeType === ELEMENT_NODE) || []
       return siblings[siblings.length - 1] === element
     }
 
@@ -481,7 +513,7 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string): boo
     {
       if (!pseudoArg)
         return false
-      const siblings = element.parentNode?.children.filter(child => child.nodeType === 'element') || []
+      const siblings = element.parentNode?.children.filter(child => child.nodeType === ELEMENT_NODE) || []
       const index = siblings.indexOf(element)
       if (index === -1)
         return false
@@ -519,14 +551,14 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string): boo
 
     case 'empty':
       // :empty matches elements with no children (elements or text nodes)
-      return element.childNodes.length === 0 || (element.childNodes.length === 1 && element.childNodes[0].nodeType === 'text' && (element.childNodes[0].nodeValue?.trim() === '' || element.childNodes[0].nodeValue === null))
+      return element.childNodes.length === 0 || (element.childNodes.length === 1 && element.childNodes[0].nodeType === TEXT_NODE && (element.childNodes[0].nodeValue?.trim() === '' || element.childNodes[0].nodeValue === null))
 
     case 'first-of-type':
     {
       if (!element.parentNode)
         return false
       const siblings = element.parentNode.children.filter(
-        child => child.nodeType === 'element' && (child as VirtualElement).tagName === element.tagName,
+        child => child.nodeType === ELEMENT_NODE && (child as VirtualElement).tagName === element.tagName,
       )
       return siblings[0] === element
     }
@@ -536,7 +568,7 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string): boo
       if (!element.parentNode)
         return false
       const siblings = element.parentNode.children.filter(
-        child => child.nodeType === 'element' && (child as VirtualElement).tagName === element.tagName,
+        child => child.nodeType === ELEMENT_NODE && (child as VirtualElement).tagName === element.tagName,
       )
       return siblings[siblings.length - 1] === element
     }
@@ -545,7 +577,7 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string): boo
     {
       if (!element.parentNode)
         return false
-      const siblings = element.parentNode.children.filter(child => child.nodeType === 'element')
+      const siblings = element.parentNode.children.filter(child => child.nodeType === ELEMENT_NODE)
       return siblings.length === 1 && siblings[0] === element
     }
 
@@ -554,7 +586,7 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string): boo
       if (!element.parentNode)
         return false
       const siblings = element.parentNode.children.filter(
-        child => child.nodeType === 'element' && (child as VirtualElement).tagName === element.tagName,
+        child => child.nodeType === ELEMENT_NODE && (child as VirtualElement).tagName === element.tagName,
       )
       return siblings.length === 1 && siblings[0] === element
     }
@@ -564,7 +596,7 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string): boo
       if (!pseudoArg || !element.parentNode)
         return false
       const siblings = element.parentNode.children.filter(
-        child => child.nodeType === 'element' && (child as VirtualElement).tagName === element.tagName,
+        child => child.nodeType === ELEMENT_NODE && (child as VirtualElement).tagName === element.tagName,
       )
       const index = siblings.indexOf(element)
       if (index === -1)
@@ -602,7 +634,7 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string): boo
     {
       if (!pseudoArg || !element.parentNode)
         return false
-      const siblings = element.parentNode.children.filter(child => child.nodeType === 'element')
+      const siblings = element.parentNode.children.filter(child => child.nodeType === ELEMENT_NODE)
       const index = siblings.indexOf(element)
       if (index === -1)
         return false
@@ -626,7 +658,7 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string): boo
       if (!pseudoArg || !element.parentNode)
         return false
       const siblings = element.parentNode.children.filter(
-        child => child.nodeType === 'element' && (child as VirtualElement).tagName === element.tagName,
+        child => child.nodeType === 1 && (child as VirtualElement).tagName === element.tagName,
       )
       const index = siblings.indexOf(element)
       if (index === -1)
@@ -677,41 +709,56 @@ export function matchesAttributeSelector(element: VirtualElement, attrSelector: 
     return element.hasAttribute(attrSelector)
   }
 
+  const parseAttributeMatch = (selector: string, operator: string): [string, string] | null => {
+    const escapedOperator = operator.replace(/([\^$*~|])/g, '\\$1')
+    const match = selector.match(new RegExp(`^([a-z0-9:-]+)${escapedOperator}(["'])(.*?)\\2(?:\\s+[is])?$`, 'i'))
+    if (!match) {
+      return null
+    }
+    return [match[1], match[3]]
+  }
+
   // [attr="value"] - exact match
-  const exactMatch = attrSelector.match(/^([a-z0-9-]+)="([^"]*)"$/i)
+  const exactMatch = parseAttributeMatch(attrSelector, '=')
   if (exactMatch) {
-    return element.getAttribute(exactMatch[1]) === exactMatch[2]
+    return element.getAttribute(exactMatch[0]) === exactMatch[1]
   }
 
   // [attr^="value"] - starts with
-  const startsWithMatch = attrSelector.match(/^([a-z0-9-]+)\^="([^"]*)"$/i)
+  const startsWithMatch = parseAttributeMatch(attrSelector, '^=')
   if (startsWithMatch) {
-    const value = element.getAttribute(startsWithMatch[1])
-    return value !== null && value.startsWith(startsWithMatch[2])
+    const value = element.getAttribute(startsWithMatch[0])
+    return value !== null && value.startsWith(startsWithMatch[1])
   }
 
   // [attr$="value"] - ends with
-  const endsWithMatch = attrSelector.match(/^([a-z0-9-]+)\$="([^"]*)"$/i)
+  const endsWithMatch = parseAttributeMatch(attrSelector, '$=')
   if (endsWithMatch) {
-    const value = element.getAttribute(endsWithMatch[1])
-    return value !== null && value.endsWith(endsWithMatch[2])
+    const value = element.getAttribute(endsWithMatch[0])
+    return value !== null && value.endsWith(endsWithMatch[1])
   }
 
   // [attr*="value"] - contains
-  const containsMatch = attrSelector.match(/^([a-z0-9-]+)\*="([^"]*)"$/i)
+  const containsMatch = parseAttributeMatch(attrSelector, '*=')
   if (containsMatch) {
-    const value = element.getAttribute(containsMatch[1])
-    return value !== null && value.includes(containsMatch[2])
+    const value = element.getAttribute(containsMatch[0])
+    return value !== null && value.includes(containsMatch[1])
   }
 
   // [attr~="value"] - contains word
-  const wordMatch = attrSelector.match(/^([a-z0-9-]+)~="([^"]*)"$/i)
+  const wordMatch = parseAttributeMatch(attrSelector, '~=')
   if (wordMatch) {
-    const value = element.getAttribute(wordMatch[1])
+    const value = element.getAttribute(wordMatch[0])
     if (value === null)
       return false
     const words = value.split(/\s+/)
-    return words.includes(wordMatch[2])
+    return words.includes(wordMatch[1])
+  }
+
+  const dashMatch = parseAttributeMatch(attrSelector, '|=')
+  if (dashMatch) {
+    const value = element.getAttribute(dashMatch[0])
+    return value !== null && (value === dashMatch[1] || value.startsWith(`${dashMatch[1]}-`))
   }
 
   return false
