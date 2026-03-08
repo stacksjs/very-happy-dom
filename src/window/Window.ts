@@ -5,9 +5,14 @@ import { CanvasRenderingContext2D, HTMLCanvasElement } from '../apis/Canvas'
 import { Navigator as VeryHappyNavigator } from '../apis/Clipboard'
 import { VeryHappyFile, VeryHappyFileList, VeryHappyFileReader } from '../apis/FileAPI'
 import { CustomEvent as VeryHappyCustomEvent } from '../events/CustomEvent'
+import { VirtualEvent } from '../events/VirtualEvent'
 import { XMLHttpRequest as VeryHappyXMLHttpRequest } from '../http/XMLHttpRequest'
 import { VeryHappyWebSocket } from '../network/WebSocket'
+import { VirtualCommentNode } from '../nodes/VirtualCommentNode'
 import { VirtualDocument } from '../nodes/VirtualDocument'
+import { VirtualElement } from '../nodes/VirtualElement'
+import { VirtualSVGElement } from '../nodes/VirtualSVGElement'
+import { VirtualTextNode } from '../nodes/VirtualTextNode'
 import { IntersectionObserver as VeryHappyIntersectionObserver } from '../observers/IntersectionObserver'
 import { MutationObserver as VeryHappyMutationObserver } from '../observers/MutationObserver'
 import { ResizeObserver as VeryHappyResizeObserver } from '../observers/ResizeObserver'
@@ -85,6 +90,15 @@ export class Window {
   public HTMLCanvasElement: typeof HTMLCanvasElement = HTMLCanvasElement
   public CanvasRenderingContext2D: typeof CanvasRenderingContext2D = CanvasRenderingContext2D
 
+  // DOM node constructors
+  public Element: typeof VirtualElement = VirtualElement
+  public Node: typeof VirtualElement = VirtualElement
+  public Text: typeof VirtualTextNode = VirtualTextNode
+  public Comment: typeof VirtualCommentNode = VirtualCommentNode
+  public DocumentFragment: typeof VirtualElement = VirtualElement
+  public Event: typeof VirtualEvent = VirtualEvent
+  public SVGElement: typeof VirtualSVGElement = VirtualSVGElement
+
   // Additional Browser APIs
   public performance: Performance = new Performance()
   public Notification: typeof Notification = Notification
@@ -133,6 +147,7 @@ export class Window {
 
     // Create document
     this.document = new VirtualDocument()
+    this.document.defaultView = this
 
     // Create location object
     this._location = this._createLocation(url)
@@ -245,6 +260,10 @@ export class Window {
 
   cancelAnimationFrame(id: number): void {
     this._timerManager.cancelAnimationFrame(id)
+  }
+
+  getComputedStyle(element: any, _pseudoElt?: string | null): any {
+    return this.document.getComputedStyle(element)
   }
 
   /**

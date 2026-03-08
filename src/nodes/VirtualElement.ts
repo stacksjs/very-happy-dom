@@ -10,9 +10,11 @@ export class VirtualElement implements VirtualNode {
   nodeName: string
   nodeValue: string | null = null
   tagName: string
+  namespaceURI: string | null = 'http://www.w3.org/1999/xhtml'
   attributes: Map<string, string> = new Map<string, string>()
   childNodes: VirtualNode[] = []
   parentNode: VirtualNode | null = null
+  ownerDocument: any = null
   shadowRoot: ShadowRoot | null = null
   private eventListeners: Map<string, EventListener[]> = new Map<string, EventListener[]>()
   private _customValidity: string = ''
@@ -77,17 +79,12 @@ export class VirtualElement implements VirtualNode {
 
   // Child manipulation methods
   appendChild(child: VirtualNode): VirtualNode {
-    // Don't remove from previous parent - allow same child to be appended multiple times
-    // if (child.parentNode) {
-    //   const prevParent = child.parentNode as VirtualElement
-    //   const index = prevParent.childNodes.indexOf(child)
-    //   if (index !== -1) {
-    //     prevParent.childNodes.splice(index, 1)
-    //   }
-    // }
-
     this.childNodes.push(child)
     child.parentNode = this
+    // Propagate ownerDocument to child
+    if (this.ownerDocument && (child as any).ownerDocument !== this.ownerDocument) {
+      this._setOwnerDocument(child, this.ownerDocument)
+    }
     return child
   }
 
@@ -124,6 +121,9 @@ export class VirtualElement implements VirtualNode {
 
     this.childNodes.splice(index, 0, newNode)
     newNode.parentNode = this
+    if (this.ownerDocument && (newNode as any).ownerDocument !== this.ownerDocument) {
+      this._setOwnerDocument(newNode, this.ownerDocument)
+    }
     return newNode
   }
 
@@ -145,6 +145,9 @@ export class VirtualElement implements VirtualNode {
     this.childNodes.splice(index, 1, newNode)
     oldNode.parentNode = null
     newNode.parentNode = this
+    if (this.ownerDocument && (newNode as any).ownerDocument !== this.ownerDocument) {
+      this._setOwnerDocument(newNode, this.ownerDocument)
+    }
     return oldNode
   }
 
@@ -515,13 +518,14 @@ export class VirtualElement implements VirtualNode {
         getPropertyPriority(property: string): string {
           return element._stylePriorities.get(property) || ''
         },
-        setProperty(property: string, value: string, priority = ''): void {
-          const normalizedValue = `${value}`.trim()
+        setProperty(property: string, value: string | number, priority = ''): void {
+          const stringValue = `${value}`
+          const normalizedValue = stringValue.trim()
           if (normalizedValue === 'NaN' || normalizedValue.includes('NaN')) {
             return
           }
 
-          element._internalStyles.set(property, value)
+          element._internalStyles.set(property, stringValue)
           if (priority) {
             element._stylePriorities.set(property, priority)
           }
@@ -548,10 +552,10 @@ export class VirtualElement implements VirtualNode {
           const value = element._internalStyles.get(kebabProp)
           return value
         },
-        set(_target, prop: string, value: string) {
+        set(_target, prop: string, value: string | number) {
           // Convert camelCase to kebab-case
           const kebabProp = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)
-          element._internalStyles.set(kebabProp, value)
+          element._internalStyles.set(kebabProp, `${value}`)
           element._stylePriorities.delete(kebabProp)
           element._updateStyleAttribute()
           return true
@@ -1009,6 +1013,35 @@ export class VirtualElement implements VirtualNode {
     }
   }
 
+  // Layout properties (virtual DOM returns 0 as no layout engine)
+  get clientLeft(): number {
+    return 0
+  }
+
+  get clientTop(): number {
+    return 0
+  }
+
+  get clientWidth(): number {
+    return 0
+  }
+
+  get clientHeight(): number {
+    return 0
+  }
+
+  get scrollWidth(): number {
+    return 0
+  }
+
+  get scrollHeight(): number {
+    return 0
+  }
+
+  getBoundingClientRect(): { x: number, y: number, width: number, height: number, top: number, right: number, bottom: number, left: number } {
+    return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 }
+  }
+
   // Visibility check
   isVisible(): boolean {
     // Check display: none
@@ -1036,6 +1069,16 @@ export class VirtualElement implements VirtualNode {
     }
     this.shadowRoot = new ShadowRoot(this, init)
     return this.shadowRoot
+  }
+
+  private _setOwnerDocument(node: VirtualNode, doc: any): void {
+    if ('ownerDocument' in node) {
+      (node as any).ownerDocument = doc
+    }
+    const children = (node as any).childNodes ?? (node as any).children ?? []
+    for (const child of children as VirtualNode[]) {
+      this._setOwnerDocument(child, doc)
+    }
   }
 
   private _rootNode(node: VirtualNode): VirtualNode {

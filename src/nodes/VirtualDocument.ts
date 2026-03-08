@@ -5,6 +5,7 @@ import { XPathEvaluator } from '../xpath/XPathEvaluator'
 import { XPathResultType } from '../xpath/XPathResult'
 import { VirtualCommentNode } from './VirtualCommentNode'
 import { VirtualElement } from './VirtualElement'
+import { VirtualSVGElement } from './VirtualSVGElement'
 import { VirtualTextNode } from './VirtualTextNode'
 
 export class VirtualDocument implements VirtualNode {
@@ -14,6 +15,7 @@ export class VirtualDocument implements VirtualNode {
   attributes: Map<string, string> = new Map<string, string>()
   children: VirtualNode[] = []
   parentNode: VirtualNode | null = null
+  defaultView: any = null
 
   documentElement: VirtualElement | null = null
   head: VirtualElement | null = null
@@ -31,8 +33,11 @@ export class VirtualDocument implements VirtualNode {
   constructor() {
     // Initialize with basic structure
     this.documentElement = new VirtualElement('html')
+    this.documentElement.ownerDocument = this
     this.head = new VirtualElement('head')
+    this.head.ownerDocument = this
     this.body = new VirtualElement('body')
+    this.body.ownerDocument = this
 
     this.documentElement.appendChild(this.head)
     this.documentElement.appendChild(this.body)
@@ -171,16 +176,47 @@ export class VirtualDocument implements VirtualNode {
   appendChild(child: VirtualNode): VirtualNode {
     this.children.push(child)
     child.parentNode = this
+    // Set ownerDocument on the child and its descendants
+    if ((child as any).ownerDocument !== undefined) {
+      this._setOwnerDocumentRecursive(child, this)
+    }
     return child
+  }
+
+  private _setOwnerDocumentRecursive(node: VirtualNode, doc: VirtualDocument): void {
+    if ('ownerDocument' in node) {
+      (node as any).ownerDocument = doc
+    }
+    const children = (node as any).childNodes ?? (node as any).children ?? []
+    for (const child of children as VirtualNode[]) {
+      this._setOwnerDocumentRecursive(child, doc)
+    }
   }
 
   createElement(tagName: string): VirtualElement | any {
     // Special handling for canvas elements
     if (tagName.toLowerCase() === 'canvas') {
       const { HTMLCanvasElement } = require('../apis/Canvas')
-      return new HTMLCanvasElement()
+      const el = new HTMLCanvasElement()
+      el.ownerDocument = this
+      return el
     }
-    return new VirtualElement(tagName)
+    const el = new VirtualElement(tagName)
+    el.ownerDocument = this
+    return el
+  }
+
+  createElementNS(namespace: string | null, qualifiedName: string): VirtualElement {
+    let el: VirtualElement
+    if (namespace === 'http://www.w3.org/2000/svg') {
+      el = new VirtualSVGElement(qualifiedName)
+    }
+    else {
+      el = new VirtualElement(qualifiedName)
+      el.namespaceURI = namespace
+    }
+    el.ownerDocument = this
+    return el
   }
 
   createTextNode(text: string): VirtualTextNode {
@@ -276,7 +312,7 @@ export class VirtualDocument implements VirtualNode {
   }
 
   // Get computed styles
-  getComputedStyle(element: VirtualElement): any {
+  getComputedStyle(element: VirtualElement, _pseudoElt?: string | null): any {
     // Define default display values for common elements
     const defaultDisplay: Record<string, string> = {
       DIV: 'block',
@@ -318,11 +354,17 @@ export class VirtualDocument implements VirtualNode {
 
           return value || ''
         },
+        getPropertyPriority(property: string): string {
+          return self.style.getPropertyPriority(property)
+        },
       },
       {
         get(target, prop: string) {
           if (prop === 'getPropertyValue') {
             return target.getPropertyValue
+          }
+          if (prop === 'getPropertyPriority') {
+            return target.getPropertyPriority
           }
           // Convert camelCase to kebab-case
           const kebabProp = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)
