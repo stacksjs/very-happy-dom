@@ -1,4 +1,5 @@
 import type { VirtualNode } from '../nodes/VirtualNode'
+import { decodeHtmlEntities } from './html-utils'
 import { VirtualCommentNode } from '../nodes/VirtualCommentNode'
 import { VirtualElement } from '../nodes/VirtualElement'
 import { VirtualSVGElement } from '../nodes/VirtualSVGElement'
@@ -7,8 +8,9 @@ import { VirtualTextNode } from '../nodes/VirtualTextNode'
 /**
  * Parse HTML string into virtual DOM nodes
  */
-export function parseHTML(html: string): VirtualNode[] {
+export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
   let pos = 0
+  const lowerHtml = html.toLowerCase()
 
   function peek(): string {
     return html[pos] || ''
@@ -22,6 +24,69 @@ export function parseHTML(html: string): VirtualNode[] {
     while (/\s/.test(peek())) {
       consume()
     }
+  }
+
+  function createElementNode(tagName: string, inSvg = false): any {
+    if (ownerDocument) {
+      return inSvg
+        ? ownerDocument.createElementNS?.('http://www.w3.org/2000/svg', tagName)
+        : ownerDocument.createElement(tagName)
+    }
+
+    const element = inSvg ? new VirtualSVGElement(tagName) : new VirtualElement(tagName)
+    if (ownerDocument) {
+      element.ownerDocument = ownerDocument
+    }
+    return element
+  }
+
+  function createTextNode(text: string): VirtualTextNode {
+    const node = ownerDocument?.createTextNode?.(text) ?? new VirtualTextNode(text)
+    if (!node.ownerDocument && ownerDocument) {
+      node.ownerDocument = ownerDocument
+    }
+    return node
+  }
+
+  function createCommentNode(text: string): VirtualCommentNode {
+    const node = ownerDocument?.createComment?.(text) ?? new VirtualCommentNode(text)
+    if (!node.ownerDocument && ownerDocument) {
+      node.ownerDocument = ownerDocument
+    }
+    return node
+  }
+
+  function consumeClosingTag(tagName: string): boolean {
+    if (html.slice(pos, pos + 2) !== '</') {
+      return false
+    }
+
+    const end = html.indexOf('>', pos + 2)
+    if (end === -1) {
+      return false
+    }
+
+    const closingName = html.slice(pos + 2, end).trim().toLowerCase()
+    if (closingName !== tagName.toLowerCase()) {
+      return false
+    }
+
+    pos = end + 1
+    return true
+  }
+
+  function readUntilClosingTag(tagName: string): string {
+    const closingToken = `</${tagName.toLowerCase()}`
+    const end = lowerHtml.indexOf(closingToken, pos)
+    if (end === -1) {
+      const text = html.slice(pos)
+      pos = html.length
+      return text
+    }
+
+    const text = html.slice(pos, end)
+    pos = end
+    return text
   }
 
   function parseTag(inSvg = false): VirtualElement | VirtualCommentNode | null {
@@ -39,7 +104,7 @@ export function parseHTML(html: string): VirtualNode[] {
       }
       const commentText = html.slice(pos, commentEnd)
       pos = commentEnd + 3
-      return new VirtualCommentNode(commentText)
+      return createCommentNode(commentText)
     }
 
     // Check for DOCTYPE
@@ -74,7 +139,8 @@ export function parseHTML(html: string): VirtualNode[] {
     }
 
     const isSvgElement = inSvg || tagName.toLowerCase() === 'svg'
-    const element = isSvgElement ? new VirtualSVGElement(tagName) : new VirtualElement(tagName)
+    const element = createElementNode(tagName, isSvgElement)
+    const tagNameLower = tagName.toLowerCase()
 
     // Parse attributes
     while (peek() && peek() !== '>' && peek() !== '/') {
@@ -121,7 +187,7 @@ export function parseHTML(html: string): VirtualNode[] {
 
       // If attribute has value (with =), use it even if empty string
       // Otherwise use attribute name as value (boolean attribute)
-      element.setAttribute(attrName, hasValue ? attrValue : attrName)
+      element.setAttribute(attrName, hasValue ? decodeHtmlEntities(attrValue) : '')
     }
 
     // Check for self-closing tag
@@ -136,7 +202,18 @@ export function parseHTML(html: string): VirtualNode[] {
 
     // Self-closing tags and void elements don't have children
     const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']
-    if (isSelfClosing || voidElements.includes(tagName.toLowerCase())) {
+    if (isSelfClosing || voidElements.includes(tagNameLower)) {
+      return element
+    }
+
+    const rawTextElements = new Set(['script', 'style'])
+    const rcDataElements = new Set(['textarea', 'title'])
+    if (rawTextElements.has(tagNameLower) || rcDataElements.has(tagNameLower)) {
+      const textContent = readUntilClosingTag(tagName)
+      if (textContent) {
+        element.appendChild(createTextNode(rcDataElements.has(tagNameLower) ? decodeHtmlEntities(textContent) : textContent))
+      }
+      consumeClosingTag(tagName)
       return element
     }
 
@@ -158,7 +235,7 @@ export function parseHTML(html: string): VirtualNode[] {
     if (!text)
       return null
 
-    return new VirtualTextNode(text)
+    return createTextNode(decodeHtmlEntities(text))
   }
 
   function parseNodes(closingTag?: string, inSvg = false): VirtualNode[] {
@@ -166,8 +243,7 @@ export function parseHTML(html: string): VirtualNode[] {
 
     while (pos < html.length) {
       // Check for closing tag
-      if (closingTag && html.slice(pos, pos + 2 + closingTag.length + 1) === `</${closingTag}>`) {
-        pos += 2 + closingTag.length + 1
+      if (closingTag && consumeClosingTag(closingTag)) {
         break
       }
 

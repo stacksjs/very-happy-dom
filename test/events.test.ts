@@ -277,6 +277,28 @@ console.log('\nTest Group 14: Event - Non-bubbling Behavior')
   await window.happyDOM.close()
 }
 
+// Test 15: Shadow-root-backed paths include shadow root and host
+console.log('\nTest Group 15: Event - Shadow Composed Path')
+{
+  const window = new Window()
+  const host = window.document.createElement('div')
+  const shadow = host.attachShadow({ mode: 'open' })
+  const button = window.document.createElement('button')
+
+  window.document.body!.appendChild(host)
+  shadow.appendChild(button)
+
+  const event = new window.CustomEvent('ping', { bubbles: true })
+  button.dispatchEvent(event)
+  const path = event.composedPath()
+
+  assert(path[0] === button, 'Shadow composedPath starts with target')
+  assert(path.includes(shadow as any), 'Shadow composedPath includes shadow root')
+  assert(path.includes(host as any), 'Shadow composedPath includes host element')
+
+  await window.happyDOM.close()
+}
+
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ Passed: ${passed}`)
 console.log(`❌ Failed: ${failed}`)

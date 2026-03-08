@@ -45,19 +45,19 @@ console.log('\nTest Group 2: Self-Closing Tags Edge Cases')
   img.setAttribute('alt', 'Test Image')
 
   const html = img.outerHTML
-  assert(html.includes('/>'), 'Self-closing tag uses />')
+  assert(!html.includes('/>'), 'Void element uses HTML serialization without />')
   assert(!html.includes('</img>'), 'No closing tag for img')
   assert(html.includes('src="test.jpg"'), 'Attributes preserved')
   assert(html.includes('alt="Test Image"'), 'Multiple attributes work')
 
   // Test br tag
   const br = window.document.createElement('br')
-  assert(br.outerHTML === '<br/>', 'BR tag is self-closing')
+  assert(br.outerHTML === '<br>', 'BR tag uses HTML void serialization')
 
   // Test input tag
   const input = window.document.createElement('input')
   input.setAttribute('type', 'text')
-  assert(input.outerHTML.includes('/>'), 'Input is self-closing')
+  assert(input.outerHTML === '<input type="text">', 'Input uses HTML void serialization')
 
   await cleanupWindow(window)
 }

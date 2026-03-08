@@ -149,6 +149,7 @@ console.log('\nTest Group 8: Shadow DOM - innerHTML')
 
   assert(shadow.children.length >= 0, 'innerHTML set on shadow root')
   assert(typeof shadow.querySelector === 'function', 'Shadow root has querySelector')
+  assert(shadow.querySelector('p')?.textContent === 'Test', 'Shadow innerHTML parsed into real nodes')
 
   await window.happyDOM.close()
 }
@@ -182,6 +183,91 @@ console.log('\nTest Group 10: Custom Element - Lifecycle Callbacks')
   assert(true, 'Lifecycle callbacks defined')
 
   await window.happyDOM.close()
+}
+
+// Test 11: Closed shadow roots are not exposed publicly
+console.log('\nTest Group 11: Shadow DOM - Closed Visibility')
+{
+  const window = new Window()
+  const element = window.document.createElement('div')
+
+  const shadow = element.attachShadow({ mode: 'closed' })
+
+  assert(shadow.mode === 'closed', 'Closed shadow root created')
+  assert(element.shadowRoot === null, 'Closed shadow root is hidden from public getter')
+
+  await window.happyDOM.close()
+}
+
+// Test 12: Existing elements upgrade after define
+console.log('\nTest Group 12: Custom Elements - Upgrade Existing DOM')
+{
+  const window = new Window()
+  let connected = 0
+
+  window.document.body!.innerHTML = '<upgraded-el data-state="ready"></upgraded-el>'
+
+  class UpgradedElement extends window.HTMLElement {
+    connectedCallback() {
+      connected++
+    }
+  }
+
+  window.customElements.define('upgraded-el', UpgradedElement as any)
+
+  const upgraded = window.document.querySelector('upgraded-el')
+  assert(upgraded instanceof UpgradedElement, 'Existing matching element upgraded after define')
+  assert(connected === 1, 'connectedCallback called during upgrade of connected element')
+
+  await window.happyDOM.close()
+}
+
+// Test 13: Lifecycle callbacks execute for connection, attributes, removal, and adoption
+console.log('\nTest Group 13: Custom Elements - Live Lifecycle')
+{
+  const windowA = new Window()
+  const windowB = new Window()
+  const lifecycleCalls: string[] = []
+
+  class LifecycleProbe extends windowA.HTMLElement {
+    static get observedAttributes() {
+      return ['data-value']
+    }
+
+    connectedCallback() {
+      lifecycleCalls.push('connected')
+    }
+
+    disconnectedCallback() {
+      lifecycleCalls.push('disconnected')
+    }
+
+    attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null) {
+      lifecycleCalls.push(`attribute:${name}:${oldValue ?? 'null'}:${newValue ?? 'null'}`)
+    }
+
+    adoptedCallback() {
+      lifecycleCalls.push('adopted')
+    }
+  }
+
+  windowA.customElements.define('lifecycle-probe', LifecycleProbe as any)
+  const element = windowA.document.createElement('lifecycle-probe') as any
+  windowA.document.body!.appendChild(element)
+  element.setAttribute('data-value', 'one')
+  element.removeAttribute('data-value')
+  windowA.document.body!.removeChild(element)
+  windowB.document.body!.appendChild(element)
+
+  assert(lifecycleCalls.includes('connected'), 'connectedCallback runs when appended')
+  assert(lifecycleCalls.includes('attribute:data-value:null:one'), 'attributeChangedCallback runs on setAttribute')
+  assert(lifecycleCalls.includes('attribute:data-value:one:null'), 'attributeChangedCallback runs on removeAttribute')
+  assert(lifecycleCalls.includes('disconnected'), 'disconnectedCallback runs on removal')
+  assert(lifecycleCalls.includes('adopted'), 'adoptedCallback runs on cross-document adoption')
+  assert(element.ownerDocument === windowB.document, 'ownerDocument updated after cross-document adoption')
+
+  await windowA.happyDOM.close()
+  await windowB.happyDOM.close()
 }
 
 console.log(`\n${'='.repeat(50)}`)

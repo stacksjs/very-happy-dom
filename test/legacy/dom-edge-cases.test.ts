@@ -355,7 +355,7 @@ describe('DOM Edge Cases', () => {
       const html = img.outerHTML
       expect(html).toContain('<img')
       expect(html).toContain('src="test.jpg"')
-      expect(html).toContain('/>')
+      expect(html).not.toContain('/>')
       expect(html).not.toContain('</img>')
     })
 
@@ -365,7 +365,7 @@ describe('DOM Edge Cases', () => {
       div.setAttribute('data-value', 'test"value')
 
       const html = div.outerHTML
-      expect(html).toContain('data-value="test"value"')
+      expect(html).toContain('data-value="test&quot;value"')
     })
   })
 

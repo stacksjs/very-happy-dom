@@ -1,8 +1,10 @@
 import type { ShadowRootInit } from '../webcomponents/ShadowRoot'
 import { VirtualEvent } from '../events/VirtualEvent'
 import { parseHTML } from '../parsers/html-parser'
+import { escapeHtmlAttribute, escapeHtmlText } from '../parsers/html-utils'
 import { hasCombinators, matchesComplexSelector, matchesSimpleSelector, querySelectorAllEngine, querySelectorEngine } from '../selectors/engine'
 import { ShadowRoot } from '../webcomponents/ShadowRoot'
+import { invokeAttributeChangedCallback } from '../webcomponents/custom-element-utils'
 import { MutationObserver } from '../observers/MutationObserver'
 import {
   COMMENT_NODE,
@@ -25,7 +27,7 @@ export class VirtualElement extends VirtualNodeBase {
   nodeName: string
   tagName: string
   namespaceURI: string | null = 'http://www.w3.org/1999/xhtml'
-  shadowRoot: ShadowRoot | null = null
+  private _shadowRoot: ShadowRoot | null = null
   private _customValidity: string = ''
   private _internalStyles: Map<string, string> = new Map<string, string>()
   private _stylePriorities: Map<string, string> = new Map<string, string>()
@@ -39,6 +41,10 @@ export class VirtualElement extends VirtualNodeBase {
     super()
     this.tagName = tagName.toUpperCase()
     this.nodeName = this.tagName
+  }
+
+  get shadowRoot(): ShadowRoot | null {
+    return this._shadowRoot?.mode === 'open' ? this._shadowRoot : null
   }
 
   // Attribute methods
@@ -60,6 +66,8 @@ export class VirtualElement extends VirtualNodeBase {
     if (normalizedName === 'style') {
       this._setStylesFromAttribute(normalizedValue)
     }
+
+    invokeAttributeChangedCallback(this, normalizedName, oldValue, normalizedValue)
 
     MutationObserver._queueMutationRecord({
       type: 'attributes',
@@ -90,6 +98,8 @@ export class VirtualElement extends VirtualNodeBase {
       this._internalStyles.clear()
       this._stylePriorities.clear()
     }
+
+    invokeAttributeChangedCallback(this, normalizedName, oldValue, null)
 
     MutationObserver._queueMutationRecord({
       type: 'attributes',
@@ -337,7 +347,7 @@ export class VirtualElement extends VirtualNodeBase {
   }
 
   get innerHTML(): string {
-    return this.childNodes.map(child => this._serializeNode(child)).join('')
+    return this.childNodes.map(child => this._serializeNode(child, this.tagName)).join('')
   }
 
   set innerHTML(html: string) {
@@ -345,7 +355,7 @@ export class VirtualElement extends VirtualNodeBase {
       this.removeChild(this.childNodes[0])
     }
     if (html) {
-      const nodes = parseHTML(html)
+      const nodes = parseHTML(html, this.ownerDocument)
 
       // Special case: if we're the documentElement (<html>) and the parsed HTML
       // contains an <html> element, extract its children instead of nesting
@@ -447,9 +457,13 @@ export class VirtualElement extends VirtualNodeBase {
     }
   }
 
-  private _serializeNode(node: VirtualNode): string {
+  private _serializeNode(node: VirtualNode, parentTagName?: string): string {
     if (node.nodeType === TEXT_NODE) {
-      return node.nodeValue || ''
+      const text = node.nodeValue || ''
+      if (parentTagName === 'SCRIPT' || parentTagName === 'STYLE') {
+        return text
+      }
+      return escapeHtmlText(text)
     }
     if (node.nodeType === COMMENT_NODE) {
       return `<!--${node.nodeValue}-->`
@@ -460,20 +474,20 @@ export class VirtualElement extends VirtualNodeBase {
       let html = `<${tagName}`
 
       for (const [name, value] of element.attributes) {
-        html += ` ${name}="${value}"`
+        html += ` ${name}="${escapeHtmlAttribute(value)}"`
       }
 
       // Check if this is a void element (self-closing tag)
       const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']
       if (voidElements.includes(tagName)) {
-        html += '/>'
+        html += '>'
         return html
       }
 
       html += '>'
 
       for (const child of element.childNodes) {
-        html += this._serializeNode(child)
+        html += this._serializeNode(child, element.tagName)
       }
 
       html += `</${tagName}>`
@@ -917,11 +931,11 @@ export class VirtualElement extends VirtualNodeBase {
 
   // Shadow DOM
   attachShadow(init: ShadowRootInit): ShadowRoot {
-    if (this.shadowRoot) {
+    if (this._shadowRoot) {
       throw new Error('Shadow root already exists')
     }
-    this.shadowRoot = new ShadowRoot(this, init)
-    return this.shadowRoot
+    this._shadowRoot = new ShadowRoot(this, init)
+    return this._shadowRoot
   }
 
   private _setOwnerDocument(node: VirtualNode, doc: any): void {

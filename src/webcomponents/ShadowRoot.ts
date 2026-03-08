@@ -2,8 +2,12 @@
  * Shadow DOM implementation
  */
 
+import { parseHTML } from '../parsers/html-parser'
+import { escapeHtmlAttribute, escapeHtmlText } from '../parsers/html-utils'
+import { VirtualDocumentFragment } from '../nodes/VirtualDocumentFragment'
+import { COMMENT_NODE, ELEMENT_NODE, TEXT_NODE, type VirtualNode } from '../nodes/VirtualNode'
 import type { VirtualElement } from '../nodes/VirtualElement'
-import { ELEMENT_NODE, type VirtualNode } from '../nodes/VirtualNode'
+import type { VirtualEventTarget } from '../events/VirtualEventTarget'
 
 export type ShadowRootMode = 'open' | 'closed'
 
@@ -15,69 +19,76 @@ export interface ShadowRootInit {
 /**
  * ShadowRoot represents a shadow DOM tree
  */
-export class ShadowRoot {
+export class ShadowRoot extends VirtualDocumentFragment {
   public mode: ShadowRootMode
   public delegatesFocus: boolean
   public host: VirtualElement
-  public innerHTML = ''
-  public children: VirtualNode[] = []
 
   constructor(host: VirtualElement, init: ShadowRootInit) {
+    super()
     this.host = host
     this.mode = init.mode
     this.delegatesFocus = init.delegatesFocus || false
+    this.parentNode = host
+    this.ownerDocument = host.ownerDocument
+    this.nodeName = '#shadow-root'
   }
 
-  querySelector(selector: string): VirtualElement | null {
-    // Simple implementation - traverse children
-    for (const child of this.children) {
-      if (child.nodeType === ELEMENT_NODE) {
-        const element = child as VirtualElement
-        // Check if this element matches first
-        if (element.matches?.(selector)) {
-          return element
-        }
-        // Then check descendants
-        const result = element.querySelector(selector)
-        if (result)
-          return result
+  get innerHTML(): string {
+    return this.childNodes.map(child => this._serializeNode(child, undefined)).join('')
+  }
+
+  set innerHTML(html: string) {
+    while (this.childNodes.length > 0) {
+      this.removeChild(this.childNodes[0])
+    }
+
+    if (!html) {
+      return
+    }
+
+    const nodes = parseHTML(html, this.ownerDocument)
+    for (const node of nodes) {
+      this.appendChild(node)
+    }
+  }
+
+  protected _getEventParent(): VirtualEventTarget | null {
+    return this.host as unknown as VirtualEventTarget
+  }
+
+  private _serializeNode(node: VirtualNode, parentTagName?: string): string {
+    if (node.nodeType === TEXT_NODE) {
+      const text = node.nodeValue || ''
+      if (parentTagName === 'SCRIPT' || parentTagName === 'STYLE') {
+        return text
       }
+      return escapeHtmlText(text)
     }
-    return null
-  }
+    if (node.nodeType === COMMENT_NODE) {
+      return `<!--${node.nodeValue || ''}-->`
+    }
+    if (node.nodeType === ELEMENT_NODE) {
+      const element = node as VirtualElement
+      const tagName = element.tagName.toLowerCase()
+      let html = `<${tagName}`
 
-  querySelectorAll(selector: string): VirtualElement[] {
-    const results: VirtualElement[] = []
-    for (const child of this.children) {
-      if (child.nodeType === ELEMENT_NODE) {
-        const element = child as VirtualElement
-        // Check if this element matches first
-        if (element.matches?.(selector)) {
-          results.push(element)
-        }
-        // Then check descendants
-        results.push(...element.querySelectorAll(selector))
+      for (const [name, value] of element.attributes) {
+        html += ` ${name}="${escapeHtmlAttribute(value)}"`
       }
+
+      const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']
+      if (voidElements.includes(tagName)) {
+        return `${html}>`
+      }
+
+      html += '>'
+      for (const child of element.childNodes) {
+        html += this._serializeNode(child, element.tagName)
+      }
+      html += `</${tagName}>`
+      return html
     }
-    return results
-  }
-
-  appendChild(child: VirtualNode): VirtualNode {
-    this.children.push(child)
-    child.parentNode = this.host
-    return child
-  }
-
-  removeChild(child: VirtualNode): VirtualNode {
-    const index = this.children.indexOf(child)
-    if (index !== -1) {
-      this.children.splice(index, 1)
-      child.parentNode = null
-    }
-    return child
-  }
-
-  getElementById(id: string): VirtualElement | null {
-    return this.querySelector(`#${id}`)
+    return ''
   }
 }

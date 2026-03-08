@@ -58,7 +58,7 @@ export class Window extends VirtualEventTarget {
   public happyDOM: DetachedWindowAPI
   public console: Console
   public navigator: VeryHappyNavigator
-  public customElements: CustomElementRegistry = new CustomElementRegistry()
+  public customElements: CustomElementRegistry
   public HTMLElement: typeof HTMLElement = HTMLElement
   public localStorage: Storage
   public sessionStorage: Storage
@@ -142,6 +142,8 @@ export class Window extends VirtualEventTarget {
     // Create navigator
     this.navigator = new VeryHappyNavigator()
 
+    this.customElements = new CustomElementRegistry()
+
     // Create storage
     this.localStorage = createStorage()
     this.sessionStorage = createStorage()
@@ -152,6 +154,7 @@ export class Window extends VirtualEventTarget {
     // Create document
     this.document = new VirtualDocument()
     this.document.defaultView = this
+    this.customElements._setDocument(this.document)
 
     // Create location object
     this._location = this._createLocation(url)

@@ -3,6 +3,7 @@
  */
 
 import { VirtualElement } from '../nodes/VirtualElement'
+import { invokeAttributeChangedCallback, invokeConnectedCallback } from './custom-element-utils'
 
 export interface CustomElementConstructor {
   new (): HTMLElement
@@ -10,6 +11,7 @@ export interface CustomElementConstructor {
 
 export class CustomElementRegistry {
   private _definitions = new Map<string, CustomElementConstructor>()
+  private _document: any = null
   private _whenDefinedPromises = new Map<string, {
     resolve: () => void
     reject: (error: Error) => void
@@ -25,6 +27,9 @@ export class CustomElementRegistry {
     }
 
     this._definitions.set(name, constructor)
+    if (this._document) {
+      this.upgrade(this._document)
+    }
 
     // Resolve whenDefined promises
     const promises = this._whenDefinedPromises.get(name)
@@ -54,9 +59,32 @@ export class CustomElementRegistry {
     })
   }
 
-  upgrade(_root: Node): void {
-    // In a full implementation, this would upgrade all custom elements in the tree
-    // For now, it's a no-op
+  _setDocument(document: any): void {
+    this._document = document
+  }
+
+  upgrade(root: Node): void {
+    const visit = (node: any): void => {
+      if (node?.tagName) {
+        const name = `${node.tagName}`.toLowerCase()
+        const constructor = this._definitions.get(name)
+        if (constructor && !(node instanceof constructor)) {
+          Object.setPrototypeOf(node, constructor.prototype)
+          for (const [attrName, attrValue] of node.attributes ?? []) {
+            invokeAttributeChangedCallback(node, attrName, null, attrValue)
+          }
+          if (node.isConnected) {
+            invokeConnectedCallback(node)
+          }
+        }
+      }
+
+      for (const child of node?.childNodes ?? []) {
+        visit(child)
+      }
+    }
+
+    visit(root)
   }
 }
 

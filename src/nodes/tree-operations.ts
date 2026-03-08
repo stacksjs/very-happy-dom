@@ -1,4 +1,5 @@
 import { MutationObserver } from '../observers/MutationObserver'
+import { invokeAdoptedCallback, invokeConnectedCallback, invokeDisconnectedCallback } from '../webcomponents/custom-element-utils'
 import { COMMENT_NODE, DOCUMENT_FRAGMENT_NODE, DOCUMENT_NODE, TEXT_NODE, type VirtualNode } from './VirtualNode'
 
 interface VirtualParentNode extends VirtualNode {
@@ -35,9 +36,12 @@ function getOwnerDocumentForChild(parent: VirtualParentNode): any {
 }
 
 export function setOwnerDocumentRecursive(node: VirtualNode, ownerDocument: any): void {
+  const previousOwnerDocument = (node as any).ownerDocument ?? null
   if (node.nodeType !== DOCUMENT_NODE) {
     ;(node as any).ownerDocument = ownerDocument
   }
+
+  invokeAdoptedCallback(node, previousOwnerDocument, ownerDocument)
 
   for (const child of node.childNodes) {
     setOwnerDocumentRecursive(child, ownerDocument)
@@ -56,6 +60,7 @@ export function nodeContains(ancestor: VirtualNode, target: VirtualNode): boolea
 }
 
 export function detachNode(node: VirtualNode): void {
+  const wasConnected = (node as any).isConnected === true
   if (!node.parentNode) {
     return
   }
@@ -66,6 +71,9 @@ export function detachNode(node: VirtualNode): void {
     siblings.splice(index, 1)
   }
   node.parentNode = null
+  if (wasConnected) {
+    invokeDisconnectedCallback(node)
+  }
 }
 
 function normalizeInsertedNodes(parent: VirtualParentNode, node: VirtualNode): VirtualNode[] {
@@ -94,6 +102,11 @@ export function appendNode(parent: VirtualParentNode, node: VirtualNode): Virtua
   const normalized = normalizeInsertedNodes(parent, node)
   const previousSibling = parent.childNodes.length > 0 ? parent.childNodes[parent.childNodes.length - 1] : null
   parent.childNodes.push(...normalized)
+  for (const inserted of normalized) {
+    if ((inserted as any).isConnected === true) {
+      invokeConnectedCallback(inserted)
+    }
+  }
   queueChildListMutation(parent, normalized, [], previousSibling, null)
   return node
 }
@@ -111,6 +124,11 @@ export function insertNodeBefore(parent: VirtualParentNode, node: VirtualNode, r
   const normalized = normalizeInsertedNodes(parent, node)
   const previousSibling = index > 0 ? parent.childNodes[index - 1] : null
   parent.childNodes.splice(index, 0, ...normalized)
+  for (const inserted of normalized) {
+    if ((inserted as any).isConnected === true) {
+      invokeConnectedCallback(inserted)
+    }
+  }
   queueChildListMutation(parent, normalized, [], previousSibling, referenceNode)
   return node
 }
@@ -121,10 +139,14 @@ export function removeNode(parent: VirtualParentNode, child: VirtualNode): Virtu
     throw new Error('Child node not found')
   }
 
+  const wasConnected = (child as any).isConnected === true
   const previousSibling = index > 0 ? parent.childNodes[index - 1] : null
   const nextSibling = index < parent.childNodes.length - 1 ? parent.childNodes[index + 1] : null
   parent.childNodes.splice(index, 1)
   child.parentNode = null
+  if (wasConnected) {
+    invokeDisconnectedCallback(child)
+  }
   queueChildListMutation(parent, [], [child], previousSibling, nextSibling)
   return child
 }
@@ -136,10 +158,19 @@ export function replaceNode(parent: VirtualParentNode, node: VirtualNode, oldNod
   }
 
   const normalized = normalizeInsertedNodes(parent, node)
+  const oldWasConnected = (oldNode as any).isConnected === true
   const previousSibling = index > 0 ? parent.childNodes[index - 1] : null
   const nextSibling = index < parent.childNodes.length - 1 ? parent.childNodes[index + 1] : null
   parent.childNodes.splice(index, 1, ...normalized)
   oldNode.parentNode = null
+  if (oldWasConnected) {
+    invokeDisconnectedCallback(oldNode)
+  }
+  for (const inserted of normalized) {
+    if ((inserted as any).isConnected === true) {
+      invokeConnectedCallback(inserted)
+    }
+  }
   queueChildListMutation(parent, normalized, [oldNode], previousSibling, nextSibling)
   return oldNode
 }

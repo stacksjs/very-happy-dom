@@ -1,4 +1,7 @@
 import type { XPathResult } from '../xpath/XPathResult'
+import type { ICookie } from '../browser/CookieContainer'
+import { CookieContainer, CookieSameSiteEnum } from '../browser/CookieContainer'
+import { VirtualEvent } from '../events/VirtualEvent'
 import type { History, HistoryState, Location, NodeKind, NodeType, VirtualNode } from './VirtualNode'
 import { parseHTML } from '../parsers/html-parser'
 import { XPathEvaluator } from '../xpath/XPathEvaluator'
@@ -27,7 +30,28 @@ export class VirtualDocument extends VirtualNodeBase {
   private _historyStack: HistoryState[] = []
   private _historyIndex = -1
   private _xpathEvaluator = new XPathEvaluator()
-  private _cookies: Record<string, string> = {}
+  private _cookieContainer = new CookieContainer()
+  private _locationState: {
+    href: string
+    protocol: string
+    host: string
+    hostname: string
+    port: string
+    pathname: string
+    search: string
+    hash: string
+    origin: string
+  } = {
+      href: '',
+      protocol: '',
+      host: '',
+      hostname: '',
+      port: '',
+      pathname: '',
+      search: '',
+      hash: '',
+      origin: '',
+    }
 
   constructor() {
     super()
@@ -41,26 +65,7 @@ export class VirtualDocument extends VirtualNodeBase {
     this.appendChild(this.documentElement)
 
     // Initialize location
-    this.location = {
-      href: '',
-      protocol: '',
-      host: '',
-      hostname: '',
-      port: '',
-      pathname: '',
-      search: '',
-      hash: '',
-      origin: '',
-      assign: (url: string) => {
-        this._updateLocation(url)
-      },
-      replace: (url: string) => {
-        this._updateLocation(url)
-      },
-      reload: () => {
-        // No-op in virtual DOM
-      },
-    }
+    this.location = this._createLocation()
 
     // Initialize history with closure to maintain 'this' context
     // eslint-disable-next-line ts/no-this-alias
@@ -73,6 +78,7 @@ export class VirtualDocument extends VirtualNodeBase {
         return doc._historyStack[doc._historyIndex]?.state || null
       },
       pushState(state: any, title: string, url?: string) {
+        const resolvedUrl = url ? doc._resolveLocationString(url) : doc.location.href
         // Remove any forward history
         doc._historyStack = doc._historyStack.slice(0, doc._historyIndex + 1)
 
@@ -80,26 +86,27 @@ export class VirtualDocument extends VirtualNodeBase {
         doc._historyStack.push({
           state,
           title,
-          url: url || doc.location.href,
+          url: resolvedUrl,
         })
         doc._historyIndex++
 
         // Update location if URL provided
         if (url) {
-          doc._updateLocation(url)
+          doc._updateLocation(resolvedUrl, { triggerHashchange: false })
         }
       },
       replaceState(state: any, title: string, url?: string) {
+        const resolvedUrl = url ? doc._resolveLocationString(url) : doc.location.href
         if (doc._historyIndex >= 0) {
           doc._historyStack[doc._historyIndex] = {
             state,
             title,
-            url: url || doc.location.href,
+            url: resolvedUrl,
           }
 
           // Update location if URL provided
           if (url) {
-            doc._updateLocation(url)
+            doc._updateLocation(resolvedUrl, { triggerHashchange: false })
           }
         }
       },
@@ -108,7 +115,7 @@ export class VirtualDocument extends VirtualNodeBase {
           doc._historyIndex--
           const entry = doc._historyStack[doc._historyIndex]
           if (entry.url) {
-            doc._updateLocation(entry.url)
+            doc._updateLocation(entry.url, { triggerPopstate: true, popState: entry.state })
           }
         }
       },
@@ -117,7 +124,7 @@ export class VirtualDocument extends VirtualNodeBase {
           doc._historyIndex++
           const entry = doc._historyStack[doc._historyIndex]
           if (entry.url) {
-            doc._updateLocation(entry.url)
+            doc._updateLocation(entry.url, { triggerPopstate: true, popState: entry.state })
           }
         }
       },
@@ -127,7 +134,7 @@ export class VirtualDocument extends VirtualNodeBase {
           doc._historyIndex = newIndex
           const entry = doc._historyStack[doc._historyIndex]
           if (entry.url) {
-            doc._updateLocation(entry.url)
+            doc._updateLocation(entry.url, { triggerPopstate: true, popState: entry.state })
           }
         }
       },
@@ -142,21 +149,122 @@ export class VirtualDocument extends VirtualNodeBase {
     // this._historyIndex = 0
   }
 
-  private _updateLocation(url: string): void {
+  private _createLocation(): Location {
+    const location = {} as Location
+
+    Object.defineProperties(location, {
+      href: {
+        enumerable: true,
+        get: () => this._locationState.href,
+        set: (value: string) => {
+          this._updateLocation(`${value}`)
+        },
+      },
+      protocol: { enumerable: true, get: () => this._locationState.protocol },
+      host: { enumerable: true, get: () => this._locationState.host },
+      hostname: { enumerable: true, get: () => this._locationState.hostname },
+      port: { enumerable: true, get: () => this._locationState.port },
+      pathname: { enumerable: true, get: () => this._locationState.pathname },
+      search: { enumerable: true, get: () => this._locationState.search },
+      hash: { enumerable: true, get: () => this._locationState.hash },
+      origin: { enumerable: true, get: () => this._locationState.origin },
+    })
+
+    location.assign = (url: string) => {
+      this._updateLocation(url)
+    }
+    location.replace = (url: string) => {
+      this._updateLocation(url)
+    }
+    location.reload = () => {}
+    ;(location as any).toString = () => this._locationState.href
+
+    return location
+  }
+
+  private _resolveLocationString(url: string): string {
     try {
-      const parsed = new URL(url, this.location.href)
-      this.location.href = parsed.href
-      this.location.protocol = parsed.protocol
-      this.location.host = parsed.host
-      this.location.hostname = parsed.hostname
-      this.location.port = parsed.port
-      this.location.pathname = parsed.pathname
-      this.location.search = parsed.search
-      this.location.hash = parsed.hash
-      this.location.origin = parsed.origin
+      const base = this.location.href || this.defaultView?.location?.href || 'http://localhost/'
+      return new URL(url, base).href
     }
     catch {
-      // Invalid URL, ignore
+      return url
+    }
+  }
+
+  private _updateLocation(
+    url: string,
+    options: { triggerHashchange?: boolean, triggerPopstate?: boolean, popState?: any } = {},
+  ): void {
+    const { triggerHashchange = true, triggerPopstate = false, popState = null } = options
+    const previousHref = this._locationState.href
+    const previousHash = this._locationState.hash
+
+    try {
+      const base = this.location.href || this.defaultView?.location?.href || 'http://localhost/'
+      const parsed = new URL(url, base)
+      this._locationState.href = parsed.href
+      this._locationState.protocol = parsed.protocol
+      this._locationState.host = parsed.host
+      this._locationState.hostname = parsed.hostname
+      this._locationState.port = parsed.port
+      this._locationState.pathname = parsed.pathname
+      this._locationState.search = parsed.search
+      this._locationState.hash = parsed.hash
+      this._locationState.origin = parsed.origin
+    }
+    catch {
+      this._locationState.href = url
+      this._locationState.protocol = ''
+      this._locationState.host = ''
+      this._locationState.hostname = ''
+      this._locationState.port = ''
+      this._locationState.pathname = ''
+      this._locationState.search = ''
+      this._locationState.hash = ''
+      this._locationState.origin = ''
+    }
+
+    if (triggerHashchange && previousHref && previousHash !== this._locationState.hash) {
+      this._dispatchWindowEvent('hashchange', {
+        oldURL: previousHref,
+        newURL: this._locationState.href,
+      })
+    }
+
+    if (triggerPopstate) {
+      this._dispatchWindowEvent('popstate', {
+        state: popState,
+      })
+    }
+  }
+
+  private _dispatchWindowEvent(type: string, extra: Record<string, any>): void {
+    if (!this.defaultView) {
+      return
+    }
+
+    const event = new VirtualEvent(type)
+    for (const [key, value] of Object.entries(extra)) {
+      ;(event as any)[key] = value
+    }
+    this.defaultView.dispatchEvent(event)
+  }
+
+  private _getCookieOrigin(): string {
+    const href = this.location.href || this.defaultView?.location?.href || 'http://localhost/'
+    if (!href || href === 'about:blank' || href.startsWith('about:')) {
+      return 'http://localhost/'
+    }
+    try {
+      const parsed = new URL(href, 'http://localhost/')
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return 'http://localhost/'
+      }
+      return parsed.href
+    }
+    catch {
+      return 'http://localhost/'
     }
   }
 
@@ -244,7 +352,7 @@ export class VirtualDocument extends VirtualNodeBase {
 
   // Parse and set body HTML
   parseHTML(html: string): void {
-    const nodes = parseHTML(html)
+    const nodes = parseHTML(html, this)
 
     if (this.body) {
       // Clear all child nodes (children is a computed property)
@@ -261,7 +369,7 @@ export class VirtualDocument extends VirtualNodeBase {
    */
   write(html: string): void {
     // Parse the HTML
-    const nodes = parseHTML(html)
+    const nodes = parseHTML(html, this)
 
     // If the HTML contains a full document structure, replace documentElement
     for (const node of nodes) {
@@ -408,22 +516,72 @@ export class VirtualDocument extends VirtualNodeBase {
 
   // Cookie API
   get cookie(): string {
-    return Object.entries(this._cookies)
-      .map(([key, value]) => `${key}=${value}`)
+    return this._cookieContainer
+      .getCookies(this._getCookieOrigin())
+      .map(cookie => `${cookie.key}=${cookie.value || ''}`)
       .join('; ')
   }
 
   set cookie(value: string) {
-    // Parse cookie string: "name=value; expires=...; path=..."
-    const parts = value.split(';').map(p => p.trim())
-    const [nameValue] = parts
+    const parts = value.split(';').map(part => part.trim()).filter(Boolean)
+    const [nameValue, ...attributes] = parts
+    if (!nameValue) {
+      return
+    }
 
-    if (nameValue) {
-      const [name, val] = nameValue.split('=').map(s => s.trim())
-      if (name) {
-        this._cookies[name] = val || ''
+    const separator = nameValue.indexOf('=')
+    const name = (separator === -1 ? nameValue : nameValue.slice(0, separator)).trim()
+    const cookieValue = separator === -1 ? '' : nameValue.slice(separator + 1).trim()
+    if (!name) {
+      return
+    }
+
+    const cookie: ICookie = {
+      key: name,
+      value: cookieValue,
+      originURL: this._getCookieOrigin(),
+    }
+
+    for (const attribute of attributes) {
+      const [rawName, ...rawValueParts] = attribute.split('=')
+      const attributeName = rawName.trim().toLowerCase()
+      const attributeValue = rawValueParts.join('=').trim()
+
+      if (attributeName === 'expires') {
+        const expires = new Date(attributeValue)
+        if (!Number.isNaN(expires.getTime())) {
+          cookie.expires = expires
+        }
+      }
+      else if (attributeName === 'max-age') {
+        const seconds = Number.parseInt(attributeValue, 10)
+        if (!Number.isNaN(seconds)) {
+          cookie.expires = new Date(Date.now() + seconds * 1000)
+        }
+      }
+      else if (attributeName === 'path') {
+        cookie.path = attributeValue || '/'
+      }
+      else if (attributeName === 'domain') {
+        cookie.domain = attributeValue.replace(/^\./, '')
+      }
+      else if (attributeName === 'secure') {
+        cookie.secure = true
+      }
+      else if (attributeName === 'httponly') {
+        cookie.httpOnly = true
+      }
+      else if (attributeName === 'samesite') {
+        const normalized = attributeValue.toLowerCase()
+        cookie.sameSite = normalized === 'strict'
+          ? CookieSameSiteEnum.strict
+          : normalized === 'none'
+            ? CookieSameSiteEnum.none
+            : CookieSameSiteEnum.lax
       }
     }
+
+    this._cookieContainer.addCookies([cookie])
   }
 }
 
