@@ -2,7 +2,7 @@
 
 ## About
 
-A light-weight version of happy-dom powered by Bun.
+very-happy-dom is a blazingly fast, lightweight virtual DOM implementation built for Bun, designed as a faster drop-in replacement for happy-dom and jsdom in testing environments. It provides comprehensive browser API support including DOM manipulation, CSS selectors, Fetch, WebSocket, Storage, Canvas 2D, Observers (Mutation/Intersection/Resize), Web Components, and request interception. Most operations complete in under 5 microseconds, and the API is compatible with happy-dom for easy migration.
 
 ## Linting
 
