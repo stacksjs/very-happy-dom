@@ -180,6 +180,27 @@ export abstract class VirtualNodeBase extends VirtualEventTarget implements Virt
     return this.childNodes.filter(child => child.nodeType === ELEMENT_NODE)
   }
 
+  get firstElementChild(): VirtualNode | null {
+    return this.childNodes.find(child => child.nodeType === ELEMENT_NODE) ?? null
+  }
+
+  get lastElementChild(): VirtualNode | null {
+    for (let i = this.childNodes.length - 1; i >= 0; i--) {
+      if (this.childNodes[i].nodeType === ELEMENT_NODE) {
+        return this.childNodes[i]
+      }
+    }
+    return null
+  }
+
+  get childElementCount(): number {
+    let count = 0
+    for (const child of this.childNodes) {
+      if (child.nodeType === ELEMENT_NODE) count++
+    }
+    return count
+  }
+
   get firstChild(): VirtualNode | null {
     return this.childNodes[0] ?? null
   }

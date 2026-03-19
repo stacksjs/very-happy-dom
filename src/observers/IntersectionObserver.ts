@@ -44,6 +44,7 @@ export class IntersectionObserver {
 
   private _callback: IntersectionObserverCallback
   private _observedElements = new Set<VirtualElement>()
+  private _pendingEntries: IntersectionObserverEntry[] = []
 
   constructor(callback: IntersectionObserverCallback, options: IntersectionObserverInit = {}) {
     this._callback = callback
@@ -68,10 +69,16 @@ export class IntersectionObserver {
 
     this._observedElements.add(target)
 
-    // Simulate intersection check asynchronously
+    // Queue entry for takeRecords and deliver via callback asynchronously
+    const entry = this._createEntry(target, true)
+    this._pendingEntries.push(entry)
     setTimeout(() => {
       if (this._observedElements.has(target)) {
-        const entry = this._createEntry(target, true)
+        // Remove this specific entry from pending (if not already taken)
+        const idx = this._pendingEntries.indexOf(entry)
+        if (idx !== -1) {
+          this._pendingEntries.splice(idx, 1)
+        }
         this._callback([entry], this)
       }
     }, 0)
@@ -86,8 +93,8 @@ export class IntersectionObserver {
   }
 
   takeRecords(): IntersectionObserverEntry[] {
-    // In a full implementation, this would return pending entries
-    return []
+    const entries = this._pendingEntries.splice(0)
+    return entries
   }
 
   private _createEntry(target: VirtualElement, isIntersecting: boolean): IntersectionObserverEntry {

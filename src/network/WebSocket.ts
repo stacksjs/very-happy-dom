@@ -43,6 +43,10 @@ export class VeryHappyWebSocket {
 
       this._ws.addEventListener('open', (_event) => {
         this.readyState = WebSocketReadyState.OPEN
+        if (this._ws) {
+          this.protocol = this._ws.protocol || ''
+          this.extensions = this._ws.extensions || ''
+        }
         this.dispatchEvent({ type: 'open' } as Event)
       })
 

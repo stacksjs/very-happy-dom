@@ -28,6 +28,9 @@ export class DetachedWindowAPI {
     await this.abort()
     // Clear document
     this._window.document.documentElement!.innerHTML = ''
+    // Clear storage
+    this._window.localStorage.clear()
+    this._window.sessionStorage.clear()
   }
 
   /**

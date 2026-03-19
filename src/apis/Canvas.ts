@@ -352,12 +352,14 @@ export class CanvasRenderingContext2D {
   }
 
   // Line dash
+  private _lineDash: number[] = []
+
   setLineDash(segments: number[]): void {
-    // Store line dash pattern (simplified)
+    this._lineDash = [...segments]
   }
 
   getLineDash(): number[] {
-    return []
+    return [...this._lineDash]
   }
 
   // Hit region (not fully implemented in most browsers)

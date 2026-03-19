@@ -27,6 +27,7 @@ export class VirtualEvent {
   immediatePropagationStopped = false
   eventPhase = 0
   timeStamp: number
+  readonly isTrusted: boolean = false
   private _path: VirtualEventTarget[] = []
   private _propagationStopped = false
   private _immediatePropagationStopped = false
@@ -37,6 +38,17 @@ export class VirtualEvent {
     this.cancelable = options.cancelable ?? false
     this.composed = options.composed ?? false
     this.timeStamp = Date.now()
+  }
+
+  initEvent(type: string, bubbles = false, cancelable = false): void {
+    this.type = type
+    this.bubbles = bubbles
+    this.cancelable = cancelable
+    this.defaultPrevented = false
+    this.propagationStopped = false
+    this.immediatePropagationStopped = false
+    this._propagationStopped = false
+    this._immediatePropagationStopped = false
   }
 
   preventDefault(): void {
@@ -69,5 +81,19 @@ export class VirtualEvent {
     if (value) {
       this.stopPropagation()
     }
+  }
+
+  get returnValue(): boolean {
+    return !this.defaultPrevented
+  }
+
+  set returnValue(value: boolean) {
+    if (!value) {
+      this.preventDefault()
+    }
+  }
+
+  get srcElement(): VirtualEventTarget | null {
+    return this.target
   }
 }

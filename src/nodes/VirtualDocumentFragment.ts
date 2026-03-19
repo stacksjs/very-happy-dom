@@ -61,4 +61,8 @@ export class VirtualDocumentFragment extends VirtualNodeBase {
   querySelectorAll(selector: string): VirtualElement[] {
     return querySelectorAllEngine(this, selector)
   }
+
+  getElementById(id: string): VirtualElement | null {
+    return this.querySelector(`#${id}`)
+  }
 }

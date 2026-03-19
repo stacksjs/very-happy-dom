@@ -111,7 +111,21 @@ export class MutationObserver {
   }
 
   observe(target: VirtualNode, options: MutationObserverInit = {}): void {
-    this._observations.set(target, normalizeObserveOptions(options))
+    const normalized = normalizeObserveOptions(options)
+    const existing = this._observations.get(target)
+    if (existing) {
+      // Per DOM spec, merge options: later observe() calls extend existing filters
+      const merged: MutationObserverInit = { ...existing, ...normalized }
+      // Merge attributeFilter arrays
+      if (existing.attributeFilter && normalized.attributeFilter) {
+        const combined = new Set([...existing.attributeFilter, ...normalized.attributeFilter])
+        merged.attributeFilter = Array.from(combined)
+      }
+      this._observations.set(target, merged)
+    }
+    else {
+      this._observations.set(target, normalized)
+    }
     MutationObserver._observers.add(this)
   }
 

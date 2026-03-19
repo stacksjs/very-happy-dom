@@ -1,4 +1,10 @@
-import type { EventListener, EventListenerOptions } from '../nodes/VirtualNode'
+import type { EventListenerOptions } from '../nodes/VirtualNode'
+
+interface InternalEventListener {
+  listener: (event: any) => void
+  options: EventListenerOptions
+  signal?: AbortSignal
+}
 
 function setEventValue(event: any, key: string, value: any): void {
   try {
@@ -85,15 +91,22 @@ function retargetNode(originalTarget: any, currentTarget: any): any {
 }
 
 export class VirtualEventTarget {
-  private _eventListeners: Map<string, EventListener[]> = new Map<string, EventListener[]>()
+  private _eventListeners: Map<string, InternalEventListener[]> = new Map<string, InternalEventListener[]>()
 
-  addEventListener(type: string, listener: ((event: any) => void) | null, options: EventListenerOptions | boolean = {}): void {
+  addEventListener(type: string, listener: ((event: any) => void) | null, options: EventListenerOptions | boolean | (EventListenerOptions & { signal?: AbortSignal }) = {}): void {
     if (!listener)
       return
 
-    const opts: EventListenerOptions = typeof options === 'boolean'
-      ? { capture: options }
-      : { capture: options.capture ?? false, once: options.once ?? false, passive: options.passive ?? false }
+    const rawOpts = typeof options === 'boolean' ? { capture: options } : options
+    const opts: EventListenerOptions = {
+      capture: rawOpts.capture ?? false,
+      once: rawOpts.once ?? false,
+      passive: rawOpts.passive ?? false,
+    }
+    const signal = (rawOpts as any).signal as AbortSignal | undefined
+
+    // If signal is already aborted, do nothing
+    if (signal?.aborted) return
 
     if (!this._eventListeners.has(type)) {
       this._eventListeners.set(type, [])
@@ -102,7 +115,15 @@ export class VirtualEventTarget {
     const listeners = this._eventListeners.get(type)!
     const duplicate = listeners.some(entry => entry.listener === listener && entry.options.capture === opts.capture)
     if (!duplicate) {
-      listeners.push({ listener, options: opts })
+      const entry: InternalEventListener = { listener, options: opts, signal }
+      listeners.push(entry)
+
+      // Wire up AbortSignal to auto-remove
+      if (signal) {
+        signal.addEventListener('abort', () => {
+          this.removeEventListener(type, listener, { capture: opts.capture })
+        }, { once: true })
+      }
     }
   }
 
@@ -207,11 +228,25 @@ export class VirtualEventTarget {
       if (isImmediatePropagationStopped())
         break
 
-      try {
-        entry.listener.call(this, event)
+      // For passive listeners, temporarily disable preventDefault
+      if (entry.options.passive) {
+        const originalPreventDefault = event.preventDefault
+        event.preventDefault = () => {}
+        try {
+          entry.listener.call(this, event)
+        }
+        catch (error) {
+          console.error('Error in event listener:', error)
+        }
+        event.preventDefault = originalPreventDefault
       }
-      catch (error) {
-        console.error('Error in event listener:', error)
+      else {
+        try {
+          entry.listener.call(this, event)
+        }
+        catch (error) {
+          console.error('Error in event listener:', error)
+        }
       }
 
       if (entry.options.once) {

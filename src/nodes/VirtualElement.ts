@@ -136,6 +136,92 @@ export class VirtualElement extends VirtualNodeBase {
     return this.hasAttribute(localName)
   }
 
+  toggleAttribute(name: string, force?: boolean): boolean {
+    const normalizedName = name.toLowerCase()
+    if (force !== undefined) {
+      if (force) {
+        this.setAttribute(normalizedName, '')
+        return true
+      }
+      this.removeAttribute(normalizedName)
+      return false
+    }
+    if (this.hasAttribute(normalizedName)) {
+      this.removeAttribute(normalizedName)
+      return false
+    }
+    this.setAttribute(normalizedName, '')
+    return true
+  }
+
+  getAttributeNames(): string[] {
+    return Array.from(this.attributes.keys())
+  }
+
+  // innerText - layout-aware text content
+  get innerText(): string {
+    const parts: string[] = []
+    const visit = (node: VirtualNode): void => {
+      if (node.nodeType === ELEMENT_NODE) {
+        const el = node as VirtualElement
+        const display = el.style.getPropertyValue('display')
+        if (display === 'none') return
+        const visibility = el.style.getPropertyValue('visibility')
+        if (visibility === 'hidden' || visibility === 'collapse') return
+
+        const tag = el.tagName
+        if (tag === 'BR') {
+          parts.push('\n')
+          return
+        }
+        if (tag === 'SCRIPT' || tag === 'STYLE') return
+
+        const isBlock = ['DIV', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'LI', 'TABLE', 'TR', 'BLOCKQUOTE', 'PRE', 'HR', 'SECTION', 'ARTICLE', 'NAV', 'HEADER', 'FOOTER', 'MAIN', 'ASIDE', 'DETAILS', 'SUMMARY', 'FORM', 'FIELDSET', 'ADDRESS', 'DL', 'DT', 'DD', 'FIGURE', 'FIGCAPTION'].includes(tag)
+
+        if (isBlock && parts.length > 0 && parts[parts.length - 1] !== '\n') {
+          parts.push('\n')
+        }
+        for (const child of el.childNodes) {
+          visit(child)
+        }
+        if (isBlock && parts.length > 0 && parts[parts.length - 1] !== '\n') {
+          parts.push('\n')
+        }
+      }
+      else if (node.nodeType === TEXT_NODE) {
+        parts.push(node.nodeValue || '')
+      }
+    }
+    for (const child of this.childNodes) {
+      visit(child)
+    }
+    return parts.join('').replace(/\n{3,}/g, '\n\n').trim()
+  }
+
+  set innerText(value: string) {
+    while (this.childNodes.length > 0) {
+      this.removeChild(this.childNodes[0])
+    }
+    if (value) {
+      const textNode = new VirtualTextNode(value)
+      this.appendChild(textNode)
+    }
+  }
+
+  replaceChildren(...nodes: Array<VirtualNode | string>): void {
+    while (this.childNodes.length > 0) {
+      this.removeChild(this.childNodes[0])
+    }
+    for (const node of nodes) {
+      if (typeof node === 'string') {
+        this.appendChild(new VirtualTextNode(node))
+      }
+      else {
+        this.appendChild(node)
+      }
+    }
+  }
+
   // Child manipulation methods
   appendChild(child: VirtualNode): VirtualNode {
     return appendNode(this, child)
@@ -166,12 +252,23 @@ export class VirtualElement extends VirtualNodeBase {
       clone.setAttribute(name, value)
     }
 
-    // Deep clone children
+    // Deep clone children and shadow root
     if (deep) {
       for (const child of this.childNodes) {
         const childClone = (child as any).cloneNode?.(true)
         if (childClone) {
           clone.appendChild(childClone)
+        }
+      }
+
+      // Clone shadow root if present
+      if (this._shadowRoot) {
+        const shadowClone = clone.attachShadow({ mode: this._shadowRoot.mode })
+        for (const child of this._shadowRoot.childNodes) {
+          const childClone = (child as any).cloneNode?.(true)
+          if (childClone) {
+            shadowClone.appendChild(childClone)
+          }
         }
       }
     }
@@ -192,45 +289,6 @@ export class VirtualElement extends VirtualNodeBase {
     }
 
     return null
-  }
-
-  compareDocumentPosition(other: VirtualNode): number {
-    if (other === this) {
-      return 0
-    }
-
-    const thisRoot = this._rootNode(this)
-    const otherRoot = this._rootNode(other)
-
-    // DOCUMENT_POSITION_DISCONNECTED
-    if (thisRoot !== otherRoot) {
-      return 1
-    }
-
-    const thisContainsOther = this._containsNode(this, other)
-    const otherContainsThis = this._containsNode(other, this)
-
-    // DOCUMENT_POSITION_CONTAINS (8) | DOCUMENT_POSITION_FOLLOWING (4)
-    if (thisContainsOther) {
-      return 12
-    }
-
-    // DOCUMENT_POSITION_CONTAINED_BY (16) | DOCUMENT_POSITION_PRECEDING (2)
-    if (otherContainsThis) {
-      return 18
-    }
-
-    const order = this._documentOrder(thisRoot)
-    const thisIndex = order.indexOf(this)
-    const otherIndex = order.indexOf(other)
-
-    // DOCUMENT_POSITION_FOLLOWING
-    if (thisIndex < otherIndex) {
-      return 4
-    }
-
-    // DOCUMENT_POSITION_PRECEDING
-    return 2
   }
 
   // parentElement - returns parent if it's an element
@@ -400,20 +458,49 @@ export class VirtualElement extends VirtualNodeBase {
     return this._serializeNode(this)
   }
 
-  // classList implementation
+  // className getter/setter
+  get className(): string {
+    return this.getAttribute('class') || ''
+  }
+
+  set className(value: string) {
+    this.setAttribute('class', value)
+  }
+
+  // slot getter/setter
+  get slot(): string {
+    return this.getAttribute('slot') || ''
+  }
+
+  set slot(value: string) {
+    this.setAttribute('slot', value)
+  }
+
+  // classList implementation (DOMTokenList-like)
   get classList(): {
     add: (...tokens: string[]) => void
     remove: (...tokens: string[]) => void
     toggle: (token: string) => boolean
     contains: (token: string) => boolean
     replace: (oldToken: string, newToken: string) => boolean
+    readonly length: number
+    item: (index: number) => string | null
+    readonly value: string
+    toString: () => string
+    forEach: (callback: (value: string, index: number, list: any) => void) => void
+    [Symbol.iterator]: () => IterableIterator<string>
+    entries: () => IterableIterator<[number, string]>
+    keys: () => IterableIterator<number>
+    values: () => IterableIterator<string>
   } {
     // eslint-disable-next-line ts/no-this-alias
     const element = this
 
+    const getClasses = (): string[] => element.getAttribute('class')?.split(/\s+/).filter(Boolean) || []
+
     return {
       add(...tokens: string[]): void {
-        const classes = element.getAttribute('class')?.split(/\s+/).filter(Boolean) || []
+        const classes = getClasses()
         for (const token of tokens) {
           if (!classes.includes(token)) {
             classes.push(token)
@@ -422,7 +509,7 @@ export class VirtualElement extends VirtualNodeBase {
         element.setAttribute('class', classes.join(' '))
       },
       remove(...tokens: string[]): void {
-        const classes = element.getAttribute('class')?.split(/\s+/).filter(Boolean) || []
+        const classes = getClasses()
         const filtered = classes.filter(c => !tokens.includes(c))
         if (filtered.length > 0) {
           element.setAttribute('class', filtered.join(' '))
@@ -432,7 +519,7 @@ export class VirtualElement extends VirtualNodeBase {
         }
       },
       toggle(token: string): boolean {
-        const classes = element.getAttribute('class')?.split(/\s+/).filter(Boolean) || []
+        const classes = getClasses()
         const index = classes.indexOf(token)
         if (index !== -1) {
           classes.splice(index, 1)
@@ -451,11 +538,10 @@ export class VirtualElement extends VirtualNodeBase {
         }
       },
       contains(token: string): boolean {
-        const classes = element.getAttribute('class')?.split(/\s+/).filter(Boolean) || []
-        return classes.includes(token)
+        return getClasses().includes(token)
       },
       replace(oldToken: string, newToken: string): boolean {
-        const classes = element.getAttribute('class')?.split(/\s+/).filter(Boolean) || []
+        const classes = getClasses()
         const index = classes.indexOf(oldToken)
         if (index !== -1) {
           classes[index] = newToken
@@ -463,6 +549,42 @@ export class VirtualElement extends VirtualNodeBase {
           return true
         }
         return false
+      },
+      get length(): number {
+        return getClasses().length
+      },
+      item(index: number): string | null {
+        return getClasses()[index] ?? null
+      },
+      get value(): string {
+        return element.getAttribute('class') || ''
+      },
+      toString(): string {
+        return element.getAttribute('class') || ''
+      },
+      forEach(callback: (value: string, index: number, list: any) => void): void {
+        const classes = getClasses()
+        for (let i = 0; i < classes.length; i++) {
+          callback(classes[i], i, this)
+        }
+      },
+      * [Symbol.iterator](): IterableIterator<string> {
+        yield * getClasses()
+      },
+      * entries(): IterableIterator<[number, string]> {
+        const classes = getClasses()
+        for (let i = 0; i < classes.length; i++) {
+          yield [i, classes[i]]
+        }
+      },
+      * keys(): IterableIterator<number> {
+        const classes = getClasses()
+        for (let i = 0; i < classes.length; i++) {
+          yield i
+        }
+      },
+      * values(): IterableIterator<string> {
+        yield * getClasses()
       },
     }
   }
@@ -542,18 +664,46 @@ export class VirtualElement extends VirtualNodeBase {
           element._updateStyleAttribute()
           return previous
         },
+        item(index: number): string {
+          const keys = Array.from(element._internalStyles.keys())
+          return keys[index] || ''
+        },
+        get length(): number {
+          return element._internalStyles.size
+        },
+        get cssText(): string {
+          return Array.from(element._internalStyles.entries())
+            .map(([prop, value]) => {
+              const priority = element._stylePriorities.get(prop)
+              return priority ? `${prop}: ${value} !${priority}` : `${prop}: ${value}`
+            })
+            .join('; ')
+        },
+        set cssText(value: string) {
+          element._internalStyles.clear()
+          element._stylePriorities.clear()
+          if (value) {
+            element._setStylesFromAttribute(value)
+          }
+          element._updateStyleAttribute()
+        },
       } as any,
       {
         get(target, prop: string) {
-          if (prop === 'getPropertyValue' || prop === 'getPropertyPriority' || prop === 'setProperty' || prop === 'removeProperty') {
-            return target[prop]
+          if (prop === 'getPropertyValue' || prop === 'getPropertyPriority' || prop === 'setProperty' || prop === 'removeProperty' || prop === 'item' || prop === 'length' || prop === 'cssText') {
+            const val = target[prop]
+            return typeof val === 'function' ? val.bind(target) : val
           }
           // Convert camelCase to kebab-case
           const kebabProp = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)
           const value = element._internalStyles.get(kebabProp)
           return value
         },
-        set(_target, prop: string, value: string | number) {
+        set(target, prop: string, value: string | number) {
+          if (prop === 'cssText') {
+            target.cssText = value as string
+            return true
+          }
           // Convert camelCase to kebab-case
           const kebabProp = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)
           element._internalStyles.set(kebabProp, `${value}`)
@@ -907,6 +1057,263 @@ export class VirtualElement extends VirtualNodeBase {
     this.setAttribute('for', value)
   }
 
+  // Reflected boolean/string properties
+  get hidden(): boolean {
+    return this.hasAttribute('hidden')
+  }
+
+  set hidden(value: boolean) {
+    if (value) {
+      this.setAttribute('hidden', '')
+    }
+    else {
+      this.removeAttribute('hidden')
+    }
+  }
+
+  get title(): string {
+    return this.getAttribute('title') || ''
+  }
+
+  set title(value: string) {
+    this.setAttribute('title', value)
+  }
+
+  get lang(): string {
+    return this.getAttribute('lang') || ''
+  }
+
+  set lang(value: string) {
+    this.setAttribute('lang', value)
+  }
+
+  get dir(): string {
+    return this.getAttribute('dir') || ''
+  }
+
+  set dir(value: string) {
+    this.setAttribute('dir', value)
+  }
+
+  get contentEditable(): string {
+    const value = this.getAttribute('contenteditable')
+    if (value === null) return 'inherit'
+    if (value === '' || value === 'true') return 'true'
+    if (value === 'false') return 'false'
+    return 'inherit'
+  }
+
+  set contentEditable(value: string) {
+    if (value === 'inherit') {
+      this.removeAttribute('contenteditable')
+    }
+    else {
+      this.setAttribute('contenteditable', value)
+    }
+  }
+
+  get isContentEditable(): boolean {
+    const value = this.contentEditable
+    if (value === 'true') return true
+    if (value === 'false') return false
+    // inherit: walk up the tree
+    if (this.parentElement) {
+      return (this.parentElement as VirtualElement).isContentEditable
+    }
+    return false
+  }
+
+  // Form-related reflected boolean properties
+  get required(): boolean {
+    return this.hasAttribute('required')
+  }
+
+  set required(value: boolean) {
+    if (value) this.setAttribute('required', '')
+    else this.removeAttribute('required')
+  }
+
+  get readOnly(): boolean {
+    return this.hasAttribute('readonly')
+  }
+
+  set readOnly(value: boolean) {
+    if (value) this.setAttribute('readonly', '')
+    else this.removeAttribute('readonly')
+  }
+
+  get autofocus(): boolean {
+    return this.hasAttribute('autofocus')
+  }
+
+  set autofocus(value: boolean) {
+    if (value) this.setAttribute('autofocus', '')
+    else this.removeAttribute('autofocus')
+  }
+
+  get multiple(): boolean {
+    return this.hasAttribute('multiple')
+  }
+
+  set multiple(value: boolean) {
+    if (value) this.setAttribute('multiple', '')
+    else this.removeAttribute('multiple')
+  }
+
+  get noValidate(): boolean {
+    return this.hasAttribute('novalidate')
+  }
+
+  set noValidate(value: boolean) {
+    if (value) this.setAttribute('novalidate', '')
+    else this.removeAttribute('novalidate')
+  }
+
+  // Reflected string properties
+  get placeholder(): string {
+    return this.getAttribute('placeholder') || ''
+  }
+
+  set placeholder(value: string) {
+    this.setAttribute('placeholder', value)
+  }
+
+  get src(): string {
+    return this.getAttribute('src') || ''
+  }
+
+  set src(value: string) {
+    this.setAttribute('src', value)
+  }
+
+  get href(): string {
+    return this.getAttribute('href') || ''
+  }
+
+  set href(value: string) {
+    this.setAttribute('href', value)
+  }
+
+  get rel(): string {
+    return this.getAttribute('rel') || ''
+  }
+
+  set rel(value: string) {
+    this.setAttribute('rel', value)
+  }
+
+  // target property for forms and anchors
+  get target(): string {
+    return this.getAttribute('target') || ''
+  }
+
+  set target(value: string) {
+    this.setAttribute('target', value)
+  }
+
+  // ARIA / role
+  get role(): string {
+    return this.getAttribute('role') || ''
+  }
+
+  set role(value: string) {
+    this.setAttribute('role', value)
+  }
+
+  // outerText
+  get outerText(): string {
+    return this.innerText
+  }
+
+  set outerText(value: string) {
+    if (!this.parentNode) {
+      throw new DOMException('This element has no parent node.', 'NoModificationAllowedError')
+    }
+    const textNode = new VirtualTextNode(value)
+    ;(this.parentNode as VirtualElement).replaceChild(textNode, this)
+  }
+
+  // Reflected number properties
+  get minLength(): number {
+    const val = this.getAttribute('minlength')
+    return val !== null ? Number.parseInt(val, 10) : -1
+  }
+
+  set minLength(value: number) {
+    this.setAttribute('minlength', String(value))
+  }
+
+  get maxLength(): number {
+    const val = this.getAttribute('maxlength')
+    return val !== null ? Number.parseInt(val, 10) : -1
+  }
+
+  set maxLength(value: number) {
+    this.setAttribute('maxlength', String(value))
+  }
+
+  get size(): number {
+    const val = this.getAttribute('size')
+    return val !== null ? Number.parseInt(val, 10) : 20
+  }
+
+  set size(value: number) {
+    this.setAttribute('size', String(value))
+  }
+
+  get rows(): number {
+    const val = this.getAttribute('rows')
+    return val !== null ? Number.parseInt(val, 10) : 2
+  }
+
+  set rows(value: number) {
+    this.setAttribute('rows', String(value))
+  }
+
+  get cols(): number {
+    const val = this.getAttribute('cols')
+    return val !== null ? Number.parseInt(val, 10) : 20
+  }
+
+  set cols(value: number) {
+    this.setAttribute('cols', String(value))
+  }
+
+  get download(): string {
+    return this.getAttribute('download') || ''
+  }
+
+  set download(value: string) {
+    this.setAttribute('download', value)
+  }
+
+  // Attribute node interface
+  getAttributeNode(name: string): { name: string, value: string, specified: boolean, ownerElement: VirtualElement } | null {
+    const normalizedName = name.toLowerCase()
+    const value = this.attributes.get(normalizedName)
+    if (value === undefined) return null
+    return { name: normalizedName, value, specified: true, ownerElement: this }
+  }
+
+  setAttributeNode(attr: { name: string, value: string }): { name: string, value: string, specified: boolean, ownerElement: VirtualElement } | null {
+    const old = this.getAttributeNode(attr.name)
+    this.setAttribute(attr.name, attr.value)
+    return old
+  }
+
+  removeAttributeNode(attr: { name: string }): { name: string, value: string, specified: boolean, ownerElement: VirtualElement } {
+    const existing = this.getAttributeNode(attr.name)
+    if (!existing) {
+      throw new DOMException('The attribute is not found.', 'NotFoundError')
+    }
+    this.removeAttribute(attr.name)
+    return existing
+  }
+
+  hasAttributes(): boolean {
+    return this.attributes.size > 0
+  }
+
   get willValidate(): boolean {
     if (!this._isListedFormAssociatedElement() || this.disabled) {
       return false
@@ -1012,9 +1419,12 @@ export class VirtualElement extends VirtualNodeBase {
     if (type !== 'checkbox' && type !== 'radio') {
       return
     }
+    const boolValue = Boolean(value)
     this._checkedDirty = true
-    this._checkedState = Boolean(value)
-    this._syncRadioGroupSelection()
+    this._checkedState = boolValue
+    if (type === 'radio' && boolValue) {
+      this._syncRadioGroupSelection()
+    }
   }
 
   get defaultChecked(): boolean {
@@ -1304,9 +1714,49 @@ export class VirtualElement extends VirtualNodeBase {
       return matchesComplexSelector(this, selector, root)
     }
     else {
-      // Simple selector without combinators
-      return matchesSimpleSelector(this, selector)
+      // Simple selector without combinators - pass self as scope root for :scope
+      return matchesSimpleSelector(this, selector, this)
     }
+  }
+
+  webkitMatchesSelector(selector: string): boolean {
+    return this.matches(selector)
+  }
+
+  // Form element reflected properties
+  get action(): string {
+    if (!this._isFormElement()) return ''
+    return this.getAttribute('action') || ''
+  }
+
+  set action(value: string) {
+    if (this._isFormElement()) this.setAttribute('action', value)
+  }
+
+  get method(): string {
+    if (!this._isFormElement()) return ''
+    return (this.getAttribute('method') || 'get').toLowerCase()
+  }
+
+  set method(value: string) {
+    if (this._isFormElement()) this.setAttribute('method', value)
+  }
+
+  get enctype(): string {
+    if (!this._isFormElement()) return ''
+    return this.getAttribute('enctype') || 'application/x-www-form-urlencoded'
+  }
+
+  set enctype(value: string) {
+    if (this._isFormElement()) this.setAttribute('enctype', value)
+  }
+
+  get encoding(): string {
+    return this.enctype
+  }
+
+  set encoding(value: string) {
+    this.enctype = value
   }
 
   // Event handling
@@ -1320,6 +1770,132 @@ export class VirtualElement extends VirtualNodeBase {
 
   dispatchEvent(event: any): boolean {
     return super.dispatchEvent(event)
+  }
+
+  // Focus/blur with actual focus tracking
+  focus(): void {
+    const doc = this.ownerDocument
+    if (doc) {
+      const previouslyFocused = doc.activeElement
+      if (previouslyFocused && previouslyFocused !== this && previouslyFocused !== doc.body) {
+        const blurEvent = new VirtualEvent('blur', { bubbles: false })
+        previouslyFocused.dispatchEvent(blurEvent)
+      }
+      doc._setFocusedElement(this)
+    }
+    const event = new VirtualEvent('focus', { bubbles: false })
+    this.dispatchEvent(event)
+  }
+
+  blur(): void {
+    const doc = this.ownerDocument
+    if (doc && doc.activeElement === this) {
+      doc._setFocusedElement(null)
+    }
+    const event = new VirtualEvent('blur', { bubbles: false })
+    this.dispatchEvent(event)
+  }
+
+  // Scroll methods (no-op in virtual DOM)
+  scrollIntoView(_arg?: boolean | ScrollIntoViewOptions): void {}
+
+  scrollTo(_x?: number, _y?: number): void {}
+
+  // Client rects
+  getClientRects(): DOMRect[] {
+    return []
+  }
+
+  private _validateInsertAdjacentPosition(position: string): string {
+    const normalized = position.toLowerCase()
+    if (normalized !== 'beforebegin' && normalized !== 'afterbegin' && normalized !== 'beforeend' && normalized !== 'afterend') {
+      throw new DOMException(`Failed to execute 'insertAdjacentHTML' on 'Element': The value provided ('${position}') is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'.`, 'SyntaxError')
+    }
+    return normalized
+  }
+
+  // insertAdjacentHTML
+  insertAdjacentHTML(position: string, html: string): void {
+    const pos = this._validateInsertAdjacentPosition(position)
+    const nodes = parseHTML(html, this.ownerDocument)
+    switch (pos) {
+      case 'beforebegin':
+        if (this.parentNode) {
+          for (const node of nodes) {
+            (this.parentNode as VirtualElement).insertBefore(node, this)
+          }
+        }
+        break
+      case 'afterbegin':
+        for (let i = nodes.length - 1; i >= 0; i--) {
+          this.insertBefore(nodes[i], this.firstChild)
+        }
+        break
+      case 'beforeend':
+        for (const node of nodes) {
+          this.appendChild(node)
+        }
+        break
+      case 'afterend':
+        if (this.parentNode) {
+          const next = this.nextSibling
+          for (const node of nodes) {
+            (this.parentNode as VirtualElement).insertBefore(node, next)
+          }
+        }
+        break
+    }
+  }
+
+  // insertAdjacentElement
+  insertAdjacentElement(position: string, element: VirtualElement): VirtualElement | null {
+    const pos = this._validateInsertAdjacentPosition(position)
+    switch (pos) {
+      case 'beforebegin':
+        if (this.parentNode) {
+          (this.parentNode as VirtualElement).insertBefore(element, this)
+          return element
+        }
+        return null
+      case 'afterbegin':
+        this.insertBefore(element, this.firstChild)
+        return element
+      case 'beforeend':
+        this.appendChild(element)
+        return element
+      case 'afterend':
+        if (this.parentNode) {
+          (this.parentNode as VirtualElement).insertBefore(element, this.nextSibling)
+          return element
+        }
+        return null
+      default:
+        return null
+    }
+  }
+
+  // insertAdjacentText
+  insertAdjacentText(position: string, text: string): void {
+    const pos = this._validateInsertAdjacentPosition(position)
+    const textNode = new VirtualTextNode(text)
+    switch (pos) {
+      case 'beforebegin':
+        if (this.parentNode) {
+          (this.parentNode as VirtualElement).insertBefore(textNode, this)
+        }
+        break
+      case 'afterbegin':
+        this.insertBefore(textNode, this.firstChild)
+        break
+      case 'beforeend':
+        this.appendChild(textNode)
+        break
+      case 'afterend':
+        if (this.parentNode) {
+          (this.parentNode as VirtualElement).insertBefore(textNode, this.nextSibling)
+        }
+        break
+    }
   }
 
   // Click simulation
@@ -1454,6 +2030,26 @@ export class VirtualElement extends VirtualNodeBase {
     return 0
   }
 
+  get offsetWidth(): number {
+    return 0
+  }
+
+  get offsetHeight(): number {
+    return 0
+  }
+
+  get offsetTop(): number {
+    return 0
+  }
+
+  get offsetLeft(): number {
+    return 0
+  }
+
+  get offsetParent(): VirtualElement | null {
+    return this.parentElement
+  }
+
   get scrollWidth(): number {
     return 0
   }
@@ -1462,26 +2058,49 @@ export class VirtualElement extends VirtualNodeBase {
     return 0
   }
 
-  getBoundingClientRect(): { x: number, y: number, width: number, height: number, top: number, right: number, bottom: number, left: number } {
-    return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 }
+  private _scrollTop = 0
+  private _scrollLeft = 0
+
+  get scrollTop(): number {
+    return this._scrollTop
   }
 
-  // Visibility check
+  set scrollTop(value: number) {
+    this._scrollTop = value
+  }
+
+  get scrollLeft(): number {
+    return this._scrollLeft
+  }
+
+  set scrollLeft(value: number) {
+    this._scrollLeft = value
+  }
+
+  getBoundingClientRect(): { x: number, y: number, width: number, height: number, top: number, right: number, bottom: number, left: number, toJSON: () => any } {
+    const rect = { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0, toJSON() { return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 } } }
+    return rect
+  }
+
+  // Visibility check - walks ancestor chain
   isVisible(): boolean {
-    // Check display: none
-    const display = this.style.getPropertyValue('display')
-    if (display === 'none')
-      return false
+    // eslint-disable-next-line ts/no-this-alias
+    let current: VirtualElement | null = this
+    while (current) {
+      const display = current.style.getPropertyValue('display')
+      if (display === 'none')
+        return false
 
-    // Check visibility: hidden
-    const visibility = this.style.getPropertyValue('visibility')
-    if (visibility === 'hidden')
-      return false
+      const visibility = current.style.getPropertyValue('visibility')
+      if (visibility === 'hidden' || visibility === 'collapse')
+        return false
 
-    // Check opacity
-    const opacity = this.style.getPropertyValue('opacity')
-    if (opacity === '0')
-      return false
+      const opacity = current.style.getPropertyValue('opacity')
+      if (opacity === '0')
+        return false
+
+      current = current.parentElement
+    }
 
     return true
   }

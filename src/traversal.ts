@@ -667,6 +667,27 @@ export class Range {
     return this.cloneContents().textContent || ''
   }
 
+  createContextualFragment(html: string): VirtualNode {
+    const doc = this.startContainer.ownerDocument ?? this.startContainer
+    const fragment = doc.createDocumentFragment()
+    if (html) {
+      const { parseHTML } = require('./parsers/html-parser')
+      const nodes = parseHTML(html, doc)
+      for (const node of nodes) {
+        fragment.appendChild(node)
+      }
+    }
+    return fragment
+  }
+
+  getBoundingClientRect(): { x: number, y: number, width: number, height: number, top: number, right: number, bottom: number, left: number } {
+    return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 }
+  }
+
+  getClientRects(): any[] {
+    return []
+  }
+
   detach(): void {}
 }
 
@@ -720,6 +741,12 @@ export class Selection {
     return this._range
   }
 
+  removeRange(range: Range): void {
+    if (this._range === range) {
+      this._range = null
+    }
+  }
+
   removeAllRanges(): void {
     this._range = null
   }
@@ -747,6 +774,29 @@ export class Selection {
     const range = this._document.createRange()
     range.selectNodeContents(node)
     this._range = range
+  }
+
+  containsNode(node: VirtualNode, allowPartialContainment = false): boolean {
+    if (!this._range) return false
+    try {
+      const startCompare = this._range.compareBoundaryPoints(Range.START_TO_START, (() => {
+        const r = this._document.createRange()
+        r.selectNode(node)
+        return r
+      })())
+      const endCompare = this._range.compareBoundaryPoints(Range.END_TO_END, (() => {
+        const r = this._document.createRange()
+        r.selectNode(node)
+        return r
+      })())
+      if (allowPartialContainment) {
+        return startCompare <= 0 || endCompare >= 0
+      }
+      return startCompare <= 0 && endCompare >= 0
+    }
+    catch {
+      return false
+    }
   }
 
   deleteFromDocument(): void {

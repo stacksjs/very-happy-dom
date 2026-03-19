@@ -9,6 +9,7 @@ import { XPathEvaluator } from '../xpath/XPathEvaluator'
 import { XPathResultType } from '../xpath/XPathResult'
 import { VirtualCommentNode } from './VirtualCommentNode'
 import { VirtualDocumentFragment } from './VirtualDocumentFragment'
+import { querySelectorAllEngine, querySelectorEngine } from '../selectors/engine'
 import { VirtualElement } from './VirtualElement'
 import { VirtualSVGElement } from './VirtualSVGElement'
 import { VirtualTemplateElement } from './VirtualTemplateElement'
@@ -28,6 +29,24 @@ export class VirtualDocument extends VirtualNodeBase {
   location: Location
   history: History
   title = ''
+  readyState: string = 'complete'
+  compatMode: string = 'CSS1Compat'
+  contentType: string = 'text/html'
+  characterSet: string = 'UTF-8'
+  doctype: null = null
+  hidden: boolean = false
+  visibilityState: string = 'visible'
+  dir: string = ''
+  referrer: string = ''
+  designMode: string = 'off'
+
+  get charset(): string {
+    return this.characterSet
+  }
+
+  get inputEncoding(): string {
+    return this.characterSet
+  }
 
   get URL(): string {
     return this.location.href
@@ -41,6 +60,73 @@ export class VirtualDocument extends VirtualNodeBase {
     const baseElement = this.head?.querySelector('base[href]') || this.querySelector('base[href]')
     const href = baseElement?.getAttribute('href')
     return href ? this._resolveAgainstDocumentURL(href) : this._getDocumentURLForResolution()
+  }
+
+  get domain(): string {
+    if (this._locationState.hostname) {
+      return this._locationState.hostname
+    }
+    try {
+      return new URL(this._getDocumentURLForResolution()).hostname
+    }
+    catch {
+      return ''
+    }
+  }
+
+  get lastModified(): string {
+    return new Date().toLocaleString()
+  }
+
+  private _focusedElement: VirtualElement | null = null
+
+  get activeElement(): VirtualElement | null {
+    return this._focusedElement || this.body
+  }
+
+  get scrollingElement(): VirtualElement | null {
+    return this.documentElement
+  }
+
+  get forms(): VirtualElement[] {
+    return this.querySelectorAll('form')
+  }
+
+  get images(): VirtualElement[] {
+    return this.querySelectorAll('img')
+  }
+
+  get links(): VirtualElement[] {
+    return this.querySelectorAll('a[href], area[href]')
+  }
+
+  get scripts(): VirtualElement[] {
+    return this.querySelectorAll('script')
+  }
+
+  get anchors(): VirtualElement[] {
+    return this.querySelectorAll('a[name]')
+  }
+
+  get embeds(): VirtualElement[] {
+    return this.querySelectorAll('embed')
+  }
+
+  get plugins(): VirtualElement[] {
+    return this.embeds
+  }
+
+  currentScript: VirtualElement | null = null
+
+  implementation = {
+    createHTMLDocument: (title?: string): VirtualDocument => {
+      const doc = new VirtualDocument()
+      if (title !== undefined) {
+        doc.title = title
+      }
+      return doc
+    },
+    hasFeature: (): boolean => true,
   }
 
   private _historyStack: HistoryState[] = []
@@ -424,6 +510,55 @@ export class VirtualDocument extends VirtualNodeBase {
     return fragment
   }
 
+  _setFocusedElement(element: VirtualElement | null): void {
+    this._focusedElement = element
+  }
+
+  createEvent(type: string): VirtualEvent {
+    return new VirtualEvent(type.replace(/s?$/i, '').toLowerCase())
+  }
+
+  createAttribute(name: string): { name: string, value: string, specified: boolean } {
+    return {
+      name: name.toLowerCase(),
+      value: '',
+      specified: true,
+    }
+  }
+
+  importNode(node: VirtualNode, deep: boolean = false): VirtualNode {
+    if (typeof (node as any).cloneNode !== 'function') {
+      throw new Error('Failed to execute \'importNode\': parameter 1 is not of type \'Node\'.')
+    }
+    const clone = (node as any).cloneNode(deep)
+    this._setOwnerDocumentRecursive(clone, this)
+    return clone
+  }
+
+  adoptNode(node: VirtualNode): VirtualNode {
+    if (node.parentNode) {
+      ;(node.parentNode as any).removeChild(node)
+    }
+    this._setOwnerDocumentRecursive(node, this)
+    return node
+  }
+
+  hasFocus(): boolean {
+    return this._focusedElement !== null
+  }
+
+  execCommand(_command: string, _showUI?: boolean, _value?: string): boolean {
+    return false
+  }
+
+  queryCommandEnabled(_command: string): boolean {
+    return false
+  }
+
+  queryCommandSupported(_command: string): boolean {
+    return false
+  }
+
   createTreeWalker(root: VirtualNode, whatToShow = 0xFFFFFFFF, filter: NodeFilterInput = null): TreeWalker {
     return new TreeWalker(root, whatToShow, filter)
   }
@@ -444,11 +579,11 @@ export class VirtualDocument extends VirtualNodeBase {
   }
 
   querySelector(selector: string): VirtualElement | null {
-    return this.documentElement?.querySelector(selector) || null
+    return querySelectorEngine(this, selector)
   }
 
   querySelectorAll(selector: string): VirtualElement[] {
-    return this.documentElement?.querySelectorAll(selector) || []
+    return querySelectorAllEngine(this, selector)
   }
 
   getElementById(id: string): VirtualElement | null {
@@ -457,6 +592,10 @@ export class VirtualDocument extends VirtualNodeBase {
 
   getElementsByTagName(tagName: string): VirtualElement[] {
     return this.querySelectorAll(tagName)
+  }
+
+  getElementsByName(name: string): VirtualElement[] {
+    return this.querySelectorAll(`[name="${name}"]`)
   }
 
   getElementsByClassName(className: string): VirtualElement[] {
@@ -520,6 +659,22 @@ export class VirtualDocument extends VirtualNodeBase {
         this.body.appendChild(node)
       }
     }
+  }
+
+  open(): VirtualDocument {
+    // Clear the document body for new content
+    if (this.body) {
+      this.body.childNodes = []
+    }
+    return this
+  }
+
+  close(): void {
+    // No-op — signals end of document.write() stream
+  }
+
+  writeln(html: string): void {
+    this.write(`${html}\n`)
   }
 
   // Get computed styles

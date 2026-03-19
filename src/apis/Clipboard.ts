@@ -37,13 +37,25 @@ export class Clipboard {
   }
 }
 
+function detectPlatform(): string {
+  if (typeof process !== 'undefined' && process.platform) {
+    switch (process.platform) {
+      case 'darwin': return 'MacIntel'
+      case 'win32': return 'Win32'
+      case 'linux': return 'Linux x86_64'
+      default: return process.platform
+    }
+  }
+  return 'Linux x86_64'
+}
+
 export class Navigator {
   public clipboard: Clipboard = new Clipboard()
   public geolocation: Geolocation = new Geolocation()
   public userAgent: string = 'Mozilla/5.0 (X11; Linux x64) AppleWebKit/537.36 (KHTML, like Gecko) VeryHappyDOM/1.0.0'
-  public language: string = 'en-US'
+  public language: string = typeof process !== 'undefined' && process.env?.LANG ? process.env.LANG.split('.')[0].replace('_', '-') : 'en-US'
   public languages: readonly string[] = ['en-US', 'en'] as const
-  public platform: string = 'Linux x86_64'
+  public platform: string = detectPlatform()
   public cookieEnabled: boolean = true
   public onLine: boolean = true
 }

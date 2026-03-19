@@ -29,6 +29,7 @@ export type { CustomEventInit } from './events/CustomEvent'
 // Export Event APIs
 export { CustomEvent } from './events/CustomEvent'
 export { VirtualEvent } from './events/VirtualEvent'
+export { VirtualEventTarget } from './events/VirtualEventTarget'
 
 // Export HTTP APIs
 export { XMLHttpRequest } from './http/XMLHttpRequest'
@@ -43,6 +44,7 @@ export { VirtualTemplateElement } from './nodes/VirtualTemplateElement'
 export { VirtualSVGElement } from './nodes/VirtualSVGElement'
 // Export types
 export type { EventListener, EventListenerOptions, History, HistoryState, Location, NodeType, VirtualNode } from './nodes/VirtualNode'
+export { VirtualNodeBase } from './nodes/VirtualNode'
 export { VirtualTextNode } from './nodes/VirtualTextNode'
 
 export type { IntersectionObserverCallback, IntersectionObserverEntry, IntersectionObserverInit } from './observers/IntersectionObserver'

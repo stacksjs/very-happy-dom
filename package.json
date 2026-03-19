@@ -60,7 +60,8 @@
   "devDependencies": {
     "@stacksjs/bunpress": "^0.1.1",
     "better-dx": "^0.2.7",
-    "bunfig": "^0.15.6"
+    "bunfig": "^0.15.6",
+    "mitata": "^1.0.34"
   },
   "git-hooks": {
     "pre-commit": {
@@ -69,8 +70,5 @@
       }
     },
     "commit-msg": "bunx gitlint --edit .git/COMMIT_EDITMSG"
-  },
-  "dependencies": {
-    "mitata": "^1.0.34"
   }
 }

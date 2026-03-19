@@ -408,13 +408,13 @@ describe('DOM Edge Cases', () => {
       expect(comment.nodeValue).toBe('test comment')
     })
 
-    test('should have empty textContent for comments', () => {
+    test('should return data for textContent on comments (per DOM spec)', () => {
       const doc = createDocument()
       const comment = doc.createComment('test')
 
-      expect(comment.textContent).toBe('')
+      expect(comment.textContent).toBe('test')
       comment.textContent = 'new value'
-      expect(comment.textContent).toBe('')
+      expect(comment.textContent).toBe('new value')
     })
   })
 

@@ -9,6 +9,7 @@ import { VirtualEventTarget } from '../events/VirtualEventTarget'
 import { VirtualEvent } from '../events/VirtualEvent'
 import { XMLHttpRequest as VeryHappyXMLHttpRequest } from '../http/XMLHttpRequest'
 import { VeryHappyWebSocket } from '../network/WebSocket'
+import { parseHTML } from '../parsers/html-parser'
 import { VirtualCommentNode } from '../nodes/VirtualCommentNode'
 import { VirtualDocument } from '../nodes/VirtualDocument'
 import { VirtualDocumentFragment } from '../nodes/VirtualDocumentFragment'
@@ -114,12 +115,79 @@ export class Window extends VirtualEventTarget {
   public performance: Performance = new Performance()
   public Notification: typeof Notification = Notification
   public DataTransfer: typeof DataTransfer = DataTransfer
+  public crypto: Crypto = globalThis.crypto
+
+  // DOMParser
+  public DOMParser = class DOMParser {
+    parseFromString(html: string, mimeType: string): VirtualDocument {
+      const doc = new VirtualDocument()
+      if (mimeType === 'text/html' || mimeType === 'application/xhtml+xml') {
+        const nodes = parseHTML(html, doc)
+        // Look for an <html> node in parsed output
+        for (const node of nodes) {
+          if ((node as any).tagName === 'HTML') {
+            doc.childNodes = []
+            doc.documentElement = node as any
+            doc.appendChild(node)
+            for (const child of (node as any).children) {
+              if ((child as any).tagName === 'HEAD') doc.head = child as any
+              else if ((child as any).tagName === 'BODY') doc.body = child as any
+            }
+            return doc
+          }
+        }
+        // No <html> wrapper — append to body
+        if (doc.body) {
+          doc.body.childNodes = []
+          for (const node of nodes) {
+            doc.body.appendChild(node)
+          }
+        }
+      }
+      else if (mimeType === 'text/xml' || mimeType === 'application/xml' || mimeType === 'image/svg+xml') {
+        const nodes = parseHTML(html, doc)
+        doc.childNodes = []
+        for (const node of nodes) {
+          doc.appendChild(node)
+        }
+      }
+      return doc
+    }
+  }
+
+  // Window self-references
+  public get self(): this { return this }
+  public get window(): this { return this }
+  public get parent(): this { return this }
+  public get top(): this { return this }
+  public get frames(): this { return this }
+  public frameElement: null = null
+
+  // Window state
+  public name: string = ''
+  public closed: boolean = false
+
+  // Scroll state
+  public scrollX: number = 0
+  public scrollY: number = 0
+  public get pageXOffset(): number { return this.scrollX }
+  public get pageYOffset(): number { return this.scrollY }
+
+  // Display properties
+  public devicePixelRatio: number = 1
+
+  // Global delegates
+  public atob(data: string): string { return globalThis.atob(data) }
+  public btoa(data: string): string { return globalThis.btoa(data) }
+  public queueMicrotask(callback: () => void): void { globalThis.queueMicrotask(callback) }
+  public structuredClone<T>(value: T, options?: StructuredSerializeOptions): T { return globalThis.structuredClone(value, options) }
 
   private _location: Location
   private _settings: IBrowserSettings
   private _width: number
   private _height: number
   private _timerManager: TimerManager
+  private _idleCallbackId: number = 0
 
   constructor(options: WindowOptions = {}) {
     super()
@@ -283,6 +351,173 @@ export class Window extends VirtualEventTarget {
 
   getComputedStyle(element: any, _pseudoElt?: string | null): any {
     return this.document.getComputedStyle(element)
+  }
+
+  get screen(): {
+    width: number
+    height: number
+    availWidth: number
+    availHeight: number
+    colorDepth: number
+    pixelDepth: number
+    orientation: { type: string, angle: number }
+  } {
+    return {
+      width: this._width,
+      height: this._height,
+      availWidth: this._width,
+      availHeight: this._height,
+      colorDepth: 24,
+      pixelDepth: 24,
+      orientation: { type: 'landscape-primary', angle: 0 },
+    }
+  }
+
+  get isSecureContext(): boolean {
+    return this._location.protocol === 'https:'
+  }
+
+  get origin(): string {
+    return this._location.origin
+  }
+
+  matchMedia(query: string): {
+    matches: boolean
+    media: string
+    onchange: null
+    addListener: (cb: any) => void
+    removeListener: (cb: any) => void
+    addEventListener: (type: string, cb: any) => void
+    removeEventListener: (type: string, cb: any) => void
+    dispatchEvent: () => true
+  } {
+    let matches = false
+
+    // prefers-color-scheme
+    const colorSchemeMatch = query.match(/\(\s*prefers-color-scheme\s*:\s*(light|dark)\s*\)/)
+    if (colorSchemeMatch) {
+      matches = this._settings.device.prefersColorScheme === colorSchemeMatch[1]
+    }
+
+    // min-width / max-width
+    const minWidthMatch = query.match(/\(\s*min-width\s*:\s*(\d+(?:\.\d+)?)(px|em|rem)?\s*\)/)
+    if (minWidthMatch) {
+      const value = Number.parseFloat(minWidthMatch[1])
+      matches = this._width >= value
+    }
+    const maxWidthMatch = query.match(/\(\s*max-width\s*:\s*(\d+(?:\.\d+)?)(px|em|rem)?\s*\)/)
+    if (maxWidthMatch) {
+      const value = Number.parseFloat(maxWidthMatch[1])
+      matches = this._width <= value
+    }
+
+    // min-height / max-height
+    const minHeightMatch = query.match(/\(\s*min-height\s*:\s*(\d+(?:\.\d+)?)(px|em|rem)?\s*\)/)
+    if (minHeightMatch) {
+      const value = Number.parseFloat(minHeightMatch[1])
+      matches = this._height >= value
+    }
+    const maxHeightMatch = query.match(/\(\s*max-height\s*:\s*(\d+(?:\.\d+)?)(px|em|rem)?\s*\)/)
+    if (maxHeightMatch) {
+      const value = Number.parseFloat(maxHeightMatch[1])
+      matches = this._height <= value
+    }
+
+    // orientation
+    const orientationMatch = query.match(/\(\s*orientation\s*:\s*(portrait|landscape)\s*\)/)
+    if (orientationMatch) {
+      const isPortrait = this._height >= this._width
+      matches = orientationMatch[1] === 'portrait' ? isPortrait : !isPortrait
+    }
+
+    // prefers-reduced-motion
+    const reducedMotionMatch = query.match(/\(\s*prefers-reduced-motion\s*:\s*(reduce|no-preference)\s*\)/)
+    if (reducedMotionMatch) {
+      matches = reducedMotionMatch[1] === 'no-preference'
+    }
+
+    const listeners = new Set<(event: any) => void>()
+    return {
+      matches,
+      media: query,
+      onchange: null,
+      addListener: (cb: any) => { if (cb) listeners.add(cb) },
+      removeListener: (cb: any) => { listeners.delete(cb) },
+      addEventListener: (_type: string, cb: any) => { if (cb) listeners.add(cb) },
+      removeEventListener: (_type: string, cb: any) => { listeners.delete(cb) },
+      dispatchEvent: () => true,
+    }
+  }
+
+  // History proxy — delegates to document.history
+  get history() {
+    return this.document.history
+  }
+
+  // postMessage
+  postMessage(message: any, targetOrigin?: string, transfer?: Transferable[]): void
+  postMessage(message: any, options?: { targetOrigin?: string, transfer?: Transferable[] }): void
+  postMessage(message: any, targetOriginOrOptions?: string | { targetOrigin?: string, transfer?: Transferable[] }): void {
+    const origin = typeof targetOriginOrOptions === 'string' ? targetOriginOrOptions : (targetOriginOrOptions?.targetOrigin ?? '*')
+    setTimeout(() => {
+      const event = new VirtualEvent('message') as any
+      event.data = message
+      event.origin = origin === '*' ? this._location.origin : origin
+      event.source = this
+      event.ports = []
+      this.dispatchEvent(event)
+    }, 0)
+  }
+
+  // Idle callbacks
+  requestIdleCallback(callback: (deadline: { didTimeout: boolean, timeRemaining: () => number }) => void, options?: { timeout?: number }): number {
+    const id = ++this._idleCallbackId
+    const timeout = options?.timeout ?? 50
+    this._timerManager.setTimeout(() => {
+      callback({
+        didTimeout: false,
+        timeRemaining: () => Math.max(0, timeout),
+      })
+    }, 0)
+    return id
+  }
+
+  cancelIdleCallback(_id: number): void {
+    // Timer already scheduled with setTimeout; cancellation is best-effort
+  }
+
+  // Focus/blur on window
+  focus(): void {}
+  blur(): void {}
+  print(): void {}
+  stop(): void {}
+
+  open(): null {
+    return null
+  }
+
+  close(): void {
+    this.closed = true
+  }
+
+  // Resize/move (no-ops)
+  resizeTo(_width: number, _height: number): void {}
+  resizeBy(_dw: number, _dh: number): void {}
+  moveTo(_x: number, _y: number): void {}
+  moveBy(_dx: number, _dy: number): void {}
+
+  scrollTo(_x?: number | ScrollToOptions, _y?: number): void {}
+
+  scrollBy(_x?: number | ScrollToOptions, _y?: number): void {}
+
+  alert(_message?: string): void {}
+
+  confirm(_message?: string): boolean {
+    return false
+  }
+
+  prompt(_message?: string, _default?: string): string | null {
+    return null
   }
 
   /**

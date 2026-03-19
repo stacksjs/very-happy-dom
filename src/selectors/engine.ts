@@ -46,6 +46,31 @@ function splitSelectorList(selector: string): string[] {
   return parts
 }
 
+function matchesNthPosition(position: number, pseudoArg: string): boolean {
+  if (pseudoArg === 'odd')
+    return position % 2 === 1
+  if (pseudoArg === 'even')
+    return position % 2 === 0
+
+  const anPlusBMatch = pseudoArg.match(/^(-?\d*)n([+-]\d+)?$/)
+  if (anPlusBMatch) {
+    const a = anPlusBMatch[1] === '' ? 1 : anPlusBMatch[1] === '-' ? -1 : Number.parseInt(anPlusBMatch[1], 10)
+    const b = anPlusBMatch[2] ? Number.parseInt(anPlusBMatch[2], 10) : 0
+
+    if (a === 0)
+      return position === b
+
+    const n = (position - b) / a
+    return n >= 0 && Number.isInteger(n)
+  }
+
+  const n = Number.parseInt(pseudoArg, 10)
+  if (!Number.isNaN(n))
+    return position === n
+
+  return false
+}
+
 /**
  * Checks if a CSS selector uses the :scope pseudo-class.
  *
@@ -484,7 +509,7 @@ export function matchesSimpleSelector(element: VirtualElement, selector: string,
   const idMatch = selectorWithoutAttr.match(/#([\w-]+)/)
   const classMatches = selectorWithoutAttr.match(/\.([\w-]+)/g)
   const attrMatches = selectorWithoutPseudo.match(/\[([^\]]+)\]/g)
-  const pseudoMatches = selector.match(/:([a-z-]+)(\(([^)]*)\))?/gi)
+  const pseudoMatches = selector.match(/::?[a-z-]+(\([^)]*\))?/gi)
 
   // Check tag name
   if (tagMatch && tagMatch[1].toLowerCase() !== element.tagName.toLowerCase()) {
@@ -558,6 +583,11 @@ export function matchesSimpleSelector(element: VirtualElement, selector: string,
  * @returns True if the element matches the pseudo-class
  */
 export function matchesPseudoClass(element: VirtualElement, pseudo: string, scopeRoot?: VirtualNode): boolean {
+  // Ignore pseudo-elements (::before, ::after, etc.) — they cannot match DOM elements
+  if (pseudo.startsWith('::')) {
+    return true
+  }
+
   const pseudoMatch = pseudo.match(/:([a-z-]+)(\(([^)]*)\))?/i)
   if (!pseudoMatch) {
     throw new Error(`Invalid pseudo-class selector: "${pseudo}"`)
@@ -590,18 +620,7 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string, scop
       if (index === -1)
         return false
 
-      const position = index + 1 // 1-indexed
-
-      if (pseudoArg === 'odd')
-        return position % 2 === 1
-      if (pseudoArg === 'even')
-        return position % 2 === 0
-
-      const n = Number.parseInt(pseudoArg, 10)
-      if (!Number.isNaN(n))
-        return position === n
-
-      return false
+      return matchesNthPosition(index + 1, pseudoArg)
     }
 
     case 'not':
@@ -620,6 +639,34 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string, scop
       return splitSelectorList(pseudoArg).some(part => matchesSimpleSelector(element, part, scopeRoot))
     }
 
+    case 'root':
+    {
+      // :root matches the document element (the <html> element)
+      const doc = element.ownerDocument
+      return doc ? doc.documentElement === element : false
+    }
+
+    case 'has':
+    {
+      if (!pseudoArg)
+        return false
+      // :has() checks if the element has descendants matching the selector
+      const selectors = splitSelectorList(pseudoArg)
+      return selectors.some((sel) => {
+        // Check for relative selectors (starting with > + ~)
+        const trimmedSel = sel.trim()
+        if (trimmedSel.startsWith('>') || trimmedSel.startsWith('+') || trimmedSel.startsWith('~')) {
+          // For relative selectors, the scope is the element itself
+          const fullSel = `:scope ${trimmedSel}`
+          const results = querySelectorAllEngine(element, fullSel)
+          return results.length > 0
+        }
+        // For regular selectors, search descendants
+        const results = querySelectorAllEngine(element, trimmedSel)
+        return results.length > 0
+      })
+    }
+
     case 'scope':
       return scopeRoot === element
 
@@ -635,6 +682,68 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string, scop
     case 'empty':
       // :empty matches elements with no children (elements or text nodes)
       return element.childNodes.length === 0 || (element.childNodes.length === 1 && element.childNodes[0].nodeType === TEXT_NODE && (element.childNodes[0].nodeValue?.trim() === '' || element.childNodes[0].nodeValue === null))
+
+    case 'required':
+      return element.hasAttribute('required')
+
+    case 'optional':
+    {
+      const tag = element.tagName
+      if (tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') return false
+      return !element.hasAttribute('required')
+    }
+
+    case 'valid':
+      return typeof (element as any).validity === 'object' ? (element as any).validity.valid : true
+
+    case 'invalid':
+      return typeof (element as any).validity === 'object' ? !(element as any).validity.valid : false
+
+    case 'placeholder-shown':
+    {
+      const tag = element.tagName
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA') return false
+      if (!element.hasAttribute('placeholder')) return false
+      const val = (element as any).value
+      return val === '' || val === undefined || val === null
+    }
+
+    case 'read-only':
+    {
+      const tag = element.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') {
+        return element.hasAttribute('readonly') || element.hasAttribute('disabled')
+      }
+      return (element as any).contentEditable !== 'true'
+    }
+
+    case 'read-write':
+    {
+      const tag = element.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') {
+        return !element.hasAttribute('readonly') && !element.hasAttribute('disabled')
+      }
+      return (element as any).contentEditable === 'true'
+    }
+
+    case 'any-link':
+      return (element.tagName === 'A' || element.tagName === 'AREA') && element.hasAttribute('href')
+
+    case 'link':
+      return (element.tagName === 'A' || element.tagName === 'AREA') && element.hasAttribute('href')
+
+    case 'visited':
+      // In virtual DOM, no links are ever visited
+      return false
+
+    case 'target':
+    case 'hover':
+    case 'active':
+    case 'focus':
+    case 'focus-within':
+    case 'focus-visible':
+      // Interactive state pseudo-classes: not applicable in virtual DOM
+      return false
 
     case 'first-of-type':
     {
@@ -685,32 +794,7 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string, scop
       if (index === -1)
         return false
 
-      const position = index + 1 // 1-indexed
-
-      if (pseudoArg === 'odd')
-        return position % 2 === 1
-      if (pseudoArg === 'even')
-        return position % 2 === 0
-
-      // Handle An+B notation (e.g., 2n+1, 3n, -n+6)
-      const anPlusBMatch = pseudoArg.match(/^(-?\d*)n([+-]\d+)?$/)
-      if (anPlusBMatch) {
-        const a = anPlusBMatch[1] === '' ? 1 : anPlusBMatch[1] === '-' ? -1 : Number.parseInt(anPlusBMatch[1], 10)
-        const b = anPlusBMatch[2] ? Number.parseInt(anPlusBMatch[2], 10) : 0
-
-        // Position must satisfy: position = a*n + b for some non-negative integer n
-        if (a === 0)
-          return position === b
-
-        const n = (position - b) / a
-        return n >= 0 && Number.isInteger(n)
-      }
-
-      const n = Number.parseInt(pseudoArg, 10)
-      if (!Number.isNaN(n))
-        return position === n
-
-      return false
+      return matchesNthPosition(index + 1, pseudoArg)
     }
 
     case 'nth-last-child':
@@ -722,18 +806,7 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string, scop
       if (index === -1)
         return false
 
-      const position = siblings.length - index // Position from the end (1-indexed)
-
-      if (pseudoArg === 'odd')
-        return position % 2 === 1
-      if (pseudoArg === 'even')
-        return position % 2 === 0
-
-      const n = Number.parseInt(pseudoArg, 10)
-      if (!Number.isNaN(n))
-        return position === n
-
-      return false
+      return matchesNthPosition(siblings.length - index, pseudoArg)
     }
 
     case 'nth-last-of-type':
@@ -747,22 +820,11 @@ export function matchesPseudoClass(element: VirtualElement, pseudo: string, scop
       if (index === -1)
         return false
 
-      const position = siblings.length - index // Position from the end (1-indexed)
-
-      if (pseudoArg === 'odd')
-        return position % 2 === 1
-      if (pseudoArg === 'even')
-        return position % 2 === 0
-
-      const n = Number.parseInt(pseudoArg, 10)
-      if (!Number.isNaN(n))
-        return position === n
-
-      return false
+      return matchesNthPosition(siblings.length - index, pseudoArg)
     }
 
     default:
-      throw new Error(`Unsupported pseudo-class: ":${pseudoName}". Supported pseudo-classes are: :first-child, :last-child, :first-of-type, :last-of-type, :only-child, :only-of-type, :nth-child(), :nth-last-child(), :nth-of-type(), :nth-last-of-type(), :not(), :is(), :where(), :scope, :disabled, :enabled, :checked, :empty`)
+      throw new Error(`Unsupported pseudo-class: ":${pseudoName}". Supported pseudo-classes are: :root, :first-child, :last-child, :first-of-type, :last-of-type, :only-child, :only-of-type, :nth-child(), :nth-last-child(), :nth-of-type(), :nth-last-of-type(), :not(), :is(), :where(), :has(), :scope, :disabled, :enabled, :checked, :empty, :required, :optional, :valid, :invalid, :placeholder-shown, :read-only, :read-write, :any-link, :link, :visited, :target, :hover, :active, :focus, :focus-within, :focus-visible`)
   }
 }
 
