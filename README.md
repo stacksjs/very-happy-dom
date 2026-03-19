@@ -8,44 +8,16 @@
 
 # very-happy-dom
 
-A blazingly fast, lightweight virtual DOM implementation powered by Bun. Perfect for testing web applications without the overhead of a real browser.
+A blazingly fast, lightweight virtual DOM implementation powered by Bun. Drop-in replacement for happy-dom and jsdom in testing environments.
 
-## Why very-happy-dom
+## Features
 
-**very-happy-dom** is designed to be a faster, leaner alternative to `happy-dom` and `jsdom` for testing environments. Built from the ground up with Bun's performance in mind, it provides a comprehensive browser-like environment for your tests.
-
-### Performance
-
-Built for speed with Bun, very-happy-dom delivers exceptional performance:
-
-| Operation | Time | Details |
-|-----------|------|---------|
-| Window Creation | 1.74 µs | Create new window instance |
-| Element Creation | 1.68 µs | createElement('div') |
-| 100 Elements | 5.60 µs | Create 100 elements |
-| appendChild | 1.78 µs | Append single child |
-| 100 appendChild | 6.70 µs | Append 100 children |
-| querySelector | 4.12 µs | Simple tag selector |
-| querySelectorAll (100 nodes) | 102.18 µs | Query 100 elements |
-| setAttribute | 1.90 µs | Set single attribute |
-| addEventListener | 1.95 µs | Add event listener |
-| Canvas createElement | 2.57 µs | Create canvas element |
-| Canvas getContext('2d') | 2.71 µs | Get 2D context |
-| localStorage setItem | 2.16 µs | Store data |
-| innerHTML parsing | 10.41 µs | Parse complex HTML |
-
-**Microseconds (µs), not milliseconds!** Most operations complete in under 5 microseconds.
-
-Benchmarks run on Apple M3 Pro with Bun 1.3.2
-
-### Features
-
-- 🚀 **Blazingly Fast** - Optimized for Bun's runtime
-- 🪶 **Lightweight** - Minimal dependencies, small bundle size
-- 🧪 **Test-Ready** - Drop-in replacement for happy-dom/jsdom
-- 🔋 **Batteries Included** - Comprehensive browser API support
-- 🎯 **Framework Agnostic** - Works with any testing framework
-- 🔌 **Easy Migration** - Compatible with happy-dom's API
+- **Comprehensive DOM** - Full DOM manipulation, CSS selectors, XPath, events with bubbling/capturing
+- **Network APIs** - Fetch, XMLHttpRequest, WebSocket, and request interception
+- **Browser APIs** - Storage, Timers, Canvas 2D, Observers, Clipboard, History, Cookies, File API
+- **Web Components** - Custom Elements and Shadow DOM
+- **Framework Agnostic** - Works with Bun, Vitest, or any testing framework
+- **Easy Migration** - API-compatible with happy-dom; one-line switch from jsdom
 
 ## Installation
 
@@ -62,16 +34,12 @@ pnpm add -D very-happy-dom
 
 ## Quick Start
 
-### Basic Usage
-
 ```typescript
 import { Window } from 'very-happy-dom'
 
-// Create a virtual browser environment
 const window = new Window()
 const document = window.document
 
-// Use it like a real browser
 document.body.innerHTML = '<h1>Hello World</h1>'
 const heading = document.querySelector('h1')
 console.log(heading?.textContent) // "Hello World"
@@ -96,45 +64,7 @@ describe('MyComponent', () => {
 })
 ```
 
-### Testing React Components
-
-```typescript
-import { describe, expect, test } from 'bun:test'
-import { Window } from 'very-happy-dom'
-
-describe('React Component', () => {
-  test('counter increments', () => {
-    const window = new Window()
-    global.window = window as any
-    global.document = window.document as any
-
-    // Your React component test here
-    const button = document.querySelector('button')
-    button?.click()
-
-    expect(document.querySelector('.count')?.textContent).toBe('1')
-  })
-})
-```
-
-### Testing Vue Components
-
-```typescript
-import { describe, expect, test } from 'bun:test'
-import { Window } from 'very-happy-dom'
-
-describe('Vue Component', () => {
-  test('updates on data change', () => {
-    const window = new Window()
-    global.window = window as any
-    global.document = window.document as any
-
-    // Your Vue component test here
-  })
-})
-```
-
-## Advanced Features
+## Advanced Usage
 
 ### Browser Context
 
@@ -155,7 +85,6 @@ import { Window } from 'very-happy-dom'
 
 const window = new Window()
 
-// Intercept and mock network requests
 window.interceptor.addInterceptor({
   onRequest: (request) => {
     if (request.url.includes('/api/')) {
@@ -269,57 +198,44 @@ const dataUrl = canvas.toDataURL()
 const blob = await canvas.toBlob()
 ```
 
-## API Reference
+## Performance
 
-### Core Classes
+Most operations complete in under 5 microseconds (not milliseconds):
 
-- **Window** - Main window/global object with all browser APIs
-- **Document** - DOM document with querySelector, createElement, etc.
-- **Element** - DOM elements with full manipulation API
-- **Browser** - Browser instance for advanced scenarios
-- **BrowserContext** - Isolated browser contexts
-- **BrowserPage** - Individual pages with navigation
+| Operation | Time | Details |
+|-----------|------|---------|
+| Window Creation | 1.74 µs | Create new window instance |
+| Element Creation | 1.68 µs | createElement('div') |
+| 100 Elements | 5.60 µs | Create 100 elements |
+| appendChild | 1.78 µs | Append single child |
+| 100 appendChild | 6.70 µs | Append 100 children |
+| querySelector | 4.12 µs | Simple tag selector |
+| querySelectorAll (100 nodes) | 102.18 µs | Query 100 elements |
+| setAttribute | 1.90 µs | Set single attribute |
+| addEventListener | 1.95 µs | Add event listener |
+| Canvas createElement | 2.57 µs | Create canvas element |
+| Canvas getContext('2d') | 2.71 µs | Get 2D context |
+| localStorage setItem | 2.16 µs | Store data |
+| innerHTML parsing | 10.41 µs | Parse complex HTML |
 
-### DOM APIs
+Benchmarks run on Apple M3 Pro with Bun 1.3.2. Run them yourself:
 
-- Complete DOM manipulation (createElement, appendChild, removeChild, etc.)
-- CSS selectors (querySelector, querySelectorAll)
-- Event system (addEventListener, removeEventListener, dispatchEvent)
-- Attributes and properties (getAttribute, setAttribute, classList, etc.)
-- XPath support (evaluate)
+```bash
+bun run bench
+```
 
-### Browser APIs
-
-- **Fetch API** - fetch(), Request, Response, Headers, FormData
-- **Storage API** - localStorage, sessionStorage
-- **Timer APIs** - setTimeout, setInterval, requestAnimationFrame
-- **Observer APIs** - MutationObserver, IntersectionObserver, ResizeObserver
-- **WebSocket** - Full WebSocket implementation
-- **Canvas API** - Basic 2D rendering context
-- **File API** - File, FileReader, FileList
-- **Clipboard API** - Clipboard and Navigator
-- **Performance API** - Performance marks and measures
-- **Console API** - Full console implementation
-
-### Web Components
-
-- Custom Elements (customElements.define)
-- Shadow DOM (attachShadow)
-
-## Migration Guide
+## Migration
 
 ### From happy-dom
 
-very-happy-dom is designed to be API-compatible with happy-dom:
+One-line change — the API is compatible:
 
 ```typescript
-// Before (happy-dom)
+// Before
 import { Window } from 'happy-dom'
 
-// After (very-happy-dom)
+// After
 import { Window } from 'very-happy-dom'
-
-// The rest of your code stays the same!
 ```
 
 ### From jsdom
@@ -337,94 +253,76 @@ const window = new Window()
 const document = window.document
 ```
 
-### Key Differences
+## API Reference
 
-- **Faster** - Built for Bun's performance
-- **Lighter** - Smaller bundle size, fewer dependencies
-- **Modern** - Uses modern JavaScript features
-- **Simpler** - Cleaner API surface
+### Core Classes
 
-## Supported APIs
+- **Window** - Main window/global object with all browser APIs
+- **Document** - DOM document with querySelector, createElement, etc.
+- **Element** - DOM elements with full manipulation API
+- **Browser** - Browser instance for advanced scenarios
+- **BrowserContext** - Isolated browser contexts
+- **BrowserPage** - Individual pages with navigation
+
+### Supported APIs
 
 <details>
 <summary>Click to expand full API list</summary>
 
-### DOM
+#### DOM
 
-- ✅ Document
-- ✅ Element
-- ✅ TextNode
-- ✅ CommentNode
-- ✅ DocumentFragment
-- ✅ Attributes
-- ✅ ClassList
-- ✅ Style
+- Document, Element, TextNode, CommentNode, DocumentFragment
+- Attributes, ClassList, Style
 
-### Selectors
+#### Selectors
 
-- ✅ querySelector / querySelectorAll
-- ✅ getElementById / getElementsByClassName / getElementsByTagName
-- ✅ CSS Selectors (all combinators)
-- ✅ XPath
+- querySelector / querySelectorAll
+- getElementById / getElementsByClassName / getElementsByTagName
+- CSS Selectors (all combinators)
+- XPath
 
-### Events
+#### Events
 
-- ✅ addEventListener / removeEventListener
-- ✅ Event bubbling and capturing
-- ✅ CustomEvent
-- ✅ Event.preventDefault / stopPropagation
+- addEventListener / removeEventListener
+- Event bubbling and capturing
+- CustomEvent
+- Event.preventDefault / stopPropagation
 
-### Network
+#### Network
 
-- ✅ fetch()
-- ✅ XMLHttpRequest
-- ✅ WebSocket
-- ✅ Request / Response / Headers
-- ✅ FormData
-- ✅ Request Interception
+- fetch(), Request / Response / Headers, FormData
+- XMLHttpRequest
+- WebSocket
+- Request Interception
 
-### Storage
+#### Storage
 
-- ✅ localStorage
-- ✅ sessionStorage
+- localStorage, sessionStorage
 
-### Timers
+#### Timers
 
-- ✅ setTimeout / clearTimeout
-- ✅ setInterval / clearInterval
-- ✅ requestAnimationFrame / cancelAnimationFrame
+- setTimeout / clearTimeout
+- setInterval / clearInterval
+- requestAnimationFrame / cancelAnimationFrame
 
-### Observers
+#### Observers
 
-- ✅ MutationObserver
-- ✅ IntersectionObserver
-- ✅ ResizeObserver
+- MutationObserver, IntersectionObserver, ResizeObserver
 
-### Canvas
+#### Canvas
 
-- ✅ Canvas element
-- ✅ 2D rendering context
-- ✅ Basic drawing operations
-- ✅ toDataURL / toBlob
+- Canvas element, 2D rendering context
+- Basic drawing operations, toDataURL / toBlob
 
-### Web Components
+#### Web Components
 
-- ✅ Custom Elements
-- ✅ Shadow DOM
+- Custom Elements, Shadow DOM
 
-### Other APIs
+#### Other
 
-- ✅ Performance API
-- ✅ Console API
-- ✅ Clipboard API
-- ✅ Navigator API
-- ✅ Geolocation API
-- ✅ Notification API
-- ✅ History API
-- ✅ Location API
-- ✅ Cookie API
-- ✅ File API
-- ✅ FileReader API
+- Performance API, Console API, Clipboard API, Navigator API
+- Geolocation API, Notification API, History API, Location API
+- Cookie API, File API, FileReader API
 
 </details>
 
@@ -434,16 +332,6 @@ const document = window.document
 bun test                  # Run all tests
 bun test --coverage      # Run with coverage
 ```
-
-## Benchmarking
-
-Run the full benchmark suite to see performance metrics:
-
-```bash
-bun run bench            # Run performance benchmarks
-```
-
-The benchmarks test various operations including DOM creation, manipulation, querying, events, Canvas API, and storage operations.
 
 ## Contributing
 
