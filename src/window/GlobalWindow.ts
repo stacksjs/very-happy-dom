@@ -20,6 +20,7 @@ export class GlobalWindow extends Window {
    * Sets a property on the global scope
    */
   setGlobal(key: string, value: any): void {
+    // eslint-disable-next-line max-statements-per-line
     ;(globalThis as any)[key] = value
   }
 

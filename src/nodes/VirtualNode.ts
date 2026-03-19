@@ -6,12 +6,12 @@ export const TEXT_NODE = 3
 export const COMMENT_NODE = 8
 export const DOCUMENT_NODE = 9
 export const DOCUMENT_FRAGMENT_NODE = 11
- export const DOCUMENT_POSITION_DISCONNECTED = 0x01
- export const DOCUMENT_POSITION_PRECEDING = 0x02
- export const DOCUMENT_POSITION_FOLLOWING = 0x04
- export const DOCUMENT_POSITION_CONTAINS = 0x08
- export const DOCUMENT_POSITION_CONTAINED_BY = 0x10
- export const DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC = 0x20
+export const DOCUMENT_POSITION_DISCONNECTED = 0x01
+export const DOCUMENT_POSITION_PRECEDING = 0x02
+export const DOCUMENT_POSITION_FOLLOWING = 0x04
+export const DOCUMENT_POSITION_CONTAINS = 0x08
+export const DOCUMENT_POSITION_CONTAINED_BY = 0x10
+export const DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC = 0x20
 
 export type NodeKind = 'element' | 'text' | 'comment' | 'document' | 'document-fragment'
 
@@ -34,6 +34,7 @@ export interface EventListenerOptions {
   capture?: boolean
   once?: boolean
   passive?: boolean
+  signal?: AbortSignal
 }
 
 export interface EventListener {
@@ -364,6 +365,7 @@ export abstract class VirtualNodeBase extends VirtualEventTarget implements Virt
 
   remove(): void {
     if (this.parentNode) {
+      // eslint-disable-next-line max-statements-per-line
       ;(this.parentNode as any).removeChild(this)
     }
   }
@@ -412,7 +414,7 @@ export abstract class VirtualNodeBase extends VirtualEventTarget implements Virt
       const child = this.childNodes[index]
       if (child.nodeType === TEXT_NODE) {
         let text = child.nodeValue || ''
-        let nextIndex = index + 1
+        const nextIndex = index + 1
         while (nextIndex < this.childNodes.length && this.childNodes[nextIndex].nodeType === TEXT_NODE) {
           text += this.childNodes[nextIndex].nodeValue || ''
           this.childNodes.splice(nextIndex, 1)
@@ -425,6 +427,7 @@ export abstract class VirtualNodeBase extends VirtualEventTarget implements Virt
         child.nodeValue = text
       }
       else if (typeof (child as VirtualNodeBase).normalize === 'function') {
+        // eslint-disable-next-line max-statements-per-line
         ;(child as VirtualNodeBase).normalize()
       }
       index++

@@ -163,4 +163,4 @@ stats.exit()
 
 ---
 
-*For detailed testing guidelines, see [TESTING.md](../TESTING.md)*
+For detailed testing guidelines, see [TESTING.md](../TESTING.md)

@@ -4,7 +4,7 @@
 
 > A TypeScript Starter Kit that will help you bootstrap your next project without minimal opinion.
 
-# bun-ts-starter
+## bun-ts-starter
 
 This is an opinionated TypeScript Starter kit to help kick-start development of your next Bun package.
 
@@ -25,7 +25,7 @@ bun run build # builds the library for production-ready use
 bun run release # automates git commits, versioning, and changelog generations
 ```
 
-_Check out the package.json scripts for more commands._
+Check out the package.json scripts for more commands.
 
 ### Developer Experience (DX)
 
@@ -88,6 +88,3 @@ The MIT License (MIT). Please see [LICENSE](https://github.com/stacksjs/ts-start
 Made with 💙
 
 <!-- Badges -->
-
-<!-- [codecov-src]: https://img.shields.io/codecov/c/gh/stacksjs/rpx/main?style=flat-square
-[codecov-href]: https://codecov.io/gh/stacksjs/rpx -->

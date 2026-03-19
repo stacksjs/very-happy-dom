@@ -1,6 +1,6 @@
 # Configuration
 
-_This is just an example of the ts-starter docs._
+This is just an example of the ts-starter docs.
 
 The Reverse Proxy can be configured using a `reverse-proxy.config.ts` _(or `reverse-proxy.config.js`)_ file and it will be automatically loaded when running the `reverse-proxy` command.
 
@@ -66,7 +66,7 @@ const config: ReverseProxyOptions = {
 export default config
 ```
 
-_Then run:_
+Then run:
 
 ```bash
 ./rpx start

@@ -235,6 +235,7 @@ export class BrowserPage {
     }
 
     // Dispatch click event
+    // eslint-disable-next-line max-statements-per-line
     ;(element as any).click?.()
   }
 
@@ -255,6 +256,7 @@ export class BrowserPage {
 
       for (const char of text) {
         currentValue += char
+        // eslint-disable-next-line max-statements-per-line
         ;(element as any).setAttribute?.('value', currentValue)
 
         if (delay > 0) {
@@ -264,6 +266,7 @@ export class BrowserPage {
     }
     else {
       // For other elements, append to textContent
+      // eslint-disable-next-line max-statements-per-line
       ;(element as any).textContent = ((element as any).textContent || '') + text
     }
   }
@@ -279,6 +282,7 @@ export class BrowserPage {
 
     // Dispatch focus event
     const event = new (this.mainFrame.window as any).Event('focus', { bubbles: true })
+    // eslint-disable-next-line max-statements-per-line
     ;(element as any).dispatchEvent?.(event)
   }
 
@@ -293,6 +297,7 @@ export class BrowserPage {
 
     // Dispatch mouseenter event
     const event = new (this.mainFrame.window as any).Event('mouseenter', { bubbles: true })
+    // eslint-disable-next-line max-statements-per-line
     ;(element as any).dispatchEvent?.(event)
   }
 
@@ -308,6 +313,7 @@ export class BrowserPage {
         const { delay = 0 } = options
 
         const keydownEvent = new (this.mainFrame.window as any).Event('keydown', { bubbles: true })
+        // eslint-disable-next-line max-statements-per-line
         ;(keydownEvent as any).key = key
         this.mainFrame.document.dispatchEvent?.(keydownEvent)
 
@@ -316,6 +322,7 @@ export class BrowserPage {
         }
 
         const keyupEvent = new (this.mainFrame.window as any).Event('keyup', { bubbles: true })
+        // eslint-disable-next-line max-statements-per-line
         ;(keyupEvent as any).key = key
         this.mainFrame.document.dispatchEvent?.(keyupEvent)
       },
@@ -340,8 +347,10 @@ export class BrowserPage {
         const { delay = 0 } = options
 
         const clickEvent = new (this.mainFrame.window as any).Event('click', { bubbles: true })
+        /* eslint-disable max-statements-per-line */
         ;(clickEvent as any).clientX = x
         ;(clickEvent as any).clientY = y
+        /* eslint-enable max-statements-per-line */
         this.mainFrame.document.dispatchEvent?.(clickEvent)
 
         if (delay > 0) {
@@ -351,8 +360,10 @@ export class BrowserPage {
 
       move: async (x: number, y: number): Promise<void> => {
         const moveEvent = new (this.mainFrame.window as any).Event('mousemove', { bubbles: true })
+        /* eslint-disable max-statements-per-line */
         ;(moveEvent as any).clientX = x
         ;(moveEvent as any).clientY = y
+        /* eslint-enable max-statements-per-line */
         this.mainFrame.document.dispatchEvent?.(moveEvent)
       },
     }
@@ -438,6 +449,7 @@ export class BrowserPage {
 
     // Dispatch drag events
     const dragStartEvent = new (this.mainFrame.window as any).Event('dragstart', { bubbles: true })
+    // eslint-disable-next-line max-statements-per-line
     ;(sourceElement as any).dispatchEvent?.(dragStartEvent)
 
     if (options.delay) {
@@ -445,9 +457,11 @@ export class BrowserPage {
     }
 
     const dropEvent = new (this.mainFrame.window as any).Event('drop', { bubbles: true })
+    // eslint-disable-next-line max-statements-per-line
     ;(targetElement as any).dispatchEvent?.(dropEvent)
 
     const dragEndEvent = new (this.mainFrame.window as any).Event('dragend', { bubbles: true })
+    // eslint-disable-next-line max-statements-per-line
     ;(sourceElement as any).dispatchEvent?.(dragEndEvent)
   }
 
@@ -612,6 +626,7 @@ ${284 + html.length}
 %%EOF`
   }
 
+  /* eslint-disable max-statements-per-line */
   private _escapeXML(text: string): string {
     return text
       .replace(/&/g, '&amp;')
@@ -620,4 +635,5 @@ ${284 + html.length}
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&apos;')
   }
+  /* eslint-enable max-statements-per-line */
 }

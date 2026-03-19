@@ -40,8 +40,8 @@ export class VeryHappyFileReader {
   public onloadend: ((event: ProgressEvent) => void) | null = null
   public onprogress: ((event: ProgressEvent) => void) | null = null
   public onabort: ((event: ProgressEvent) => void) | null = null
- // eslint-enable pickier/no-unused-vars
 
+  // eslint-enable pickier/no-unused-vars
   private _eventListeners = new Map<string, Set<EventListener>>()
 
   readAsText(blob: Blob, _encoding = 'UTF-8'): void {

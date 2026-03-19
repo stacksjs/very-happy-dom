@@ -1,3 +1,4 @@
+<!-- eslint-disable markdown/no-duplicate-heading -->
 
 ## v0.3.1...main
 

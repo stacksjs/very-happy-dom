@@ -29,8 +29,8 @@ export class VeryHappyWebSocket {
   public onmessage: ((event: MessageEvent) => void) | null = null
   public onerror: ((event: Event) => void) | null = null
   public onclose: ((event: CloseEvent) => void) | null = null
- // eslint-enable pickier/no-unused-vars
 
+  // eslint-enable pickier/no-unused-vars
   private _ws: WebSocket | null = null
   private _eventListeners = new Map<string, Set<EventListener>>()
 

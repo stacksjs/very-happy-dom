@@ -99,7 +99,7 @@ describe('Document: importNode', () => {
     const el = doc1.createElement('div')
     el.setAttribute('id', 'test')
     const imported = doc2.importNode(el, false)
-    expect(imported.getAttribute('id')).toBe('test')
+    expect((imported as VirtualElement).getAttribute('id')).toBe('test')
     expect(imported.ownerDocument).toBe(doc2)
     expect(imported).not.toBe(el)
   })

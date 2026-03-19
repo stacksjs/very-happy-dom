@@ -78,7 +78,7 @@ function matchesNthPosition(position: number, pseudoArg: string): boolean {
  * @returns True if the selector uses :scope
  */
 function selectorUsesScope(selector: string): boolean {
-  return /(^|[^\w-]):scope\b/i.test(selector)
+  return /(?:^|[^\w-]):scope\b/i.test(selector)
 }
 
 /**

@@ -152,8 +152,8 @@ export class Notification {
   public onclose: ((event: Event) => void) | null = null
   public onerror: ((event: Event) => void) | null = null
   public onshow: ((event: Event) => void) | null = null
-  // eslint-enable pickier/no-unused-vars
 
+  // eslint-enable pickier/no-unused-vars
   constructor(title: string, options?: NotificationOptions) {
     this.title = title
     this.body = options?.body

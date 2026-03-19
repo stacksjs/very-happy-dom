@@ -33,8 +33,8 @@ export class XMLHttpRequest {
   public onloadend: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null = null
   public onprogress: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null = null
   public ontimeout: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null = null
- // eslint-enable pickier/no-unused-vars
 
+  // eslint-enable pickier/no-unused-vars
   private _method = ''
   private _url = ''
   private _requestHeaders = new Map<string, string>()
@@ -219,8 +219,8 @@ class XMLHttpRequestUpload {
   public onprogress: ((this: XMLHttpRequestUpload, ev: ProgressEvent) => any) | null = null
   public onload: ((this: XMLHttpRequestUpload, ev: ProgressEvent) => any) | null = null
   public onerror: ((this: XMLHttpRequestUpload, ev: ProgressEvent) => any) | null = null
-  // eslint-enable pickier/no-unused-vars
 
+  // eslint-enable pickier/no-unused-vars
   addEventListener(_type: string, _listener: EventListener): void {}
   removeEventListener(_type: string, _listener: EventListener): void {}
   dispatchEvent(_event: Event): boolean {

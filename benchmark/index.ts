@@ -88,6 +88,7 @@ group('HTML Parsing', () => {
     </div>
   `
 
+  /* eslint-disable quotes */
   const largeHTML = `
     <html>
       <head>
@@ -118,6 +119,7 @@ group('HTML Parsing', () => {
       </body>
     </html>
   `
+  /* eslint-enable quotes */
 
   bench('parse small HTML', () => {
     doc.body!.innerHTML = smallHTML

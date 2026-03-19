@@ -93,6 +93,7 @@ function retargetNode(originalTarget: any, currentTarget: any): any {
 export class VirtualEventTarget {
   private _eventListeners: Map<string, InternalEventListener[]> = new Map<string, InternalEventListener[]>()
 
+  // eslint-disable-next-line pickier/no-unused-vars
   addEventListener(type: string, listener: ((event: any) => void) | null, options: EventListenerOptions | boolean | (EventListenerOptions & { signal?: AbortSignal }) = {}): void {
     if (!listener)
       return
@@ -127,6 +128,7 @@ export class VirtualEventTarget {
     }
   }
 
+  // eslint-disable-next-line pickier/no-unused-vars
   removeEventListener(type: string, listener: ((event: any) => void) | null, options: EventListenerOptions | boolean = {}): void {
     if (!listener)
       return

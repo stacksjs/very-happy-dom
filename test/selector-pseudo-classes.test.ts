@@ -12,7 +12,7 @@ describe('Selector: :root pseudo-class', () => {
     const doc = new VirtualDocument()
     const results = doc.querySelectorAll(':root')
     expect(results.length).toBe(1)
-    expect(results[0]).toBe(doc.documentElement)
+    expect(results[0]!).toBe(doc.documentElement!)
   })
 
   test(':root does not match other elements', () => {

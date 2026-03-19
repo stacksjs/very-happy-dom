@@ -15,14 +15,17 @@ cli
   .example('reverse-proxy start --from localhost:5173 --to my-project.localhost')
   .action(async (options?: CliOption) => {
     if (!options?.from) {
+      // eslint-disable-next-line no-console
       console.error('Missing --from option')
     }
     else {
+      // eslint-disable-next-line no-console
       console.log('Options:', options)
     }
   })
 
 cli.command('version', 'Show the version of the CLI').action(() => {
+  // eslint-disable-next-line no-console
   console.log(version)
 })
 

@@ -29,7 +29,7 @@ export class CustomElementRegistry {
   }[]>()
 
   define(name: string, constructor: CustomElementConstructor, _options?: ElementDefinitionOptions): void {
-    if (!/^[a-z](?:[\.0-9_a-z-]*-)[\.0-9_a-z-]*$/.test(name) || RESERVED_CUSTOM_ELEMENT_NAMES.has(name)) {
+    if (!/^[a-z][.0-9_a-z-]*-[.0-9_a-z-]*$/.test(name) || RESERVED_CUSTOM_ELEMENT_NAMES.has(name)) {
       throw new Error(`Failed to execute 'define' on 'CustomElementRegistry': "${name}" is not a valid custom element name`)
     }
 
@@ -37,6 +37,7 @@ export class CustomElementRegistry {
       throw new Error(`Failed to execute 'define' on 'CustomElementRegistry': the name "${name}" has already been used`)
     }
 
+    // eslint-disable-next-line max-statements-per-line
     ;(constructor as any).__veryHappyCustomElementName = name
     this._definitions.set(name, constructor)
     if (this._document) {
@@ -82,6 +83,7 @@ export class CustomElementRegistry {
         const constructor = this._definitions.get(name)
         if (constructor && !(node instanceof constructor)) {
           Object.setPrototypeOf(node, constructor.prototype)
+          // eslint-disable-next-line max-statements-per-line
           ;(node as any).__veryHappyCustomElementName = name
           for (const [attrName, attrValue] of node.attributes ?? []) {
             invokeAttributeChangedCallback(node, attrName, null, attrValue)

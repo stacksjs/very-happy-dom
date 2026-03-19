@@ -139,6 +139,7 @@ export function parseHTML(html: string): ParsedElement {
   let pos = 0
 
   // Handle common entities
+  /* eslint-disable max-statements-per-line */
   const decodeEntities = (text: string): string => {
     return text
       .replace(/&lt;/g, '<')
@@ -150,6 +151,7 @@ export function parseHTML(html: string): ParsedElement {
       .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(Number.parseInt(code, 16)))
       .replace(/&nbsp;/g, ' ')
   }
+  /* eslint-enable max-statements-per-line */
 
   while (pos < html.length) {
     const tagStart = html.indexOf('<', pos)

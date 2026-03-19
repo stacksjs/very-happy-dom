@@ -260,6 +260,7 @@ const namedEntities: Record<string, string> = {
 }
 
 export function decodeHtmlEntities(value: string): string {
+  // eslint-disable-next-line max-statements-per-line
   return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (_match, entity: string) => {
     if (entity.startsWith('#x') || entity.startsWith('#X')) {
       const codePoint = Number.parseInt(entity.slice(2), 16)

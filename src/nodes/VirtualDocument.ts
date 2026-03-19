@@ -314,6 +314,7 @@ export class VirtualDocument extends VirtualNodeBase {
       this._updateLocation(url)
     }
     location.reload = () => {}
+    // eslint-disable-next-line max-statements-per-line
     ;(location as any).toString = () => this._locationState.href
 
     return location
@@ -395,6 +396,7 @@ export class VirtualDocument extends VirtualNodeBase {
 
     const event = new VirtualEvent(type)
     for (const [key, value] of Object.entries(extra)) {
+      // eslint-disable-next-line max-statements-per-line
       ;(event as any)[key] = value
     }
     this.defaultView.dispatchEvent(event)
@@ -537,6 +539,7 @@ export class VirtualDocument extends VirtualNodeBase {
 
   adoptNode(node: VirtualNode): VirtualNode {
     if (node.parentNode) {
+      // eslint-disable-next-line max-statements-per-line
       ;(node.parentNode as any).removeChild(node)
     }
     this._setOwnerDocumentRecursive(node, this)

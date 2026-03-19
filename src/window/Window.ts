@@ -14,6 +14,7 @@ import { VirtualCommentNode } from '../nodes/VirtualCommentNode'
 import { VirtualDocument } from '../nodes/VirtualDocument'
 import { VirtualDocumentFragment } from '../nodes/VirtualDocumentFragment'
 import { VirtualElement } from '../nodes/VirtualElement'
+import type { History as VirtualHistory } from '../nodes/VirtualNode'
 import { VirtualNodeBase } from '../nodes/VirtualNode'
 import { VirtualSVGElement } from '../nodes/VirtualSVGElement'
 import { VirtualTemplateElement } from '../nodes/VirtualTemplateElement'
@@ -118,7 +119,7 @@ export class Window extends VirtualEventTarget {
   public crypto: Crypto = globalThis.crypto
 
   // DOMParser
-  public DOMParser = class DOMParser {
+  public DOMParser: { new(): { parseFromString(html: string, mimeType: string): VirtualDocument } } = class DOMParser {
     parseFromString(html: string, mimeType: string): VirtualDocument {
       const doc = new VirtualDocument()
       if (mimeType === 'text/html' || mimeType === 'application/xhtml+xml') {
@@ -450,7 +451,7 @@ export class Window extends VirtualEventTarget {
   }
 
   // History proxy — delegates to document.history
-  get history() {
+  get history(): VirtualHistory {
     return this.document.history
   }
 

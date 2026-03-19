@@ -158,6 +158,7 @@ export class HtmlRenderer {
       }
     `).join('\n')
 
+    /* eslint-disable max-statements-per-line */
     return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
   <defs>
@@ -183,6 +184,7 @@ export class HtmlRenderer {
     </html>
   </foreignObject>
 </svg>`
+    /* eslint-enable max-statements-per-line */
   }
 
   /**
@@ -403,6 +405,7 @@ export class HtmlRenderer {
   /**
    * Escape XML special characters
    */
+  /* eslint-disable max-statements-per-line */
   private escapeXml(str: string): string {
     return str
       .replace(/&/g, '&amp;')
@@ -411,6 +414,7 @@ export class HtmlRenderer {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&apos;')
   }
+  /* eslint-enable max-statements-per-line */
 }
 
 /**

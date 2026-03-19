@@ -1230,6 +1230,7 @@ export class VirtualElement extends VirtualNodeBase {
       throw new DOMException('This element has no parent node.', 'NoModificationAllowedError')
     }
     const textNode = new VirtualTextNode(value)
+    // eslint-disable-next-line max-statements-per-line
     ;(this.parentNode as VirtualElement).replaceChild(textNode, this)
   }
 
@@ -1940,6 +1941,7 @@ export class VirtualElement extends VirtualNodeBase {
       return
     }
     const event = new VirtualEvent('submit', { bubbles: true, cancelable: true })
+    // eslint-disable-next-line max-statements-per-line
     ;(event as any).submitter = null
     this.dispatchEvent(event)
   }
@@ -1955,6 +1957,7 @@ export class VirtualElement extends VirtualNodeBase {
       return
     }
     const event = new VirtualEvent('submit', { bubbles: true, cancelable: true })
+    // eslint-disable-next-line max-statements-per-line
     ;(event as any).submitter = submitter ?? null
     this.dispatchEvent(event)
   }

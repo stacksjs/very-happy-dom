@@ -44,8 +44,10 @@ function getTemplateContent(node: VirtualNode): VirtualNode | null {
 }
 
 function clearRemovalTraversalHints(node: VirtualNode): void {
+  /* eslint-disable max-statements-per-line */
   ;(node as any)._lastTraversalParent = null
   ;(node as any)._lastTraversalNextSibling = null
+  /* eslint-enable max-statements-per-line */
   for (const child of node.childNodes) {
     clearRemovalTraversalHints(child)
   }
@@ -54,6 +56,7 @@ function clearRemovalTraversalHints(node: VirtualNode): void {
 export function setOwnerDocumentRecursive(node: VirtualNode, ownerDocument: any): void {
   const previousOwnerDocument = (node as any).ownerDocument ?? null
   if (node.nodeType !== DOCUMENT_NODE) {
+    // eslint-disable-next-line max-statements-per-line
     ;(node as any).ownerDocument = ownerDocument
   }
 
@@ -64,6 +67,7 @@ export function setOwnerDocumentRecursive(node: VirtualNode, ownerDocument: any)
 
   const templateContent = getTemplateContent(node)
   if (templateContent) {
+    // eslint-disable-next-line max-statements-per-line
     ;(templateContent as any).ownerDocument = ownerDocument
   }
 
@@ -98,8 +102,10 @@ export function detachNode(node: VirtualNode): void {
   if (index !== -1) {
     siblings.splice(index, 1)
   }
+  /* eslint-disable max-statements-per-line */
   ;(node as any)._lastTraversalParent = parent
   ;(node as any)._lastTraversalNextSibling = nextSibling
+  /* eslint-enable max-statements-per-line */
   node.parentNode = null
   if (wasConnected) {
     invokeDisconnectedCallback(node)
@@ -175,8 +181,10 @@ export function removeNode(parent: VirtualParentNode, child: VirtualNode): Virtu
   const previousSibling = index > 0 ? parent.childNodes[index - 1] : null
   const nextSibling = index < parent.childNodes.length - 1 ? parent.childNodes[index + 1] : null
   parent.childNodes.splice(index, 1)
+  /* eslint-disable max-statements-per-line */
   ;(child as any)._lastTraversalParent = parent
   ;(child as any)._lastTraversalNextSibling = nextSibling
+  /* eslint-enable max-statements-per-line */
   child.parentNode = null
   if (wasConnected) {
     invokeDisconnectedCallback(child)
@@ -196,8 +204,10 @@ export function replaceNode(parent: VirtualParentNode, node: VirtualNode, oldNod
   const previousSibling = index > 0 ? parent.childNodes[index - 1] : null
   const nextSibling = index < parent.childNodes.length - 1 ? parent.childNodes[index + 1] : null
   parent.childNodes.splice(index, 1, ...normalized)
+  /* eslint-disable max-statements-per-line */
   ;(oldNode as any)._lastTraversalParent = parent
   ;(oldNode as any)._lastTraversalNextSibling = nextSibling
+  /* eslint-enable max-statements-per-line */
   oldNode.parentNode = null
   if (oldWasConnected) {
     invokeDisconnectedCallback(oldNode)

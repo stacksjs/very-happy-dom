@@ -558,6 +558,7 @@ export class Range {
 
       const nodes = this.startContainer.childNodes.slice(this.startOffset, this.endOffset)
       for (const node of nodes) {
+        // eslint-disable-next-line max-statements-per-line
         ;(this.startContainer as any).removeChild(node)
       }
       this.setEnd(this.startContainer, this.startOffset)
@@ -618,10 +619,12 @@ export class Range {
 
     const fragment = this.extractContents()
     while (newParent.childNodes.length > 0) {
+      // eslint-disable-next-line max-statements-per-line
       ;(newParent as any).removeChild(newParent.childNodes[0])
     }
     this.insertNode(newParent)
     while (fragment.childNodes.length > 0) {
+      // eslint-disable-next-line max-statements-per-line
       ;(newParent as any).appendChild(fragment.childNodes[0])
     }
     this.selectNode(newParent)
