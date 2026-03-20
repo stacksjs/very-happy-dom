@@ -178,7 +178,12 @@ export abstract class VirtualNodeBase extends VirtualEventTarget implements Virt
   abstract set textContent(value: string)
 
   get children(): VirtualNode[] {
-    return this.childNodes.filter(child => child.nodeType === ELEMENT_NODE)
+    const cn = this.childNodes
+    const result: VirtualNode[] = []
+    for (let i = 0; i < cn.length; i++) {
+      if (cn[i].nodeType === ELEMENT_NODE) result.push(cn[i])
+    }
+    return result
   }
 
   get firstElementChild(): VirtualNode | null {
@@ -211,21 +216,25 @@ export abstract class VirtualNodeBase extends VirtualEventTarget implements Virt
   }
 
   get previousSibling(): VirtualNode | null {
-    if (!this.parentNode) {
-      return null
-    }
+    if (!this.parentNode) return null
     const siblings = this.parentNode.childNodes
-    const index = siblings.indexOf(this)
-    return index > 0 ? siblings[index - 1] : null
+    for (let i = 0; i < siblings.length; i++) {
+      if (siblings[i] === this) {
+        return i > 0 ? siblings[i - 1] : null
+      }
+    }
+    return null
   }
 
   get nextSibling(): VirtualNode | null {
-    if (!this.parentNode) {
-      return null
-    }
+    if (!this.parentNode) return null
     const siblings = this.parentNode.childNodes
-    const index = siblings.indexOf(this)
-    return index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : null
+    for (let i = 0; i < siblings.length; i++) {
+      if (siblings[i] === this) {
+        return i < siblings.length - 1 ? siblings[i + 1] : null
+      }
+    }
+    return null
   }
 
   get parentElement(): VirtualNode | null {

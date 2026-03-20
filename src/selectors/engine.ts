@@ -9,9 +9,36 @@ interface ParsedSimpleSelector {
   pseudos: string[] | null
 }
 
-const SIMPLE_ID_RE = /^#([\w-]+)$/
-const SIMPLE_CLASS_RE = /^\.([\w-]+)$/
-const SIMPLE_TAG_RE = /^[a-z][a-z0-9-]*$/i
+function isSimpleIdSelector(s: string): boolean {
+  if (s.length < 2 || s[0] !== '#') return false
+  for (let i = 1; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    if ((c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57) || c === 95 || c === 45) continue
+    return false
+  }
+  return true
+}
+
+function isSimpleClassSelector(s: string): boolean {
+  if (s.length < 2 || s[0] !== '.') return false
+  for (let i = 1; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    if ((c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57) || c === 95 || c === 45) continue
+    return false
+  }
+  return true
+}
+
+function isSimpleTagSelector(s: string): boolean {
+  const c0 = s.charCodeAt(0)
+  if (!((c0 >= 97 && c0 <= 122) || (c0 >= 65 && c0 <= 90))) return false
+  for (let i = 1; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    if ((c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57) || c === 45) continue
+    return false
+  }
+  return true
+}
 
 const parsedSelectorCache = new Map<string, ParsedSimpleSelector>()
 const combinatorCache = new Map<string, boolean>()
@@ -128,30 +155,30 @@ export function querySelectorEngine(root: VirtualNode, selector: string): Virtua
     return null
   }
 
-  let idFast: RegExpMatchArray | null
-  let classFast: RegExpMatchArray | null
-
-  if ((idFast = trimmed.match(SIMPLE_ID_RE))) {
-    const targetId = idFast[1]
-    const findById = (node: VirtualNode): VirtualElement | null => {
+  if (isSimpleIdSelector(trimmed)) {
+    const targetId = trimmed.substring(1)
+    if (root.nodeType === DOCUMENT_NODE && (root as any)._idIndex) {
+      return (root as any)._idIndex.get(targetId) ?? null
+    }
+    const stack: VirtualNode[] = [root]
+    while (stack.length > 0) {
+      const node = stack.pop()!
       const cn = node.childNodes
-      for (let i = 0; i < cn.length; i++) {
+      for (let i = cn.length - 1; i >= 0; i--) {
         const child = cn[i]
         if (child.nodeType === ELEMENT_NODE) {
           if (child.attributes.get('id') === targetId) {
             return child as VirtualElement
           }
-          const match = findById(child)
-          if (match) return match
+          stack.push(child)
         }
       }
-      return null
     }
-    return findById(root)
+    return null
   }
 
-  if ((classFast = trimmed.match(SIMPLE_CLASS_RE))) {
-    const targetClass = classFast[1]
+  if (isSimpleClassSelector(trimmed)) {
+    const targetClass = trimmed.substring(1)
     const findByClass = (node: VirtualNode): VirtualElement | null => {
       const cn = node.childNodes
       for (let i = 0; i < cn.length; i++) {
@@ -172,7 +199,7 @@ export function querySelectorEngine(root: VirtualNode, selector: string): Virtua
     return findByClass(root)
   }
 
-  if (SIMPLE_TAG_RE.test(trimmed)) {
+  if (isSimpleTagSelector(trimmed)) {
     const targetTag = trimmed.toLowerCase()
     const findByTag = (node: VirtualNode): VirtualElement | null => {
       const cn = node.childNodes
@@ -249,11 +276,8 @@ export function querySelectorAllEngine(root: VirtualNode, selector: string): Vir
     return []
   }
 
-  let idFast: RegExpMatchArray | null
-  let classFast: RegExpMatchArray | null
-
-  if ((idFast = trimmed.match(SIMPLE_ID_RE))) {
-    const targetId = idFast[1]
+  if (isSimpleIdSelector(trimmed)) {
+    const targetId = trimmed.substring(1)
     const results: VirtualElement[] = []
     const findById = (node: VirtualNode) => {
       const cn = node.childNodes
@@ -271,30 +295,31 @@ export function querySelectorAllEngine(root: VirtualNode, selector: string): Vir
     return results
   }
 
-  if ((classFast = trimmed.match(SIMPLE_CLASS_RE))) {
-    const targetClass = classFast[1]
+  if (isSimpleClassSelector(trimmed)) {
+    const targetClass = trimmed.substring(1)
+    const pad = ` ${targetClass} `
     const results: VirtualElement[] = []
-    const findByClass = (node: VirtualNode) => {
+    const collectByClass = (node: VirtualNode) => {
       const cn = node.childNodes
       for (let i = 0; i < cn.length; i++) {
         const child = cn[i]
         if (child.nodeType === ELEMENT_NODE) {
           const cls = child.attributes.get('class')
-          if (cls !== undefined && (cls === targetClass || (` ${cls} `).includes(` ${targetClass} `))) {
+          if (cls !== undefined && (cls === targetClass || (` ${cls} `).includes(pad))) {
             results.push(child as VirtualElement)
           }
-          findByClass(child)
+          collectByClass(child)
         }
       }
     }
-    findByClass(root)
+    collectByClass(root)
     return results
   }
 
-  if (SIMPLE_TAG_RE.test(trimmed)) {
+  if (isSimpleTagSelector(trimmed)) {
     const targetTag = trimmed.toLowerCase()
     const results: VirtualElement[] = []
-    const findByTag = (node: VirtualNode) => {
+    const collectByTag = (node: VirtualNode) => {
       const cn = node.childNodes
       for (let i = 0; i < cn.length; i++) {
         const child = cn[i]
@@ -302,11 +327,11 @@ export function querySelectorAllEngine(root: VirtualNode, selector: string): Vir
           if ((child as VirtualElement).tagName.toLowerCase() === targetTag) {
             results.push(child as VirtualElement)
           }
-          findByTag(child)
+          collectByTag(child)
         }
       }
     }
-    findByTag(root)
+    collectByTag(root)
     return results
   }
 

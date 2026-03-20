@@ -19,7 +19,7 @@ import {
   type NodeType,
   type VirtualNode,
 } from './VirtualNode'
-import { appendNode, getNodeTextContent, insertNodeBefore, nodeContains, removeNode, replaceNode, setOwnerDocumentRecursive } from './tree-operations'
+import { appendNode, getNodeTextContent, insertNodeBefore, nodeContains, removeIdFromIndex as removeIdFromIndexExported, removeNode, replaceNode, setOwnerDocumentRecursive } from './tree-operations'
 import { VirtualTextNode } from './VirtualTextNode'
 
 export class VirtualElement extends VirtualNodeBase {
@@ -43,7 +43,12 @@ export class VirtualElement extends VirtualNodeBase {
 
   // children should only contain element nodes, per DOM spec
   get children(): VirtualNode[] {
-    return this.childNodes.filter(node => node.nodeType === ELEMENT_NODE)
+    const cn = this.childNodes
+    const result: VirtualNode[] = []
+    for (let i = 0; i < cn.length; i++) {
+      if (cn[i].nodeType === ELEMENT_NODE) result.push(cn[i])
+    }
+    return result
   }
 
   constructor(tagName: string) {
@@ -76,6 +81,16 @@ export class VirtualElement extends VirtualNodeBase {
 
     this.attributes.set(normalizedName, normalizedValue)
 
+    if (normalizedName === 'id') {
+      const doc = this.ownerDocument
+      if (doc && doc._idIndex) {
+        if (oldValue !== null) {
+          doc._idIndex.delete(oldValue)
+        }
+        doc._idIndex.set(normalizedValue, this)
+      }
+    }
+
     if (normalizedName === 'style') {
       this._setStylesFromAttribute(normalizedValue)
     }
@@ -106,6 +121,13 @@ export class VirtualElement extends VirtualNodeBase {
       return
     }
     this.attributes.delete(normalizedName)
+
+    if (normalizedName === 'id') {
+      const doc = this.ownerDocument
+      if (doc && doc._idIndex) {
+        doc._idIndex.delete(oldValue)
+      }
+    }
 
     if (normalizedName === 'style') {
       this._internalStyles = null
@@ -339,38 +361,31 @@ export class VirtualElement extends VirtualNodeBase {
   }
 
   get nextElementSibling(): VirtualElement | null {
-    if (!this.parentNode)
-      return null
-
-    const siblings = this.parentNode.children
-    const index = siblings.indexOf(this)
-    if (index === -1)
-      return null
-
-    for (let i = index + 1; i < siblings.length; i++) {
-      if (siblings[i].nodeType === ELEMENT_NODE) {
+    if (!this.parentNode) return null
+    const siblings = this.parentNode.childNodes
+    let found = false
+    for (let i = 0; i < siblings.length; i++) {
+      if (siblings[i] === this) {
+        found = true
+        continue
+      }
+      if (found && siblings[i].nodeType === ELEMENT_NODE) {
         return siblings[i] as VirtualElement
       }
     }
-
     return null
   }
 
   get previousElementSibling(): VirtualElement | null {
-    if (!this.parentNode)
-      return null
-
-    const siblings = this.parentNode.children
-    const index = siblings.indexOf(this)
-    if (index === -1)
-      return null
-
-    for (let i = index - 1; i >= 0; i--) {
+    if (!this.parentNode) return null
+    const siblings = this.parentNode.childNodes
+    let lastElement: VirtualElement | null = null
+    for (let i = 0; i < siblings.length; i++) {
+      if (siblings[i] === this) return lastElement
       if (siblings[i].nodeType === ELEMENT_NODE) {
-        return siblings[i] as VirtualElement
+        lastElement = siblings[i] as VirtualElement
       }
     }
-
     return null
   }
 
@@ -440,8 +455,17 @@ export class VirtualElement extends VirtualNodeBase {
   }
 
   set innerHTML(html: string) {
-    while (this.childNodes.length > 0) {
-      this.removeChild(this.childNodes[0])
+    if (this.childNodes.length > 0) {
+      const doc = this.ownerDocument
+      if (doc?._idIndex && doc._idIndex.size > 0) {
+        for (const child of this.childNodes) {
+          removeIdFromIndexExported(child)
+        }
+      }
+      for (const child of this.childNodes) {
+        child.parentNode = null
+      }
+      this.childNodes.length = 0
     }
     if (html) {
       const nodes = parseHTML(html, this.ownerDocument)
@@ -746,19 +770,34 @@ export class VirtualElement extends VirtualNodeBase {
 
   private _updateStyleAttribute(): void {
     if (!this._internalStyles || this._internalStyles.size === 0) {
-      this.removeAttribute('style')
+      if (this.attributes.has('style')) {
+        this.removeAttribute('style')
+      }
       return
     }
 
-    const styleString = Array.from(this._internalStyles.entries())
-      .map(([prop, value]) => {
-        const priority = this._stylePriorities?.get(prop)
-        return priority ? `${prop}: ${value} !${priority}` : `${prop}: ${value}`
-      })
-      .join('; ')
+    let styleString = ''
+    for (const [prop, value] of this._internalStyles) {
+      if (styleString) styleString += '; '
+      const priority = this._stylePriorities?.get(prop)
+      styleString += priority ? `${prop}: ${value} !${priority}` : `${prop}: ${value}`
+    }
 
     if (styleString) {
-      this.setAttribute('style', styleString)
+      const oldValue = this.attributes.get('style') ?? null
+      this.attributes.set('style', styleString)
+
+      MutationObserver._queueMutationRecord({
+        type: 'attributes',
+        target: this,
+        addedNodes: [],
+        removedNodes: [],
+        previousSibling: null,
+        nextSibling: null,
+        attributeName: 'style',
+        attributeNamespace: null,
+        oldValue,
+      })
     }
     else {
       this.removeAttribute('style')

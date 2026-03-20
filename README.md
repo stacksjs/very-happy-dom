@@ -204,26 +204,28 @@ const blob = await canvas.toBlob()
 
 | Operation | very-happy-dom | happy-dom | jsdom |
 |---|---|---|---|
-| Window&nbsp;Creation | **4.58&nbsp;µs** | 97.16&nbsp;µs | 1.32&nbsp;ms |
-| createElement | **1.28&nbsp;µs** | 1.54&nbsp;µs | 4.49&nbsp;µs |
-| createElement&nbsp;+&nbsp;setAttribute | **2.61&nbsp;µs** | 5.10&nbsp;µs | 4.92&nbsp;µs |
-| innerHTML&nbsp;(medium) | **35.16&nbsp;µs** | 49.74&nbsp;µs | 104.32&nbsp;µs |
-| innerHTML&nbsp;(large,&nbsp;200&nbsp;nodes) | **3.39&nbsp;ms** | 3.47&nbsp;ms | 6.22&nbsp;ms |
-| querySelector&nbsp;by&nbsp;ID | 174.02&nbsp;µs | 52.37&nbsp;ns | **2.48&nbsp;µs** |
-| querySelectorAll&nbsp;(200&nbsp;matches) | 1.05&nbsp;ms | 44.29&nbsp;ns | **60.62&nbsp;µs** |
-| appendChild&nbsp;(single) | **3.02&nbsp;µs** | 3.35&nbsp;µs | 5.84&nbsp;µs |
-| appendChild&nbsp;(1000&nbsp;children) | 2.47&nbsp;ms | **1.63&nbsp;ms** | 3.99&nbsp;ms |
-| setAttribute | **125.52&nbsp;ns** | 2.61&nbsp;µs | 1.40&nbsp;µs |
-| getAttribute | **2.30&nbsp;ns** | 27.31&nbsp;ns | 219.76&nbsp;ns |
-| classList.add | **2.36&nbsp;µs** | 5.79&nbsp;µs | 5.40&nbsp;µs |
-| addEventListener&nbsp;+&nbsp;dispatch | **3.22&nbsp;µs** | 5.34&nbsp;µs | 3.64&nbsp;µs |
-| textContent&nbsp;set | 2.21&nbsp;µs | **1.94&nbsp;µs** | 6.19&nbsp;µs |
-| cloneNode&nbsp;(deep) | **11.48&nbsp;µs** | 19.75&nbsp;µs | 15.74&nbsp;µs |
-| style.setProperty | **1.99&nbsp;µs** | 3.85&nbsp;µs | 4.63&nbsp;µs |
-| Build&nbsp;data&nbsp;table&nbsp;(50x5) | **530.61&nbsp;µs** | 954.06&nbsp;µs | 2.94&nbsp;ms |
-| Update&nbsp;list&nbsp;items&nbsp;(100) | **386.08&nbsp;µs** | 1.11&nbsp;ms | 2.92&nbsp;ms |
+| Window&nbsp;Creation | **4.08&nbsp;µs** | 92.83&nbsp;µs | 1.22&nbsp;ms |
+| createElement | **463.02&nbsp;ns** | 2.62&nbsp;µs | 4.67&nbsp;µs |
+| createElement&nbsp;+&nbsp;setAttribute | **748.35&nbsp;ns** | 15.41&nbsp;µs | 6.62&nbsp;µs |
+| innerHTML&nbsp;(medium) | **41.61&nbsp;µs** | 47.48&nbsp;µs | 168.98&nbsp;µs |
+| innerHTML&nbsp;(large,&nbsp;200&nbsp;nodes) | **1.92&nbsp;ms** | 3.72&nbsp;ms | 6.27&nbsp;ms |
+| querySelector&nbsp;by&nbsp;ID | **81.03&nbsp;ns** | n/a | 2.76&nbsp;µs |
+| querySelector&nbsp;by&nbsp;class | **242.20&nbsp;ns** | n/a | 3.52&nbsp;µs |
+| querySelectorAll&nbsp;(200&nbsp;matches) | **66.44&nbsp;µs** | n/a | 66.55&nbsp;µs |
+| querySelectorAll&nbsp;+&nbsp;iteration | **76.44&nbsp;µs** | n/a | 170.37&nbsp;µs |
+| appendChild&nbsp;(single) | **1.70&nbsp;µs** | 4.58&nbsp;µs | 6.14&nbsp;µs |
+| appendChild&nbsp;(1000&nbsp;children) | **852.90&nbsp;µs** | 1.54&nbsp;ms | 4.45&nbsp;ms |
+| setAttribute | **124.66&nbsp;ns** | 2.64&nbsp;µs | 1.43&nbsp;µs |
+| getAttribute | **2.18&nbsp;ns** | 28.85&nbsp;ns | 194.98&nbsp;ns |
+| classList.add | **3.97&nbsp;µs** | 6.88&nbsp;µs | 4.87&nbsp;µs |
+| addEventListener&nbsp;+&nbsp;dispatch | **2.67&nbsp;µs** | 5.43&nbsp;µs | 3.65&nbsp;µs |
+| textContent&nbsp;set | **470.48&nbsp;ns** | 1.72&nbsp;µs | 4.67&nbsp;µs |
+| cloneNode&nbsp;(deep) | **6.16&nbsp;µs** | 21.59&nbsp;µs | 15.55&nbsp;µs |
+| style.setProperty | **490.62&nbsp;ns** | 4.20&nbsp;µs | 4.64&nbsp;µs |
+| Build&nbsp;data&nbsp;table&nbsp;(50x5) | **519.30&nbsp;µs** | 754.42&nbsp;µs | 2.89&nbsp;ms |
+| Update&nbsp;list&nbsp;items&nbsp;(100) | **454.98&nbsp;µs** | n/a | 2.41&nbsp;ms |
 
-> **Note:** happy-dom's query selector results benefit from internal caching on repeated identical queries. Benchmarks run on Apple M3 Pro with Bun 1.3.11. Run them yourself:
+> **Note:** happy-dom's querySelector is incompatible with Bun (marked n/a). Benchmarks run on Apple M3 Pro with Bun 1.3.11. Run them yourself:
 
 ```bash
 bun run bench

@@ -25,6 +25,7 @@ export class VirtualDocument extends VirtualNodeBase {
   nodeKind: NodeKind = 'document'
   nodeName: string = '#document'
   defaultView: any = null
+  _idIndex: Map<string, VirtualElement> = new Map()
 
   documentElement: VirtualElement | null = null
   head: VirtualElement | null = null
@@ -626,7 +627,7 @@ export class VirtualDocument extends VirtualNodeBase {
   }
 
   getElementById(id: string): VirtualElement | null {
-    return this.querySelector(`#${id}`)
+    return this._idIndex.get(id) ?? null
   }
 
   getElementsByTagName(tagName: string): VirtualElement[] {

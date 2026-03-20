@@ -1,6 +1,6 @@
 import { MutationObserver } from '../observers/MutationObserver'
 import { invokeAdoptedCallback, invokeConnectedCallback, invokeDisconnectedCallback } from '../webcomponents/custom-element-utils'
-import { COMMENT_NODE, DOCUMENT_FRAGMENT_NODE, DOCUMENT_NODE, TEXT_NODE, type VirtualNode } from './VirtualNode'
+import { COMMENT_NODE, DOCUMENT_FRAGMENT_NODE, DOCUMENT_NODE, ELEMENT_NODE, TEXT_NODE, type VirtualNode } from './VirtualNode'
 
 interface VirtualParentNode extends VirtualNode {
   childNodes: VirtualNode[]
@@ -67,15 +67,27 @@ export function setOwnerDocumentRecursive(node: VirtualNode, ownerDocument: any)
     ;(node as any).ownerDocument = ownerDocument
   }
 
-  const internalShadowRoot = getInternalShadowRoot(node)
-  if (internalShadowRoot) {
-    setOwnerDocumentRecursive(internalShadowRoot, ownerDocument)
-  }
+  if (node.nodeType === ELEMENT_NODE) {
+    const id = (node as any).attributes?.get('id')
+    if (id !== undefined) {
+      if (previousOwnerDocument?._idIndex) {
+        previousOwnerDocument._idIndex.delete(id)
+      }
+      if (ownerDocument?._idIndex) {
+        ownerDocument._idIndex.set(id, node)
+      }
+    }
 
-  const templateContent = getTemplateContent(node)
-  if (templateContent) {
-    // eslint-disable-next-line max-statements-per-line
-    ;(templateContent as any).ownerDocument = ownerDocument
+    const internalShadowRoot = getInternalShadowRoot(node)
+    if (internalShadowRoot) {
+      setOwnerDocumentRecursive(internalShadowRoot, ownerDocument)
+    }
+
+    const templateContent = getTemplateContent(node)
+    if (templateContent) {
+      // eslint-disable-next-line max-statements-per-line
+      ;(templateContent as any).ownerDocument = ownerDocument
+    }
   }
 
   invokeAdoptedCallback(node, previousOwnerDocument, ownerDocument)
@@ -96,12 +108,29 @@ export function nodeContains(ancestor: VirtualNode, target: VirtualNode): boolea
   return false
 }
 
+export function removeIdFromIndex(node: VirtualNode): void {
+  const doc = (node as any).ownerDocument
+  if (!doc || !doc._idIndex || doc._idIndex.size === 0) return
+  if (node.nodeType === ELEMENT_NODE) {
+    const id = (node as any).attributes?.get('id')
+    if (id !== undefined) {
+      doc._idIndex.delete(id)
+    }
+    for (const child of node.childNodes) {
+      if (child.nodeType === ELEMENT_NODE) {
+        removeIdFromIndex(child)
+      }
+    }
+  }
+}
+
 export function detachNode(node: VirtualNode): void {
   const wasConnected = (node as any).isConnected === true
   if (!node.parentNode) {
     return
   }
 
+  removeIdFromIndex(node)
   const parent = node.parentNode
   const siblings = parent.childNodes
   const index = siblings.indexOf(node)
@@ -194,6 +223,7 @@ export function removeNode(parent: VirtualParentNode, child: VirtualNode): Virtu
     throw new Error('Child node not found')
   }
 
+  removeIdFromIndex(child)
   const wasConnected = (child as any).isConnected === true
   const previousSibling = index > 0 ? parent.childNodes[index - 1] : null
   const nextSibling = index < parent.childNodes.length - 1 ? parent.childNodes[index + 1] : null
@@ -216,6 +246,7 @@ export function replaceNode(parent: VirtualParentNode, node: VirtualNode, oldNod
     throw new Error('Old node not found')
   }
 
+  removeIdFromIndex(oldNode)
   const normalized = normalizeInsertedNodes(parent, node)
   const oldWasConnected = (oldNode as any).isConnected === true
   const previousSibling = index > 0 ? parent.childNodes[index - 1] : null

@@ -98,33 +98,31 @@ export class VirtualEventTarget {
     if (!listener)
       return
 
-    const rawOpts = typeof options === 'boolean' ? { capture: options } : options
-    const opts: EventListenerOptions = {
-      capture: rawOpts.capture ?? false,
-      once: rawOpts.once ?? false,
-      passive: rawOpts.passive ?? false,
-    }
-    const signal = (rawOpts as any).signal as AbortSignal | undefined
+    const hasOpts = options !== undefined && options !== false && options !== true && typeof options === 'object'
+    const capture = hasOpts ? (options as any).capture ?? false : options === true
+    const once = hasOpts ? (options as any).once ?? false : false
+    const passive = hasOpts ? (options as any).passive ?? false : false
+    const signal = hasOpts ? (options as any).signal as AbortSignal | undefined : undefined
 
-    // If signal is already aborted, do nothing
     if (signal?.aborted) return
 
-    if (!this._eventListeners.has(type)) {
-      this._eventListeners.set(type, [])
+    const existing = this._eventListeners.get(type)
+    if (existing) {
+      for (let i = 0; i < existing.length; i++) {
+        if (existing[i].listener === listener && existing[i].options.capture === capture) {
+          return
+        }
+      }
+      existing.push({ listener, options: { capture, once, passive }, signal })
+    }
+    else {
+      this._eventListeners.set(type, [{ listener, options: { capture, once, passive }, signal }])
     }
 
-    const listeners = this._eventListeners.get(type)!
-    const duplicate = listeners.some(entry => entry.listener === listener && entry.options.capture === opts.capture)
-    if (!duplicate) {
-      const entry: InternalEventListener = { listener, options: opts, signal }
-      listeners.push(entry)
-
-      // Wire up AbortSignal to auto-remove
-      if (signal) {
-        signal.addEventListener('abort', () => {
-          this.removeEventListener(type, listener, { capture: opts.capture })
-        }, { once: true })
-      }
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        this.removeEventListener(type, listener, { capture })
+      }, { once: true })
     }
   }
 
@@ -157,6 +155,26 @@ export class VirtualEventTarget {
     }
 
     const path = buildEventPath(this, event)
+
+    // Fast path: no parent (path.length === 1), no bubbling needed
+    if (path.length === 1) {
+      setEventValue(event, 'target', this)
+      setEventValue(event, 'eventPhase', 2)
+      setEventValue(event, 'currentTarget', this)
+      if (typeof event.composedPath !== 'function') {
+        setEventValue(event, 'composedPath', () => [this])
+      }
+      setEventValue(event, '_path', [this])
+
+      const noopStop = () => false
+      this._invokeEventListeners(event, true, noopStop)
+      this._invokeEventListeners(event, false, noopStop)
+
+      setEventValue(event, 'eventPhase', 0)
+      setEventValue(event, 'currentTarget', null)
+      return !event.defaultPrevented
+    }
+
     const originalTarget = this
     const originalRelatedTarget = event?.relatedTarget ?? null
 
@@ -223,7 +241,7 @@ export class VirtualEventTarget {
     if (!listeners || listeners.length === 0)
       return
 
-    const snapshot = [...listeners]
+    const snapshot = listeners.length === 1 ? listeners : [...listeners]
     for (const entry of snapshot) {
       if ((entry.options.capture ?? false) !== capture)
         continue
