@@ -1,11 +1,13 @@
 /**
  * DOM Performance Benchmarks using mitata
  *
- * Competing with happy-dom performance test:
- * https://github.com/capricorn86/happy-dom-performance-test
+ * Compares very-happy-dom vs happy-dom vs jsdom
  */
 
+/* eslint-disable ts/no-require-imports */
 import { bench, group, run } from 'mitata'
+import { Window as HappyWindow } from 'happy-dom'
+import { JSDOM } from 'jsdom'
 import { SHOW_ELEMENT, Window, createDocument } from '../src'
 
 function readCliOption(name: string): string | null {
@@ -21,8 +23,543 @@ function readCliOption(name: string): string | null {
 const requestedFormat = readCliOption('format')
 const requestedFilter = readCliOption('filter')
 
-// Benchmark: Document Creation
-group('Document Creation', () => {
+// ─── Shared HTML fixtures ────────────────────────────────────────────
+
+const mediumHTML = `
+  <div class="container">
+    <h1 id="title">Hello World</h1>
+    <p class="description">Lorem ipsum dolor sit amet</p>
+    <ul class="list">
+      <li>Item 1</li>
+      <li>Item 2</li>
+      <li>Item 3</li>
+      <li>Item 4</li>
+      <li>Item 5</li>
+    </ul>
+  </div>
+`
+
+/* eslint-disable quotes */
+const largeHTML = `<div class="app">${Array.from({ length: 200 }).map((_, i) => `<div class="item" id="item-${i}" data-index="${i}"><h3 class="title">Title ${i}</h3><p class="description">Description ${i}</p><button class="btn" type="button">Click</button></div>`).join('')}</div>`
+/* eslint-enable quotes */
+
+// ═══════════════════════════════════════════════════════════════════════
+// COMPARISON BENCHMARKS — very-happy-dom vs happy-dom vs jsdom
+// ═══════════════════════════════════════════════════════════════════════
+
+group('Window/Document Creation', () => {
+  bench('very-happy-dom', () => {
+    new Window()
+  }).baseline()
+
+  bench('happy-dom', () => {
+    new HappyWindow()
+  })
+
+  bench('jsdom', () => {
+    new JSDOM('<!DOCTYPE html><html><body></body></html>')
+  })
+})
+
+group('createElement', () => {
+  const vDoc = createDocument()
+  const hWin = new HappyWindow()
+  const hDoc = hWin.document
+  const jDom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+  const jDoc = jDom.window.document
+
+  bench('very-happy-dom', () => {
+    vDoc.createElement('div')
+  }).baseline()
+
+  bench('happy-dom', () => {
+    hDoc.createElement('div')
+  })
+
+  bench('jsdom', () => {
+    jDoc.createElement('div')
+  })
+})
+
+group('createElement + setAttribute', () => {
+  const vDoc = createDocument()
+  const hWin = new HappyWindow()
+  const hDoc = hWin.document
+  const jDom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+  const jDoc = jDom.window.document
+
+  bench('very-happy-dom', () => {
+    const el = vDoc.createElement('div')
+    el.setAttribute('id', 'test')
+    el.setAttribute('class', 'container')
+  }).baseline()
+
+  bench('happy-dom', () => {
+    const el = hDoc.createElement('div')
+    el.setAttribute('id', 'test')
+    el.setAttribute('class', 'container')
+  })
+
+  bench('jsdom', () => {
+    const el = jDoc.createElement('div')
+    el.setAttribute('id', 'test')
+    el.setAttribute('class', 'container')
+  })
+})
+
+group('innerHTML set (medium HTML)', () => {
+  const vDoc = createDocument()
+  const hWin = new HappyWindow()
+  const hDoc = hWin.document
+  const jDom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+  const jDoc = jDom.window.document
+
+  bench('very-happy-dom', () => {
+    const el = vDoc.createElement('div')
+    el.innerHTML = mediumHTML
+  }).baseline()
+
+  bench('happy-dom', () => {
+    const el = hDoc.createElement('div')
+    el.innerHTML = mediumHTML
+  })
+
+  bench('jsdom', () => {
+    const el = jDoc.createElement('div')
+    el.innerHTML = mediumHTML
+  })
+})
+
+group('innerHTML set (large HTML — 200 nodes)', () => {
+  const vDoc = createDocument()
+  const hWin = new HappyWindow()
+  const hDoc = hWin.document
+  const jDom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+  const jDoc = jDom.window.document
+
+  bench('very-happy-dom', () => {
+    vDoc.body!.innerHTML = largeHTML
+  }).baseline()
+
+  bench('happy-dom', () => {
+    hDoc.body.innerHTML = largeHTML
+  })
+
+  bench('jsdom', () => {
+    jDoc.body!.innerHTML = largeHTML
+  })
+})
+
+// Pre-build DOMs for query benchmarks — keep Window references alive
+const vQueryDoc = createDocument()
+vQueryDoc.body!.innerHTML = largeHTML
+
+const hQueryWin = new HappyWindow()
+const hQueryDoc = hQueryWin.document
+hQueryDoc.body.innerHTML = largeHTML
+
+const jQueryDom = new JSDOM(`<!DOCTYPE html><html><body>${largeHTML}</body></html>`)
+const jQueryDoc = jQueryDom.window.document
+
+group('querySelector by ID', () => {
+  bench('very-happy-dom', () => {
+    vQueryDoc.querySelector('#item-100')
+  }).baseline()
+
+  bench('happy-dom', () => {
+    hQueryDoc.querySelector('#item-100')
+  })
+
+  bench('jsdom', () => {
+    jQueryDoc.querySelector('#item-100')
+  })
+})
+
+group('querySelector by class', () => {
+  bench('very-happy-dom', () => {
+    vQueryDoc.querySelector('.title')
+  }).baseline()
+
+  bench('happy-dom', () => {
+    hQueryDoc.querySelector('.title')
+  })
+
+  bench('jsdom', () => {
+    jQueryDoc.querySelector('.title')
+  })
+})
+
+group('querySelectorAll (200 matches)', () => {
+  bench('very-happy-dom', () => {
+    vQueryDoc.querySelectorAll('.item')
+  }).baseline()
+
+  bench('happy-dom', () => {
+    hQueryDoc.querySelectorAll('.item')
+  })
+
+  bench('jsdom', () => {
+    jQueryDoc.querySelectorAll('.item')
+  })
+})
+
+group('querySelectorAll + iteration', () => {
+  bench('very-happy-dom', () => {
+    const items = vQueryDoc.querySelectorAll('.item')
+    for (const item of items) {
+      item.getAttribute('id')
+    }
+  }).baseline()
+
+  bench('happy-dom', () => {
+    const items = hQueryDoc.querySelectorAll('.item')
+    for (const item of items) {
+      item.getAttribute('id')
+    }
+  })
+
+  bench('jsdom', () => {
+    const items = jQueryDoc.querySelectorAll('.item')
+    for (const item of items) {
+      item.getAttribute('id')
+    }
+  })
+})
+
+group('appendChild (single)', () => {
+  const vDoc = createDocument()
+  const hWin = new HappyWindow()
+  const hDoc = hWin.document
+  const jDom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+  const jDoc = jDom.window.document
+
+  bench('very-happy-dom', () => {
+    const parent = vDoc.createElement('div')
+    const child = vDoc.createElement('span')
+    parent.appendChild(child)
+  }).baseline()
+
+  bench('happy-dom', () => {
+    const parent = hDoc.createElement('div')
+    const child = hDoc.createElement('span')
+    parent.appendChild(child)
+  })
+
+  bench('jsdom', () => {
+    const parent = jDoc.createElement('div')
+    const child = jDoc.createElement('span')
+    parent.appendChild(child)
+  })
+})
+
+group('appendChild (1000 children)', () => {
+  bench('very-happy-dom', () => {
+    const doc = createDocument()
+    const parent = doc.createElement('div')
+    for (let i = 0; i < 1000; i++) {
+      const child = doc.createElement('div')
+      child.textContent = `Child ${i}`
+      parent.appendChild(child)
+    }
+  }).baseline()
+
+  bench('happy-dom', () => {
+    const win = new HappyWindow()
+    const doc = win.document
+    const parent = doc.createElement('div')
+    for (let i = 0; i < 1000; i++) {
+      const child = doc.createElement('div')
+      child.textContent = `Child ${i}`
+      parent.appendChild(child)
+    }
+  })
+
+  bench('jsdom', () => {
+    const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+    const doc = dom.window.document
+    const parent = doc.createElement('div')
+    for (let i = 0; i < 1000; i++) {
+      const child = doc.createElement('div')
+      child.textContent = `Child ${i}`
+      parent.appendChild(child)
+    }
+  })
+})
+
+group('setAttribute', () => {
+  const vDoc = createDocument()
+  const vEl = vDoc.createElement('div')
+  const hWin = new HappyWindow()
+  const hEl = hWin.document.createElement('div')
+  const jDom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+  const jEl = jDom.window.document.createElement('div')
+
+  bench('very-happy-dom', () => {
+    vEl.setAttribute('class', 'test')
+  }).baseline()
+
+  bench('happy-dom', () => {
+    hEl.setAttribute('class', 'test')
+  })
+
+  bench('jsdom', () => {
+    jEl.setAttribute('class', 'test')
+  })
+})
+
+group('getAttribute', () => {
+  const vDoc = createDocument()
+  const vEl = vDoc.createElement('div')
+  vEl.setAttribute('class', 'test')
+  const hWin = new HappyWindow()
+  const hEl = hWin.document.createElement('div')
+  hEl.setAttribute('class', 'test')
+  const jDom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+  const jEl = jDom.window.document.createElement('div')
+  jEl.setAttribute('class', 'test')
+
+  bench('very-happy-dom', () => {
+    vEl.getAttribute('class')
+  }).baseline()
+
+  bench('happy-dom', () => {
+    hEl.getAttribute('class')
+  })
+
+  bench('jsdom', () => {
+    jEl.getAttribute('class')
+  })
+})
+
+group('classList.add', () => {
+  const vDoc = createDocument()
+  const hWin = new HappyWindow()
+  const hDoc = hWin.document
+  const jDom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+  const jDoc = jDom.window.document
+
+  bench('very-happy-dom', () => {
+    const el = vDoc.createElement('div')
+    el.classList.add('test-class')
+  }).baseline()
+
+  bench('happy-dom', () => {
+    const el = hDoc.createElement('div')
+    el.classList.add('test-class')
+  })
+
+  bench('jsdom', () => {
+    const el = jDoc.createElement('div')
+    el.classList.add('test-class')
+  })
+})
+
+group('addEventListener + dispatchEvent', () => {
+  const vWin = new Window()
+  const vDoc = vWin.document
+  const hWin = new HappyWindow()
+  const hDoc = hWin.document
+  const jDom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+  const jDoc = jDom.window.document
+
+  bench('very-happy-dom', () => {
+    const el = vDoc.createElement('button')
+    let _clicked = false
+    el.addEventListener('click', () => { _clicked = true })
+    el.dispatchEvent(new vWin.CustomEvent('click'))
+  }).baseline()
+
+  bench('happy-dom', () => {
+    const el = hDoc.createElement('button')
+    let _clicked = false
+    el.addEventListener('click', () => { _clicked = true })
+    el.dispatchEvent(new hWin.CustomEvent('click'))
+  })
+
+  bench('jsdom', () => {
+    const el = jDoc.createElement('button')
+    let _clicked = false
+    el.addEventListener('click', () => { _clicked = true })
+    el.dispatchEvent(new jDom.window.CustomEvent('click'))
+  })
+})
+
+group('textContent set', () => {
+  const vDoc = createDocument()
+  const vEl = vDoc.createElement('div')
+  const hWin = new HappyWindow()
+  const hEl = hWin.document.createElement('div')
+  const jDom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+  const jEl = jDom.window.document.createElement('div')
+
+  bench('very-happy-dom', () => {
+    vEl.textContent = 'Hello World'
+  }).baseline()
+
+  bench('happy-dom', () => {
+    hEl.textContent = 'Hello World'
+  })
+
+  bench('jsdom', () => {
+    jEl.textContent = 'Hello World'
+  })
+})
+
+group('cloneNode deep', () => {
+  const vDoc = createDocument()
+  const vEl = vDoc.createElement('div')
+  vEl.innerHTML = '<div><span>Text</span><p>More</p></div>'
+  const hWin = new HappyWindow()
+  const hEl = hWin.document.createElement('div')
+  hEl.innerHTML = '<div><span>Text</span><p>More</p></div>'
+  const jDom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+  const jEl = jDom.window.document.createElement('div')
+  jEl.innerHTML = '<div><span>Text</span><p>More</p></div>'
+
+  bench('very-happy-dom', () => {
+    vEl.cloneNode(true)
+  }).baseline()
+
+  bench('happy-dom', () => {
+    hEl.cloneNode(true)
+  })
+
+  bench('jsdom', () => {
+    jEl.cloneNode(true)
+  })
+})
+
+group('style.setProperty', () => {
+  const vDoc = createDocument()
+  const vEl = vDoc.createElement('div')
+  const hWin = new HappyWindow()
+  const hEl = hWin.document.createElement('div')
+  const jDom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+  const jEl = jDom.window.document.createElement('div')
+
+  bench('very-happy-dom', () => {
+    vEl.style.setProperty('color', 'red')
+  }).baseline()
+
+  bench('happy-dom', () => {
+    hEl.style.setProperty('color', 'red')
+  })
+
+  bench('jsdom', () => {
+    jEl.style.setProperty('color', 'red')
+  })
+})
+
+// ─── Real-World: Build data table ────────────────────────────────────
+
+group('Build data table (50 rows x 5 cols)', () => {
+  bench('very-happy-dom', () => {
+    const doc = createDocument()
+    const table = doc.createElement('table')
+    for (let i = 0; i < 50; i++) {
+      const row = doc.createElement('tr')
+      for (let j = 0; j < 5; j++) {
+        const cell = doc.createElement('td')
+        cell.textContent = `Cell ${i},${j}`
+        row.appendChild(cell)
+      }
+      table.appendChild(row)
+    }
+    doc.body!.appendChild(table)
+  }).baseline()
+
+  bench('happy-dom', () => {
+    const win = new HappyWindow()
+    const doc = win.document
+    const table = doc.createElement('table')
+    for (let i = 0; i < 50; i++) {
+      const row = doc.createElement('tr')
+      for (let j = 0; j < 5; j++) {
+        const cell = doc.createElement('td')
+        cell.textContent = `Cell ${i},${j}`
+        row.appendChild(cell)
+      }
+      table.appendChild(row)
+    }
+    doc.body.appendChild(table)
+  })
+
+  bench('jsdom', () => {
+    const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+    const doc = dom.window.document
+    const table = doc.createElement('table')
+    for (let i = 0; i < 50; i++) {
+      const row = doc.createElement('tr')
+      for (let j = 0; j < 5; j++) {
+        const cell = doc.createElement('td')
+        cell.textContent = `Cell ${i},${j}`
+        row.appendChild(cell)
+      }
+      table.appendChild(row)
+    }
+    doc.body!.appendChild(table)
+  })
+})
+
+// ─── Real-World: Update list items ───────────────────────────────────
+
+group('Update list items (100 items)', () => {
+  bench('very-happy-dom', () => {
+    const doc = createDocument()
+    const ul = doc.createElement('ul')
+    for (let i = 0; i < 100; i++) {
+      const li = doc.createElement('li')
+      li.textContent = `Item ${i}`
+      li.setAttribute('class', 'item')
+      ul.appendChild(li)
+    }
+    const items = ul.querySelectorAll('.item')
+    for (let i = 0; i < items.length; i++) {
+      items[i].textContent = `Updated ${i}`
+      items[i].classList.add('updated')
+    }
+  }).baseline()
+
+  bench('happy-dom', () => {
+    const win = new HappyWindow()
+    const doc = win.document
+    const ul = doc.createElement('ul')
+    for (let i = 0; i < 100; i++) {
+      const li = doc.createElement('li')
+      li.textContent = `Item ${i}`
+      li.setAttribute('class', 'item')
+      ul.appendChild(li)
+    }
+    const items = ul.querySelectorAll('.item')
+    for (let i = 0; i < items.length; i++) {
+      items[i].textContent = `Updated ${i}`
+      items[i].classList.add('updated')
+    }
+  })
+
+  bench('jsdom', () => {
+    const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+    const doc = dom.window.document
+    const ul = doc.createElement('ul')
+    for (let i = 0; i < 100; i++) {
+      const li = doc.createElement('li')
+      li.textContent = `Item ${i}`
+      li.setAttribute('class', 'item')
+      ul.appendChild(li)
+    }
+    const items = ul.querySelectorAll('.item')
+    for (let i = 0; i < items.length; i++) {
+      items[i].textContent = `Updated ${i}`
+      items[i].classList.add('updated')
+    }
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════
+// STANDALONE very-happy-dom BENCHMARKS (detailed)
+// ═══════════════════════════════════════════════════════════════════════
+
+group('Document Creation (detailed)', () => {
   bench('createDocument()', () => {
     createDocument()
   })
@@ -38,8 +575,7 @@ group('Document Creation', () => {
   })
 })
 
-// Benchmark: Element Creation
-group('Element Creation', () => {
+group('Element Creation (detailed)', () => {
   const doc = createDocument()
 
   bench('createElement', () => {
@@ -68,28 +604,13 @@ group('Element Creation', () => {
   })
 })
 
-// Benchmark: HTML Parsing
-group('HTML Parsing', () => {
+group('HTML Parsing (detailed)', () => {
   const doc = createDocument()
 
   const smallHTML = '<div>Hello World</div>'
 
-  const mediumHTML = `
-    <div class="container">
-      <h1 id="title">Hello World</h1>
-      <p class="description">Lorem ipsum dolor sit amet</p>
-      <ul class="list">
-        <li>Item 1</li>
-        <li>Item 2</li>
-        <li>Item 3</li>
-        <li>Item 4</li>
-        <li>Item 5</li>
-      </ul>
-    </div>
-  `
-
   /* eslint-disable quotes */
-  const largeHTML = `
+  const fullPageHTML = `
     <html>
       <head>
         <title>Test Page</title>
@@ -130,7 +651,7 @@ group('HTML Parsing', () => {
   })
 
   bench('parse large HTML (100 articles)', () => {
-    doc.documentElement!.innerHTML = largeHTML
+    doc.documentElement!.innerHTML = fullPageHTML
   })
 
   bench('parse + query', () => {
@@ -140,22 +661,9 @@ group('HTML Parsing', () => {
   })
 })
 
-// Benchmark: querySelector Operations
-group('querySelector Operations', () => {
+group('querySelector Operations (detailed)', () => {
   const doc = createDocument()
-
-  // Setup large DOM
-  doc.body!.innerHTML = `
-    <div class="app">
-      ${Array.from({ length: 200 }).map((_, i) => `
-        <div class="item" id="item-${i}" data-index="${i}">
-          <h3 class="title">Title ${i}</h3>
-          <p class="description">Description ${i}</p>
-          <button class="btn" type="button">Click</button>
-        </div>
-      `).join('')}
-    </div>
-  `
+  doc.body!.innerHTML = largeHTML
 
   bench('querySelector by ID', () => {
     doc.querySelector('#item-100')
@@ -178,22 +686,9 @@ group('querySelector Operations', () => {
   })
 })
 
-// Benchmark: querySelectorAll Operations
-group('querySelectorAll Operations', () => {
+group('querySelectorAll Operations (detailed)', () => {
   const doc = createDocument()
-
-  // Setup large DOM
-  doc.body!.innerHTML = `
-    <div class="app">
-      ${Array.from({ length: 200 }).map((_, i) => `
-        <div class="item" id="item-${i}" data-index="${i}">
-          <h3 class="title">Title ${i}</h3>
-          <p class="description">Description ${i}</p>
-          <button class="btn" type="button">Click</button>
-        </div>
-      `).join('')}
-    </div>
-  `
+  doc.body!.innerHTML = largeHTML
 
   bench('querySelectorAll by class (200 results)', () => {
     doc.querySelectorAll('.item')
@@ -215,8 +710,7 @@ group('querySelectorAll Operations', () => {
   })
 })
 
-// Benchmark: DOM Manipulation
-group('DOM Manipulation', () => {
+group('DOM Manipulation (detailed)', () => {
   bench('appendChild (single)', () => {
     const doc = createDocument()
     const parent = doc.createElement('div')
@@ -266,8 +760,7 @@ group('DOM Manipulation', () => {
   })
 })
 
-// Benchmark: Attribute Operations
-group('Attribute Operations', () => {
+group('Attribute Operations (detailed)', () => {
   const doc = createDocument()
   const el = doc.createElement('div')
 
@@ -300,8 +793,7 @@ group('Attribute Operations', () => {
   })
 })
 
-// Benchmark: Class List Operations
-group('ClassList Operations', () => {
+group('ClassList Operations (detailed)', () => {
   bench('classList.add', () => {
     const doc = createDocument()
     const el = doc.createElement('div')
@@ -346,8 +838,7 @@ group('ClassList Operations', () => {
   })
 })
 
-// Benchmark: innerHTML Operations
-group('innerHTML Operations', () => {
+group('innerHTML Operations (detailed)', () => {
   const doc = createDocument()
 
   const html = `
@@ -387,8 +878,7 @@ group('innerHTML Operations', () => {
   })
 })
 
-// Benchmark: DOM Traversal
-group('DOM Traversal', () => {
+group('DOM Traversal (detailed)', () => {
   const doc = createDocument()
   doc.body!.innerHTML = `
     <div id="root">
@@ -468,8 +958,7 @@ group('Advanced Selector & Range Operations', () => {
   })
 })
 
-// Benchmark: insertBefore & replaceChild
-group('Advanced DOM Manipulation', () => {
+group('Advanced DOM Manipulation (detailed)', () => {
   bench('insertBefore (100x)', () => {
     const doc = createDocument()
     const parent = doc.createElement('div')
@@ -521,8 +1010,7 @@ group('Advanced DOM Manipulation', () => {
   })
 })
 
-// Benchmark: Style Operations
-group('Style Operations', () => {
+group('Style Operations (detailed)', () => {
   const doc = createDocument()
   const el = doc.createElement('div')
 
@@ -559,8 +1047,7 @@ group('Style Operations', () => {
   })
 })
 
-// Benchmark: Dataset Operations
-group('Dataset Operations', () => {
+group('Dataset Operations (detailed)', () => {
   const doc = createDocument()
 
   bench('dataset.set', () => {
@@ -588,8 +1075,7 @@ group('Dataset Operations', () => {
   })
 })
 
-// Benchmark: Event Handling
-group('Event Handling', () => {
+group('Event Handling (detailed)', () => {
   const window = new Window()
   const doc = window.document
 
@@ -635,8 +1121,7 @@ group('Event Handling', () => {
   })
 })
 
-// Benchmark: Canvas API
-group('Canvas API', () => {
+group('Canvas API (detailed)', () => {
   const window = new Window()
   const doc = window.document
 
@@ -689,8 +1174,7 @@ group('Canvas API', () => {
   })
 })
 
-// Benchmark: Storage API
-group('Storage API', () => {
+group('Storage API (detailed)', () => {
   bench('localStorage setItem', () => {
     const window = new Window()
     window.localStorage.setItem('key', 'value')
@@ -715,8 +1199,7 @@ group('Storage API', () => {
   })
 })
 
-// Benchmark: DocumentFragment
-group('DocumentFragment Operations', () => {
+group('DocumentFragment Operations (detailed)', () => {
   const doc = createDocument()
 
   bench('createDocumentFragment', () => {
@@ -745,131 +1228,7 @@ group('DocumentFragment Operations', () => {
   })
 })
 
-// Benchmark: Real-World Scenarios
-group('🌍 Real-World Scenarios', () => {
-  bench('Build data table (50 rows × 5 cols)', () => {
-    const doc = createDocument()
-    const table = doc.createElement('table')
-
-    for (let i = 0; i < 50; i++) {
-      const row = doc.createElement('tr')
-      for (let j = 0; j < 5; j++) {
-        const cell = doc.createElement('td')
-        cell.textContent = `Cell ${i},${j}`
-        row.appendChild(cell)
-      }
-      table.appendChild(row)
-    }
-
-    doc.body!.appendChild(table)
-  }).baseline()
-
-  bench('Update list items (100 items)', () => {
-    const doc = createDocument()
-    const ul = doc.createElement('ul')
-
-    for (let i = 0; i < 100; i++) {
-      const li = doc.createElement('li')
-      li.textContent = `Item ${i}`
-      li.setAttribute('class', 'item')
-      ul.appendChild(li)
-    }
-
-    const items = ul.querySelectorAll('.item')
-    for (let i = 0; i < items.length; i++) {
-      items[i].textContent = `Updated ${i}`
-      items[i].classList.add('updated')
-    }
-  })
-
-  bench('Filter and re-render list (100→50)', () => {
-    const doc = createDocument()
-    const container = doc.createElement('div')
-
-    const data = Array.from({ length: 100 }, (_, i) => ({ id: i, name: `Item ${i}`, active: i % 2 === 0 }))
-
-    for (const item of data) {
-      const el = doc.createElement('div')
-      el.setAttribute('data-id', item.id.toString())
-      el.textContent = item.name
-      container.appendChild(el)
-    }
-
-    container.innerHTML = ''
-    const filtered = data.filter(item => item.active)
-    for (const item of filtered) {
-      const el = doc.createElement('div')
-      el.setAttribute('data-id', item.id.toString())
-      el.textContent = item.name
-      container.appendChild(el)
-    }
-  })
-
-  bench('Build card grid (4×6 cards)', () => {
-    const doc = createDocument()
-    const grid = doc.createElement('div')
-    grid.setAttribute('class', 'grid')
-
-    for (let i = 0; i < 24; i++) {
-      const card = doc.createElement('div')
-      card.setAttribute('class', 'card')
-
-      const title = doc.createElement('h3')
-      title.textContent = `Card ${i}`
-
-      const desc = doc.createElement('p')
-      desc.textContent = 'Lorem ipsum dolor sit amet'
-
-      const button = doc.createElement('button')
-      button.textContent = 'Click me'
-      button.setAttribute('class', 'btn')
-
-      card.appendChild(title)
-      card.appendChild(desc)
-      card.appendChild(button)
-      grid.appendChild(card)
-    }
-
-    doc.body!.appendChild(grid)
-  })
-
-  bench('Form with validation (10 inputs)', () => {
-    const doc = createDocument()
-    const form = doc.createElement('form')
-
-    for (let i = 0; i < 10; i++) {
-      const label = doc.createElement('label')
-      label.textContent = `Field ${i}`
-
-      const input = doc.createElement('input')
-      input.setAttribute('type', 'text')
-      input.setAttribute('name', `field${i}`)
-      input.setAttribute('required', 'true')
-      input.setAttribute('class', 'form-input')
-
-      const error = doc.createElement('span')
-      error.setAttribute('class', 'error')
-      error.textContent = ''
-
-      form.appendChild(label)
-      form.appendChild(input)
-      form.appendChild(error)
-    }
-
-    const inputs = form.querySelectorAll('input')
-    for (const input of inputs) {
-      const isValid = input.hasAttribute('required')
-      if (!isValid) {
-        const errorSpan = input.nextSibling
-        if (errorSpan)
-          (errorSpan as any).textContent = 'Required field'
-      }
-    }
-  })
-})
-
-// Benchmark: Memory & Cleanup
-group('Memory Efficiency', () => {
+group('Memory Efficiency (detailed)', () => {
   bench('create + destroy 100 windows', () => {
     for (let i = 0; i < 100; i++) {
       const window = new Window()
