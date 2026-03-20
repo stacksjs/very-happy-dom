@@ -5,6 +5,31 @@ import { CanvasRenderingContext2D, HTMLCanvasElement } from '../apis/Canvas'
 import { Navigator as VeryHappyNavigator } from '../apis/Clipboard'
 import { VeryHappyFile, VeryHappyFileList, VeryHappyFileReader } from '../apis/FileAPI'
 import { CustomEvent as VeryHappyCustomEvent } from '../events/CustomEvent'
+import {
+  AnimationEvent as VHDAnimationEvent,
+  ClipboardEvent as VHDClipboardEvent,
+  CloseEvent as VHDCloseEvent,
+  CompositionEvent as VHDCompositionEvent,
+  DragEvent as VHDDragEvent,
+  ErrorEvent as VHDErrorEvent,
+  FocusEvent as VHDFocusEvent,
+  HashChangeEvent as VHDHashChangeEvent,
+  InputEvent as VHDInputEvent,
+  KeyboardEvent as VHDKeyboardEvent,
+  MediaQueryListEvent as VHDMediaQueryListEvent,
+  MessageEvent as VHDMessageEvent,
+  MouseEvent as VHDMouseEvent,
+  PointerEvent as VHDPointerEvent,
+  PopStateEvent as VHDPopStateEvent,
+  ProgressEvent as VHDProgressEvent,
+  StorageEvent as VHDStorageEvent,
+  SubmitEvent as VHDSubmitEvent,
+  Touch as VHDTouch,
+  TouchEvent as VHDTouchEvent,
+  TransitionEvent as VHDTransitionEvent,
+  UIEvent as VHDUIEvent,
+  WheelEvent as VHDWheelEvent,
+} from '../events/EventClasses'
 import { VirtualEventTarget } from '../events/VirtualEventTarget'
 import { VirtualEvent } from '../events/VirtualEvent'
 import { XMLHttpRequest as VeryHappyXMLHttpRequest } from '../http/XMLHttpRequest'
@@ -26,6 +51,73 @@ import { createStorage } from '../storage/Storage'
 import { TimerManager } from '../timers/TimerManager'
 import { NodeFilter, NodeIterator, Range, Selection, TreeWalker } from '../traversal'
 import { CustomElementRegistry, HTMLElement } from '../webcomponents/CustomElementRegistry'
+import {
+  Audio,
+  HTMLAnchorElement,
+  HTMLAreaElement,
+  HTMLAudioElement,
+  HTMLBaseElement,
+  HTMLBodyElement,
+  HTMLBRElement,
+  HTMLButtonElement,
+  HTMLDataElement,
+  HTMLDataListElement,
+  HTMLDetailsElement,
+  HTMLDialogElement,
+  HTMLDivElement,
+  HTMLDListElement,
+  HTMLEmbedElement,
+  HTMLFieldSetElement,
+  HTMLFormElement,
+  HTMLHeadElement,
+  HTMLHeadingElement,
+  HTMLHRElement,
+  HTMLHtmlElement,
+  HTMLIFrameElement,
+  HTMLImageElement,
+  HTMLInputElement,
+  HTMLLabelElement,
+  HTMLLegendElement,
+  HTMLLIElement,
+  HTMLLinkElement,
+  HTMLMapElement,
+  HTMLMediaElement,
+  HTMLMenuElement,
+  HTMLMetaElement,
+  HTMLMeterElement,
+  HTMLModElement,
+  HTMLObjectElement,
+  HTMLOListElement,
+  HTMLOptGroupElement,
+  HTMLOptionElement,
+  HTMLOutputElement,
+  HTMLParagraphElement,
+  HTMLParamElement,
+  HTMLPictureElement,
+  HTMLPreElement,
+  HTMLProgressElement,
+  HTMLQuoteElement,
+  HTMLScriptElement,
+  HTMLSelectElement,
+  HTMLSlotElement,
+  HTMLSourceElement,
+  HTMLSpanElement,
+  HTMLStyleElement,
+  HTMLTableCaptionElement,
+  HTMLTableCellElement,
+  HTMLTableColElement,
+  HTMLTableElement,
+  HTMLTableRowElement,
+  HTMLTableSectionElement,
+  HTMLTextAreaElement,
+  HTMLTimeElement,
+  HTMLTitleElement,
+  HTMLTrackElement,
+  HTMLUListElement,
+  HTMLUnknownElement,
+  HTMLVideoElement,
+  Image,
+} from '../nodes/HTMLElementClasses'
 
 export interface WindowOptions {
   url?: string
@@ -75,6 +167,14 @@ export class Window extends VirtualEventTarget {
   public FormData: typeof globalThis.FormData = globalThis.FormData
   public URL: typeof globalThis.URL = globalThis.URL
   public URLSearchParams: typeof globalThis.URLSearchParams = globalThis.URLSearchParams
+  public AbortController: typeof globalThis.AbortController = globalThis.AbortController
+  public AbortSignal: typeof globalThis.AbortSignal = globalThis.AbortSignal
+  public Blob: typeof globalThis.Blob = globalThis.Blob
+  public TextEncoder: typeof globalThis.TextEncoder = globalThis.TextEncoder
+  public TextDecoder: typeof globalThis.TextDecoder = globalThis.TextDecoder
+  public ReadableStream: typeof globalThis.ReadableStream = globalThis.ReadableStream
+  public WritableStream: typeof globalThis.WritableStream = globalThis.WritableStream
+  public TransformStream: typeof globalThis.TransformStream = globalThis.TransformStream
 
   // Observer APIs
   public CustomEvent: typeof VeryHappyCustomEvent = VeryHappyCustomEvent
@@ -97,7 +197,75 @@ export class Window extends VirtualEventTarget {
   public HTMLCanvasElement: typeof HTMLCanvasElement = HTMLCanvasElement
   public CanvasRenderingContext2D: typeof CanvasRenderingContext2D = CanvasRenderingContext2D
 
+  // HTML Element subclass constructors (aliases for compatibility)
+  public HTMLAnchorElement: typeof HTMLAnchorElement = HTMLAnchorElement
+  public HTMLAreaElement: typeof HTMLAreaElement = HTMLAreaElement
+  public HTMLAudioElement: typeof HTMLAudioElement = HTMLAudioElement
+  public HTMLBaseElement: typeof HTMLBaseElement = HTMLBaseElement
+  public HTMLBodyElement: typeof HTMLBodyElement = HTMLBodyElement
+  public HTMLBRElement: typeof HTMLBRElement = HTMLBRElement
+  public HTMLButtonElement: typeof HTMLButtonElement = HTMLButtonElement
+  public HTMLDataElement: typeof HTMLDataElement = HTMLDataElement
+  public HTMLDataListElement: typeof HTMLDataListElement = HTMLDataListElement
+  public HTMLDetailsElement: typeof HTMLDetailsElement = HTMLDetailsElement
+  public HTMLDialogElement: typeof HTMLDialogElement = HTMLDialogElement
+  public HTMLDivElement: typeof HTMLDivElement = HTMLDivElement
+  public HTMLDListElement: typeof HTMLDListElement = HTMLDListElement
+  public HTMLEmbedElement: typeof HTMLEmbedElement = HTMLEmbedElement
+  public HTMLFieldSetElement: typeof HTMLFieldSetElement = HTMLFieldSetElement
+  public HTMLFormElement: typeof HTMLFormElement = HTMLFormElement
+  public HTMLHeadElement: typeof HTMLHeadElement = HTMLHeadElement
+  public HTMLHeadingElement: typeof HTMLHeadingElement = HTMLHeadingElement
+  public HTMLHRElement: typeof HTMLHRElement = HTMLHRElement
+  public HTMLHtmlElement: typeof HTMLHtmlElement = HTMLHtmlElement
+  public HTMLIFrameElement: typeof HTMLIFrameElement = HTMLIFrameElement
+  public HTMLImageElement: typeof HTMLImageElement = HTMLImageElement
+  public HTMLInputElement: typeof HTMLInputElement = HTMLInputElement
+  public HTMLLabelElement: typeof HTMLLabelElement = HTMLLabelElement
+  public HTMLLegendElement: typeof HTMLLegendElement = HTMLLegendElement
+  public HTMLLIElement: typeof HTMLLIElement = HTMLLIElement
+  public HTMLLinkElement: typeof HTMLLinkElement = HTMLLinkElement
+  public HTMLMapElement: typeof HTMLMapElement = HTMLMapElement
+  public HTMLMediaElement: typeof HTMLMediaElement = HTMLMediaElement
+  public HTMLMenuElement: typeof HTMLMenuElement = HTMLMenuElement
+  public HTMLMetaElement: typeof HTMLMetaElement = HTMLMetaElement
+  public HTMLMeterElement: typeof HTMLMeterElement = HTMLMeterElement
+  public HTMLModElement: typeof HTMLModElement = HTMLModElement
+  public HTMLObjectElement: typeof HTMLObjectElement = HTMLObjectElement
+  public HTMLOListElement: typeof HTMLOListElement = HTMLOListElement
+  public HTMLOptGroupElement: typeof HTMLOptGroupElement = HTMLOptGroupElement
+  public HTMLOptionElement: typeof HTMLOptionElement = HTMLOptionElement
+  public HTMLOutputElement: typeof HTMLOutputElement = HTMLOutputElement
+  public HTMLParagraphElement: typeof HTMLParagraphElement = HTMLParagraphElement
+  public HTMLParamElement: typeof HTMLParamElement = HTMLParamElement
+  public HTMLPictureElement: typeof HTMLPictureElement = HTMLPictureElement
+  public HTMLPreElement: typeof HTMLPreElement = HTMLPreElement
+  public HTMLProgressElement: typeof HTMLProgressElement = HTMLProgressElement
+  public HTMLQuoteElement: typeof HTMLQuoteElement = HTMLQuoteElement
+  public HTMLScriptElement: typeof HTMLScriptElement = HTMLScriptElement
+  public HTMLSelectElement: typeof HTMLSelectElement = HTMLSelectElement
+  public HTMLSlotElement: typeof HTMLSlotElement = HTMLSlotElement
+  public HTMLSourceElement: typeof HTMLSourceElement = HTMLSourceElement
+  public HTMLSpanElement: typeof HTMLSpanElement = HTMLSpanElement
+  public HTMLStyleElement: typeof HTMLStyleElement = HTMLStyleElement
+  public HTMLTableCaptionElement: typeof HTMLTableCaptionElement = HTMLTableCaptionElement
+  public HTMLTableCellElement: typeof HTMLTableCellElement = HTMLTableCellElement
+  public HTMLTableColElement: typeof HTMLTableColElement = HTMLTableColElement
+  public HTMLTableElement: typeof HTMLTableElement = HTMLTableElement
+  public HTMLTableRowElement: typeof HTMLTableRowElement = HTMLTableRowElement
+  public HTMLTableSectionElement: typeof HTMLTableSectionElement = HTMLTableSectionElement
+  public HTMLTextAreaElement: typeof HTMLTextAreaElement = HTMLTextAreaElement
+  public HTMLTimeElement: typeof HTMLTimeElement = HTMLTimeElement
+  public HTMLTitleElement: typeof HTMLTitleElement = HTMLTitleElement
+  public HTMLTrackElement: typeof HTMLTrackElement = HTMLTrackElement
+  public HTMLUListElement: typeof HTMLUListElement = HTMLUListElement
+  public HTMLUnknownElement: typeof HTMLUnknownElement = HTMLUnknownElement
+  public HTMLVideoElement: typeof HTMLVideoElement = HTMLVideoElement
+  public Image: typeof Image = Image
+  public Audio: typeof Audio = Audio
+
   // DOM node constructors
+  public Document: typeof VirtualDocument = VirtualDocument
   public Element: typeof VirtualElement = VirtualElement
   public HTMLTemplateElement: typeof VirtualTemplateElement = VirtualTemplateElement
   public Node: typeof VirtualNodeBase = VirtualNodeBase
@@ -111,6 +279,31 @@ export class Window extends VirtualEventTarget {
   public DocumentFragment: typeof VirtualDocumentFragment = VirtualDocumentFragment
   public Event: typeof VirtualEvent = VirtualEvent
   public SVGElement: typeof VirtualSVGElement = VirtualSVGElement
+
+  // Event subclass constructors
+  public UIEvent: typeof VHDUIEvent = VHDUIEvent
+  public MouseEvent: typeof VHDMouseEvent = VHDMouseEvent
+  public KeyboardEvent: typeof VHDKeyboardEvent = VHDKeyboardEvent
+  public FocusEvent: typeof VHDFocusEvent = VHDFocusEvent
+  public InputEvent: typeof VHDInputEvent = VHDInputEvent
+  public WheelEvent: typeof VHDWheelEvent = VHDWheelEvent
+  public PointerEvent: typeof VHDPointerEvent = VHDPointerEvent
+  public TouchEvent: typeof VHDTouchEvent = VHDTouchEvent
+  public Touch: typeof VHDTouch = VHDTouch
+  public AnimationEvent: typeof VHDAnimationEvent = VHDAnimationEvent
+  public TransitionEvent: typeof VHDTransitionEvent = VHDTransitionEvent
+  public ClipboardEvent: typeof VHDClipboardEvent = VHDClipboardEvent
+  public DragEvent: typeof VHDDragEvent = VHDDragEvent
+  public ErrorEvent: typeof VHDErrorEvent = VHDErrorEvent
+  public HashChangeEvent: typeof VHDHashChangeEvent = VHDHashChangeEvent
+  public PopStateEvent: typeof VHDPopStateEvent = VHDPopStateEvent
+  public ProgressEvent: typeof VHDProgressEvent = VHDProgressEvent
+  public MessageEvent: typeof VHDMessageEvent = VHDMessageEvent
+  public CloseEvent: typeof VHDCloseEvent = VHDCloseEvent
+  public StorageEvent: typeof VHDStorageEvent = VHDStorageEvent
+  public SubmitEvent: typeof VHDSubmitEvent = VHDSubmitEvent
+  public MediaQueryListEvent: typeof VHDMediaQueryListEvent = VHDMediaQueryListEvent
+  public CompositionEvent: typeof VHDCompositionEvent = VHDCompositionEvent
 
   // Additional Browser APIs
   public performance: Performance = new Performance()

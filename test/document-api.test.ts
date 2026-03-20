@@ -61,25 +61,24 @@ describe('Document: properties (readyState, compatMode, contentType, etc.)', () 
 // Document: createEvent
 // =============================================================================
 describe('Document: createEvent', () => {
-  test('createEvent returns VirtualEvent with type', () => {
+  test('createEvent returns uninitialized event', () => {
     const doc = new VirtualDocument()
     const event = doc.createEvent('Event')
     expect(event).toBeDefined()
-    expect(event.type).toBe('event')
+    expect(event).toBeInstanceOf(VirtualEvent)
   })
 
-  test('createEvent returns event with correct type', () => {
+  test('createEvent + initEvent sets type', () => {
     const doc = new VirtualDocument()
-    const event = doc.createEvent('click')
+    const event = doc.createEvent('Event')
+    event.initEvent('click', true, true)
     expect(event.type).toBe('click')
   })
 
-  test('createEvent with MouseEvents type', () => {
+  test('createEvent with MouseEvents returns MouseEvent-compatible instance', () => {
     const doc = new VirtualDocument()
     const event = doc.createEvent('MouseEvents')
-    // Should normalize the type
     expect(event).toBeInstanceOf(VirtualEvent)
-    expect(event.type).not.toBe('')
   })
 
   test('createEvent with empty string still works', () => {

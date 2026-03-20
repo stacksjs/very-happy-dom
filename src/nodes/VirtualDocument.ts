@@ -1,7 +1,9 @@
 import type { XPathResult } from '../xpath/XPathResult'
 import type { ICookie } from '../browser/CookieContainer'
 import { CookieContainer, CookieSameSiteEnum } from '../browser/CookieContainer'
+import { CustomEvent } from '../events/CustomEvent'
 import { VirtualEvent } from '../events/VirtualEvent'
+import { MouseEvent, KeyboardEvent, FocusEvent, UIEvent } from '../events/EventClasses'
 import type { History, HistoryState, Location, NodeKind, NodeType, VirtualNode } from './VirtualNode'
 import { parseHTML } from '../parsers/html-parser'
 import { NodeIterator, Range, Selection, TreeWalker, type NodeFilterInput } from '../traversal'
@@ -517,7 +519,26 @@ export class VirtualDocument extends VirtualNodeBase {
   }
 
   createEvent(type: string): VirtualEvent {
-    return new VirtualEvent(type.replace(/s?$/i, '').toLowerCase())
+    // The createEvent factory - returns the appropriate event subclass
+    // This is a deprecated API but still widely used in tests
+    const normalizedType = type.toLowerCase()
+    switch (normalizedType) {
+      case 'customevent':
+      case 'customevents':
+        return new CustomEvent('')
+      case 'mouseevent':
+      case 'mouseevents':
+        return new MouseEvent('')
+      case 'keyboardevent':
+        return new KeyboardEvent('')
+      case 'focusevent':
+        return new FocusEvent('')
+      case 'uievent':
+      case 'uievents':
+        return new UIEvent('')
+      default:
+        return new VirtualEvent('')
+    }
   }
 
   createAttribute(name: string): { name: string, value: string, specified: boolean } {
