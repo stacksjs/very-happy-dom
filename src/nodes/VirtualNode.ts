@@ -370,6 +370,25 @@ export abstract class VirtualNodeBase extends VirtualEventTarget implements Virt
     }
   }
 
+  replaceChildren(...nodes: Array<VirtualNode | string>): void {
+    const parent = this as any
+    if (typeof parent.removeChild !== 'function' || typeof parent.appendChild !== 'function') {
+      throw new Error('This node type does not support replaceChildren()')
+    }
+
+    while (this.childNodes.length > 0) {
+      parent.removeChild(this.childNodes[this.childNodes.length - 1])
+    }
+    for (const node of nodes) {
+      if (typeof node === 'string') {
+        parent.appendChild(createTextNodeForContext(this, node))
+      }
+      else {
+        parent.appendChild(node)
+      }
+    }
+  }
+
   isSameNode(other: VirtualNode | null): boolean {
     return this === other
   }

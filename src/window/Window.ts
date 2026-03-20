@@ -356,6 +356,7 @@ export class Window extends VirtualEventTarget {
   public get top(): this { return this }
   public get frames(): this { return this }
   public frameElement: null = null
+  public opener: Window | null = null
 
   // Window state
   public name: string = ''
@@ -701,6 +702,10 @@ export class Window extends VirtualEventTarget {
   moveBy(_dx: number, _dy: number): void {}
 
   scrollTo(_x?: number | ScrollToOptions, _y?: number): void {}
+
+  scroll(x?: number | ScrollToOptions, y?: number): void {
+    this.scrollTo(x, y)
+  }
 
   scrollBy(_x?: number | ScrollToOptions, _y?: number): void {}
 

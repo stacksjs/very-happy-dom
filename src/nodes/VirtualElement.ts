@@ -1112,6 +1112,48 @@ export class VirtualElement extends VirtualNodeBase {
     }
   }
 
+  get draggable(): boolean {
+    return this.getAttribute('draggable') === 'true'
+  }
+
+  set draggable(value: boolean) {
+    this.setAttribute('draggable', String(value))
+  }
+
+  get spellcheck(): boolean {
+    const val = this.getAttribute('spellcheck')
+    return val !== 'false'
+  }
+
+  set spellcheck(value: boolean) {
+    this.setAttribute('spellcheck', String(value))
+  }
+
+  get translate(): boolean {
+    const val = this.getAttribute('translate')
+    return val !== 'no'
+  }
+
+  set translate(value: boolean) {
+    this.setAttribute('translate', value ? 'yes' : 'no')
+  }
+
+  get accessKey(): string {
+    return this.getAttribute('accesskey') || ''
+  }
+
+  set accessKey(value: string) {
+    this.setAttribute('accesskey', value)
+  }
+
+  get autocapitalize(): string {
+    return this.getAttribute('autocapitalize') || ''
+  }
+
+  set autocapitalize(value: string) {
+    this.setAttribute('autocapitalize', value)
+  }
+
   get isContentEditable(): boolean {
     const value = this.contentEditable
     if (value === 'true') return true

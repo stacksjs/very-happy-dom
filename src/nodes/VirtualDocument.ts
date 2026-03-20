@@ -881,6 +881,34 @@ export class VirtualDocument extends VirtualNodeBase {
 
     this._cookieContainer.addCookies([cookie])
   }
+
+  getElementsByTagNameNS(_namespace: string | null, tagName: string): VirtualElement[] {
+    // For now, delegate to getElementsByTagName (namespace filtering is rare in tests)
+    return this.getElementsByTagName(tagName)
+  }
+
+  createAttributeNS(namespace: string | null, qualifiedName: string): { name: string, value: string, namespaceURI: string | null, specified: boolean } {
+    return {
+      name: qualifiedName.toLowerCase(),
+      value: '',
+      namespaceURI: namespace,
+      specified: true,
+    }
+  }
+
+  createProcessingInstruction(target: string, data: string): VirtualNode {
+    // Return a minimal processing instruction node
+    const node = new VirtualCommentNode(`?${target} ${data}?`)
+    return node as any
+  }
+
+  elementFromPoint(_x: number, _y: number): VirtualElement | null {
+    return this.body
+  }
+
+  elementsFromPoint(_x: number, _y: number): VirtualElement[] {
+    return this.body ? [this.body] : []
+  }
 }
 
 /**

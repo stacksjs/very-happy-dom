@@ -4,69 +4,195 @@ import { VirtualElement } from './VirtualElement'
 // very-happy-dom uses a single VirtualElement class internally, but user code may rely on
 // `instanceof window.HTMLDivElement` or `new window.HTMLInputElement()`, so we expose these.
 
-export class HTMLAnchorElement extends VirtualElement {}
-export class HTMLAreaElement extends VirtualElement {}
-export class HTMLAudioElement extends VirtualElement {}
-export class HTMLBaseElement extends VirtualElement {}
-export class HTMLBodyElement extends VirtualElement {}
-export class HTMLBRElement extends VirtualElement {}
-export class HTMLButtonElement extends VirtualElement {}
-export class HTMLDataElement extends VirtualElement {}
-export class HTMLDataListElement extends VirtualElement {}
-export class HTMLDetailsElement extends VirtualElement {}
-export class HTMLDialogElement extends VirtualElement {}
-export class HTMLDivElement extends VirtualElement {}
-export class HTMLDListElement extends VirtualElement {}
-export class HTMLEmbedElement extends VirtualElement {}
-export class HTMLFieldSetElement extends VirtualElement {}
-export class HTMLFormElement extends VirtualElement {}
-export class HTMLHeadElement extends VirtualElement {}
-export class HTMLHeadingElement extends VirtualElement {}
-export class HTMLHRElement extends VirtualElement {}
-export class HTMLHtmlElement extends VirtualElement {}
-export class HTMLIFrameElement extends VirtualElement {}
-export class HTMLImageElement extends VirtualElement {}
-export class HTMLInputElement extends VirtualElement {}
-export class HTMLLabelElement extends VirtualElement {}
-export class HTMLLegendElement extends VirtualElement {}
-export class HTMLLIElement extends VirtualElement {}
-export class HTMLLinkElement extends VirtualElement {}
-export class HTMLMapElement extends VirtualElement {}
-export class HTMLMediaElement extends VirtualElement {}
-export class HTMLMenuElement extends VirtualElement {}
-export class HTMLMetaElement extends VirtualElement {}
-export class HTMLMeterElement extends VirtualElement {}
-export class HTMLModElement extends VirtualElement {}
-export class HTMLObjectElement extends VirtualElement {}
-export class HTMLOListElement extends VirtualElement {}
-export class HTMLOptGroupElement extends VirtualElement {}
-export class HTMLOptionElement extends VirtualElement {}
-export class HTMLOutputElement extends VirtualElement {}
-export class HTMLParagraphElement extends VirtualElement {}
-export class HTMLParamElement extends VirtualElement {}
-export class HTMLPictureElement extends VirtualElement {}
-export class HTMLPreElement extends VirtualElement {}
-export class HTMLProgressElement extends VirtualElement {}
-export class HTMLQuoteElement extends VirtualElement {}
-export class HTMLScriptElement extends VirtualElement {}
-export class HTMLSelectElement extends VirtualElement {}
-export class HTMLSlotElement extends VirtualElement {}
-export class HTMLSourceElement extends VirtualElement {}
-export class HTMLSpanElement extends VirtualElement {}
-export class HTMLStyleElement extends VirtualElement {}
-export class HTMLTableCaptionElement extends VirtualElement {}
-export class HTMLTableCellElement extends VirtualElement {}
-export class HTMLTableColElement extends VirtualElement {}
-export class HTMLTableElement extends VirtualElement {}
-export class HTMLTableRowElement extends VirtualElement {}
-export class HTMLTableSectionElement extends VirtualElement {}
-export class HTMLTextAreaElement extends VirtualElement {}
-export class HTMLTimeElement extends VirtualElement {}
-export class HTMLTitleElement extends VirtualElement {}
-export class HTMLTrackElement extends VirtualElement {}
-export class HTMLUListElement extends VirtualElement {}
-export class HTMLUnknownElement extends VirtualElement {}
-export class HTMLVideoElement extends VirtualElement {}
+export class HTMLAnchorElement extends VirtualElement {
+  constructor() { super('a') }
+}
+export class HTMLAreaElement extends VirtualElement {
+  constructor() { super('area') }
+}
+export class HTMLAudioElement extends VirtualElement {
+  constructor() { super('audio') }
+}
+export class HTMLBaseElement extends VirtualElement {
+  constructor() { super('base') }
+}
+export class HTMLBodyElement extends VirtualElement {
+  constructor() { super('body') }
+}
+export class HTMLBRElement extends VirtualElement {
+  constructor() { super('br') }
+}
+export class HTMLButtonElement extends VirtualElement {
+  constructor() { super('button') }
+}
+export class HTMLDataElement extends VirtualElement {
+  constructor() { super('data') }
+}
+export class HTMLDataListElement extends VirtualElement {
+  constructor() { super('datalist') }
+}
+export class HTMLDetailsElement extends VirtualElement {
+  constructor() { super('details') }
+}
+export class HTMLDialogElement extends VirtualElement {
+  constructor() { super('dialog') }
+}
+export class HTMLDivElement extends VirtualElement {
+  constructor() { super('div') }
+}
+export class HTMLDListElement extends VirtualElement {
+  constructor() { super('dl') }
+}
+export class HTMLEmbedElement extends VirtualElement {
+  constructor() { super('embed') }
+}
+export class HTMLFieldSetElement extends VirtualElement {
+  constructor() { super('fieldset') }
+}
+export class HTMLFormElement extends VirtualElement {
+  constructor() { super('form') }
+}
+export class HTMLHeadElement extends VirtualElement {
+  constructor() { super('head') }
+}
+export class HTMLHeadingElement extends VirtualElement {
+  constructor() { super('h1') }
+}
+export class HTMLHRElement extends VirtualElement {
+  constructor() { super('hr') }
+}
+export class HTMLHtmlElement extends VirtualElement {
+  constructor() { super('html') }
+}
+export class HTMLIFrameElement extends VirtualElement {
+  constructor() { super('iframe') }
+}
+export class HTMLImageElement extends VirtualElement {
+  constructor() { super('img') }
+}
+export class HTMLInputElement extends VirtualElement {
+  constructor() { super('input') }
+}
+export class HTMLLabelElement extends VirtualElement {
+  constructor() { super('label') }
+}
+export class HTMLLegendElement extends VirtualElement {
+  constructor() { super('legend') }
+}
+export class HTMLLIElement extends VirtualElement {
+  constructor() { super('li') }
+}
+export class HTMLLinkElement extends VirtualElement {
+  constructor() { super('link') }
+}
+export class HTMLMapElement extends VirtualElement {
+  constructor() { super('map') }
+}
+export class HTMLMediaElement extends VirtualElement {
+  constructor() { super('video') }
+}
+export class HTMLMenuElement extends VirtualElement {
+  constructor() { super('menu') }
+}
+export class HTMLMetaElement extends VirtualElement {
+  constructor() { super('meta') }
+}
+export class HTMLMeterElement extends VirtualElement {
+  constructor() { super('meter') }
+}
+export class HTMLModElement extends VirtualElement {
+  constructor() { super('ins') }
+}
+export class HTMLObjectElement extends VirtualElement {
+  constructor() { super('object') }
+}
+export class HTMLOListElement extends VirtualElement {
+  constructor() { super('ol') }
+}
+export class HTMLOptGroupElement extends VirtualElement {
+  constructor() { super('optgroup') }
+}
+export class HTMLOptionElement extends VirtualElement {
+  constructor() { super('option') }
+}
+export class HTMLOutputElement extends VirtualElement {
+  constructor() { super('output') }
+}
+export class HTMLParagraphElement extends VirtualElement {
+  constructor() { super('p') }
+}
+export class HTMLParamElement extends VirtualElement {
+  constructor() { super('param') }
+}
+export class HTMLPictureElement extends VirtualElement {
+  constructor() { super('picture') }
+}
+export class HTMLPreElement extends VirtualElement {
+  constructor() { super('pre') }
+}
+export class HTMLProgressElement extends VirtualElement {
+  constructor() { super('progress') }
+}
+export class HTMLQuoteElement extends VirtualElement {
+  constructor() { super('blockquote') }
+}
+export class HTMLScriptElement extends VirtualElement {
+  constructor() { super('script') }
+}
+export class HTMLSelectElement extends VirtualElement {
+  constructor() { super('select') }
+}
+export class HTMLSlotElement extends VirtualElement {
+  constructor() { super('slot') }
+}
+export class HTMLSourceElement extends VirtualElement {
+  constructor() { super('source') }
+}
+export class HTMLSpanElement extends VirtualElement {
+  constructor() { super('span') }
+}
+export class HTMLStyleElement extends VirtualElement {
+  constructor() { super('style') }
+}
+export class HTMLTableCaptionElement extends VirtualElement {
+  constructor() { super('caption') }
+}
+export class HTMLTableCellElement extends VirtualElement {
+  constructor() { super('td') }
+}
+export class HTMLTableColElement extends VirtualElement {
+  constructor() { super('col') }
+}
+export class HTMLTableElement extends VirtualElement {
+  constructor() { super('table') }
+}
+export class HTMLTableRowElement extends VirtualElement {
+  constructor() { super('tr') }
+}
+export class HTMLTableSectionElement extends VirtualElement {
+  constructor() { super('tbody') }
+}
+export class HTMLTextAreaElement extends VirtualElement {
+  constructor() { super('textarea') }
+}
+export class HTMLTimeElement extends VirtualElement {
+  constructor() { super('time') }
+}
+export class HTMLTitleElement extends VirtualElement {
+  constructor() { super('title') }
+}
+export class HTMLTrackElement extends VirtualElement {
+  constructor() { super('track') }
+}
+export class HTMLUListElement extends VirtualElement {
+  constructor() { super('ul') }
+}
+export class HTMLUnknownElement extends VirtualElement {
+  constructor() { super('unknown') }
+}
+export class HTMLVideoElement extends VirtualElement {
+  constructor() { super('video') }
+}
 
 // Convenience constructors (match browser globals)
 
