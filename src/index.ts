@@ -315,6 +315,7 @@ export { CustomElementRegistry, HTMLElement } from './webcomponents/CustomElemen
 export { ShadowRoot, type ShadowRootInit } from './webcomponents/ShadowRoot'
 export { DetachedWindowAPI } from './window/DetachedWindowAPI'
 
+export { GlobalRegistrator } from './window/GlobalRegistrator'
 export { GlobalWindow } from './window/GlobalWindow'
 export type { IBrowserSettings, IOptionalBrowserSettings, WindowOptions } from './window/Window'
 // Export Browser API classes
