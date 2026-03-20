@@ -44,6 +44,9 @@ function getTemplateContent(node: VirtualNode): VirtualNode | null {
 }
 
 function clearRemovalTraversalHints(node: VirtualNode): void {
+  if (!(node as any)._lastTraversalParent && !(node as any)._lastTraversalNextSibling) {
+    return
+  }
   /* eslint-disable max-statements-per-line */
   ;(node as any)._lastTraversalParent = null
   ;(node as any)._lastTraversalNextSibling = null
@@ -54,6 +57,10 @@ function clearRemovalTraversalHints(node: VirtualNode): void {
 }
 
 export function setOwnerDocumentRecursive(node: VirtualNode, ownerDocument: any): void {
+  if (node.ownerDocument === ownerDocument && node.nodeType !== DOCUMENT_NODE) {
+    return
+  }
+
   const previousOwnerDocument = (node as any).ownerDocument ?? null
   if (node.nodeType !== DOCUMENT_NODE) {
     // eslint-disable-next-line max-statements-per-line
@@ -120,17 +127,22 @@ function normalizeInsertedNodes(parent: VirtualParentNode, node: VirtualNode): V
   if (node.nodeType === DOCUMENT_FRAGMENT_NODE) {
     const fragmentChildren = [...node.childNodes]
     node.childNodes = []
+    const doc = getOwnerDocumentForChild(parent)
     for (const child of fragmentChildren) {
-      detachNode(child)
-      clearRemovalTraversalHints(child)
+      if (child.parentNode) {
+        detachNode(child)
+        clearRemovalTraversalHints(child)
+      }
       child.parentNode = parent
-      setOwnerDocumentRecursive(child, getOwnerDocumentForChild(parent))
+      setOwnerDocumentRecursive(child, doc)
     }
     return fragmentChildren
   }
 
-  detachNode(node)
-  clearRemovalTraversalHints(node)
+  if (node.parentNode) {
+    detachNode(node)
+    clearRemovalTraversalHints(node)
+  }
   node.parentNode = parent
   setOwnerDocumentRecursive(node, getOwnerDocumentForChild(parent))
   return [node]
@@ -139,7 +151,12 @@ function normalizeInsertedNodes(parent: VirtualParentNode, node: VirtualNode): V
 export function appendNode(parent: VirtualParentNode, node: VirtualNode): VirtualNode {
   const normalized = normalizeInsertedNodes(parent, node)
   const previousSibling = parent.childNodes.length > 0 ? parent.childNodes[parent.childNodes.length - 1] : null
-  parent.childNodes.push(...normalized)
+  if (normalized.length === 1) {
+    parent.childNodes.push(normalized[0])
+  }
+  else {
+    parent.childNodes.push(...normalized)
+  }
   for (const inserted of normalized) {
     if ((inserted as any).isConnected === true) {
       invokeConnectedCallback(inserted)

@@ -164,6 +164,7 @@ export class MutationObserver {
   }
 
   static _queueMutationRecord(record: MutationRecord): void {
+    if (MutationObserver._observers.size === 0) return
     for (const observer of MutationObserver._observers) {
       for (const [observedTarget, options] of observer._observations) {
         const withinScope = isObservedWithinScope(record.target, observedTarget, options.subtree === true, observer._transientRoots)

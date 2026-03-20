@@ -30,8 +30,10 @@ export class VirtualElement extends VirtualNodeBase {
   namespaceURI: string | null = 'http://www.w3.org/1999/xhtml'
   private _shadowRoot: ShadowRoot | null = null
   private _customValidity: string = ''
-  private _internalStyles: Map<string, string> = new Map<string, string>()
-  private _stylePriorities: Map<string, string> = new Map<string, string>()
+  private _internalStyles: Map<string, string> | null = null
+  private _stylePriorities: Map<string, string> | null = null
+  private _styleProxy: any = null
+  private _datasetProxy: any = null
   private _valueState: string | null = null
   private _valueDirty = false
   private _checkedState: boolean | null = null
@@ -106,8 +108,8 @@ export class VirtualElement extends VirtualNodeBase {
     this.attributes.delete(normalizedName)
 
     if (normalizedName === 'style') {
-      this._internalStyles.clear()
-      this._stylePriorities.clear()
+      this._internalStyles = null
+      this._stylePriorities = null
     }
 
     invokeAttributeChangedCallback(this, normalizedName, oldValue, null)
@@ -378,18 +380,36 @@ export class VirtualElement extends VirtualNodeBase {
   }
 
   set textContent(value: string) {
-    while (this.childNodes.length > 0) {
-      this.removeChild(this.childNodes[0])
+    for (const child of this.childNodes) {
+      child.parentNode = null
     }
+    this.childNodes.length = 0
+
     if (value) {
       const textNode = new VirtualTextNode(value)
-      this.appendChild(textNode)
+      textNode.parentNode = this
+      textNode.ownerDocument = this.ownerDocument
+      this.childNodes.push(textNode)
     }
+
+    MutationObserver._queueMutationRecord({
+      type: 'childList',
+      target: this,
+      addedNodes: value ? [this.childNodes[0]] : [],
+      removedNodes: [],
+      previousSibling: null,
+      nextSibling: null,
+      attributeName: null,
+      attributeNamespace: null,
+      oldValue: null,
+    })
   }
 
   private _setStylesFromAttribute(styleText: string): void {
-    this._internalStyles.clear()
-    this._stylePriorities.clear()
+    const styles = this._internalStyles ?? (this._internalStyles = new Map())
+    const priorities = this._stylePriorities ?? (this._stylePriorities = new Map())
+    styles.clear()
+    priorities.clear()
 
     for (const declaration of styleText.split(';')) {
       const trimmed = declaration.trim()
@@ -408,9 +428,9 @@ export class VirtualElement extends VirtualNodeBase {
         priority = 'important'
       }
 
-      this._internalStyles.set(property, value)
+      styles.set(property, value)
       if (priority) {
-        this._stylePriorities.set(property, priority)
+        priorities.set(property, priority)
       }
     }
   }
@@ -631,16 +651,18 @@ export class VirtualElement extends VirtualNodeBase {
 
   // Style property with Proxy for dynamic access
   get style(): CSSStyleDeclaration & { [key: string]: any } {
+    if (this._styleProxy) return this._styleProxy
+
     // eslint-disable-next-line ts/no-this-alias
     const element = this
 
-    return new Proxy(
+    this._styleProxy = new Proxy(
       {
         getPropertyValue(property: string): string {
-          return element._internalStyles.get(property) || ''
+          return element._internalStyles?.get(property) || ''
         },
         getPropertyPriority(property: string): string {
-          return element._stylePriorities.get(property) || ''
+          return element._stylePriorities?.get(property) || ''
         },
         setProperty(property: string, value: string | number, priority = ''): void {
           const stringValue = `${value}`
@@ -649,40 +671,44 @@ export class VirtualElement extends VirtualNodeBase {
             return
           }
 
-          element._internalStyles.set(property, stringValue)
+          const styles = element._internalStyles ?? (element._internalStyles = new Map())
+          styles.set(property, stringValue)
           if (priority) {
-            element._stylePriorities.set(property, priority)
+            const priorities = element._stylePriorities ?? (element._stylePriorities = new Map())
+            priorities.set(property, priority)
           }
           else {
-            element._stylePriorities.delete(property)
+            element._stylePriorities?.delete(property)
           }
           element._updateStyleAttribute()
         },
         removeProperty(property: string): string {
-          const previous = element._internalStyles.get(property) || ''
-          element._internalStyles.delete(property)
-          element._stylePriorities.delete(property)
+          const previous = element._internalStyles?.get(property) || ''
+          element._internalStyles?.delete(property)
+          element._stylePriorities?.delete(property)
           element._updateStyleAttribute()
           return previous
         },
         item(index: number): string {
+          if (!element._internalStyles) return ''
           const keys = Array.from(element._internalStyles.keys())
           return keys[index] || ''
         },
         get length(): number {
-          return element._internalStyles.size
+          return element._internalStyles?.size ?? 0
         },
         get cssText(): string {
+          if (!element._internalStyles) return ''
           return Array.from(element._internalStyles.entries())
             .map(([prop, value]) => {
-              const priority = element._stylePriorities.get(prop)
+              const priority = element._stylePriorities?.get(prop)
               return priority ? `${prop}: ${value} !${priority}` : `${prop}: ${value}`
             })
             .join('; ')
         },
         set cssText(value: string) {
-          element._internalStyles.clear()
-          element._stylePriorities.clear()
+          element._internalStyles = null
+          element._stylePriorities = null
           if (value) {
             element._setStylesFromAttribute(value)
           }
@@ -697,8 +723,7 @@ export class VirtualElement extends VirtualNodeBase {
           }
           // Convert camelCase to kebab-case
           const kebabProp = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)
-          const value = element._internalStyles.get(kebabProp)
-          return value
+          return element._internalStyles?.get(kebabProp)
         },
         set(target, prop: string, value: string | number) {
           if (prop === 'cssText') {
@@ -707,19 +732,27 @@ export class VirtualElement extends VirtualNodeBase {
           }
           // Convert camelCase to kebab-case
           const kebabProp = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)
-          element._internalStyles.set(kebabProp, `${value}`)
-          element._stylePriorities.delete(kebabProp)
+          const styles = element._internalStyles ?? (element._internalStyles = new Map())
+          styles.set(kebabProp, `${value}`)
+          element._stylePriorities?.delete(kebabProp)
           element._updateStyleAttribute()
           return true
         },
       },
     )
+
+    return this._styleProxy
   }
 
   private _updateStyleAttribute(): void {
+    if (!this._internalStyles || this._internalStyles.size === 0) {
+      this.removeAttribute('style')
+      return
+    }
+
     const styleString = Array.from(this._internalStyles.entries())
       .map(([prop, value]) => {
-        const priority = this._stylePriorities.get(prop)
+        const priority = this._stylePriorities?.get(prop)
         return priority ? `${prop}: ${value} !${priority}` : `${prop}: ${value}`
       })
       .join('; ')
@@ -734,10 +767,12 @@ export class VirtualElement extends VirtualNodeBase {
 
   // Dataset property for data-* attributes
   get dataset(): { [key: string]: string } {
+    if (this._datasetProxy) return this._datasetProxy
+
     // eslint-disable-next-line ts/no-this-alias
     const self = this
 
-    return new Proxy({}, {
+    this._datasetProxy = new Proxy({}, {
       get(_target, prop: string): string {
         // Convert camelCase to kebab-case
         const kebabProp = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)
@@ -783,6 +818,8 @@ export class VirtualElement extends VirtualNodeBase {
         return undefined
       },
     })
+
+    return this._datasetProxy
   }
 
   private _isInputElement(): boolean {
