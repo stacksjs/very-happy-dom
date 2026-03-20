@@ -268,7 +268,7 @@ const blob = await canvas.toBlob()
 | Build&nbsp;data&nbsp;table&nbsp;(50x5) | **519.30&nbsp;µs** | 754.42&nbsp;µs | 2.89&nbsp;ms | 1.5x |
 | Update&nbsp;list&nbsp;items&nbsp;(100) | **454.98&nbsp;µs** | n/a | 2.41&nbsp;ms | 5.3x |
 
-> **Note:** "Faster by" compares very-happy-dom to the next-fastest competitor. happy-dom's querySelector is incompatible with Bun (marked n/a). Benchmarks run on Apple M3 Pro with Bun 1.3.11. Run them yourself:
+> **Note:** "Faster by" compares very-happy-dom to the next-fastest result. Benchmarks run on Apple M3 Pro with Bun 1.3.11. Run them yourself:
 
 ```bash
 bun run bench
