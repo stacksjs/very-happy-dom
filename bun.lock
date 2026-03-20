@@ -4,13 +4,11 @@
   "workspaces": {
     "": {
       "name": "very-happy-dom",
-      "dependencies": {
-        "mitata": "^1.0.34",
-      },
       "devDependencies": {
         "@stacksjs/bunpress": "^0.1.4",
         "better-dx": "^0.2.7",
         "bunfig": "^0.15.6",
+        "mitata": "^1.0.34",
       },
     },
   },
