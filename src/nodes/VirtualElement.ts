@@ -1,4 +1,5 @@
 import type { ShadowRootInit } from '../webcomponents/ShadowRoot'
+import { DOMRect } from '../dom/DOMClasses'
 import { VirtualEvent } from '../events/VirtualEvent'
 import { parseHTML } from '../parsers/html-parser'
 import { escapeHtmlAttribute, escapeHtmlText } from '../parsers/html-utils'
@@ -2122,9 +2123,8 @@ export class VirtualElement extends VirtualNodeBase {
     this._scrollLeft = value
   }
 
-  getBoundingClientRect(): { x: number, y: number, width: number, height: number, top: number, right: number, bottom: number, left: number, toJSON: () => any } {
-    const rect = { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0, toJSON() { return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 } } }
-    return rect
+  getBoundingClientRect(): DOMRect {
+    return new DOMRect()
   }
 
   // Visibility check - walks ancestor chain

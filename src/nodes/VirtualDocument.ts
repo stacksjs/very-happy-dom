@@ -1,4 +1,5 @@
 import type { XPathResult } from '../xpath/XPathResult'
+import type { CSSStyleSheet } from '../css/CSSOM'
 import type { ICookie } from '../browser/CookieContainer'
 import { CookieContainer, CookieSameSiteEnum } from '../browser/CookieContainer'
 import { CustomEvent } from '../events/CustomEvent'
@@ -119,6 +120,20 @@ export class VirtualDocument extends VirtualNodeBase {
   }
 
   currentScript: VirtualElement | null = null
+
+  private _adoptedStyleSheets: CSSStyleSheet[] = []
+
+  get styleSheets(): CSSStyleSheet[] {
+    return []
+  }
+
+  get adoptedStyleSheets(): CSSStyleSheet[] {
+    return this._adoptedStyleSheets
+  }
+
+  set adoptedStyleSheets(value: CSSStyleSheet[]) {
+    this._adoptedStyleSheets = value
+  }
 
   implementation = {
     createHTMLDocument: (title?: string): VirtualDocument => {

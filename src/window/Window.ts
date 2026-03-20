@@ -1,5 +1,41 @@
 import type { Storage } from '../storage/Storage'
 import type { DetachedWindowAPI } from './DetachedWindowAPI'
+import {
+  Attr as VHDAttr,
+  DOMMatrix as VHDDOMMatrix,
+  DOMMatrixReadOnly as VHDDOMMatrixReadOnly,
+  DOMPoint as VHDDOMPoint,
+  DOMPointReadOnly as VHDDOMPointReadOnly,
+  DOMRect as VHDDOMRect,
+  DOMRectReadOnly as VHDDOMRectReadOnly,
+  DocumentType as VHDDocumentType,
+  HTMLCollection as VHDHTMLCollection,
+  MediaQueryList as VHDMediaQueryList,
+  NamedNodeMap as VHDNamedNodeMap,
+  NodeList as VHDNodeList,
+  Screen as VHDScreen,
+  ValidityState as VHDValidityState,
+  XMLSerializer as VHDXMLSerializer,
+} from '../dom/DOMClasses'
+import {
+  CSS as VHD_CSS,
+  CSSConditionRule as VHDCSSConditionRule,
+  CSSContainerRule as VHDCSSContainerRule,
+  CSSFontFaceRule as VHDCSSFontFaceRule,
+  CSSGroupingRule as VHDCSSGroupingRule,
+  CSSKeyframeRule as VHDCSSKeyframeRule,
+  CSSKeyframesRule as VHDCSSKeyframesRule,
+  CSSMediaRule as VHDCSSMediaRule,
+  CSSRule as VHDCSSRule,
+  CSSScopeRule as VHDCSSScopeRule,
+  CSSStyleDeclaration as VHDCSSStyleDeclaration,
+  CSSStyleRule as VHDCSSStyleRule,
+  CSSStyleSheet as VHDCSSStyleSheet,
+  CSSSupportsRule as VHDCSSSupportsRule,
+  MediaList as VHDMediaList,
+  StylePropertyMap as VHDStylePropertyMap,
+  StylePropertyMapReadOnly as VHDStylePropertyMapReadOnly,
+} from '../css/CSSOM'
 import { DataTransfer, Notification, Performance } from '../apis/BrowserAPIs'
 import { CanvasRenderingContext2D, HTMLCanvasElement } from '../apis/Canvas'
 import { Navigator as VeryHappyNavigator } from '../apis/Clipboard'
@@ -118,6 +154,70 @@ import {
   HTMLVideoElement,
   Image,
 } from '../nodes/HTMLElementClasses'
+import {
+  SVGAngle,
+  SVGAnimationElement,
+  SVGCircleElement,
+  SVGClipPathElement,
+  SVGDefsElement,
+  SVGDescElement,
+  SVGEllipseElement,
+  SVGFEBlendElement,
+  SVGFEColorMatrixElement,
+  SVGFEComponentTransferElement,
+  SVGFECompositeElement,
+  SVGFEConvolveMatrixElement,
+  SVGFEDiffuseLightingElement,
+  SVGFEDisplacementMapElement,
+  SVGFEDistantLightElement,
+  SVGFEFloodElement,
+  SVGFEGaussianBlurElement,
+  SVGFEImageElement,
+  SVGFEMergeElement,
+  SVGFEMergeNodeElement,
+  SVGFEMorphologyElement,
+  SVGFEOffsetElement,
+  SVGFEPointLightElement,
+  SVGFESpecularLightingElement,
+  SVGFESpotLightElement,
+  SVGFETileElement,
+  SVGFETurbulenceElement,
+  SVGFilterElement,
+  SVGForeignObjectElement,
+  SVGGElement,
+  SVGGeometryElement,
+  SVGGraphicsElement,
+  SVGImageElement as VHDSVGImageElement,
+  SVGLength,
+  SVGLineElement,
+  SVGLinearGradientElement,
+  SVGMarkerElement,
+  SVGMaskElement,
+  SVGMatrix,
+  SVGMetadataElement,
+  SVGNumber,
+  SVGPathElement,
+  SVGPatternElement,
+  SVGPoint,
+  SVGPolygonElement,
+  SVGPolylineElement,
+  SVGRadialGradientElement,
+  SVGRect,
+  SVGRectElement,
+  SVGSVGElement,
+  SVGScriptElement,
+  SVGStopElement,
+  SVGStyleElement,
+  SVGSwitchElement,
+  SVGSymbolElement,
+  SVGTSpanElement,
+  SVGTextElement,
+  SVGTextPathElement,
+  SVGTitleElement,
+  SVGTransform,
+  SVGUseElement,
+  SVGViewElement,
+} from '../nodes/SVGElementClasses'
 
 export interface WindowOptions {
   url?: string
@@ -279,6 +379,116 @@ export class Window extends VirtualEventTarget {
   public DocumentFragment: typeof VirtualDocumentFragment = VirtualDocumentFragment
   public Event: typeof VirtualEvent = VirtualEvent
   public SVGElement: typeof VirtualSVGElement = VirtualSVGElement
+
+  // SVG Element subclass constructors
+  public SVGSVGElement: typeof SVGSVGElement = SVGSVGElement
+  public SVGGraphicsElement: typeof SVGGraphicsElement = SVGGraphicsElement
+  public SVGGeometryElement: typeof SVGGeometryElement = SVGGeometryElement
+  public SVGAnimationElement: typeof SVGAnimationElement = SVGAnimationElement
+  public SVGCircleElement: typeof SVGCircleElement = SVGCircleElement
+  public SVGClipPathElement: typeof SVGClipPathElement = SVGClipPathElement
+  public SVGDefsElement: typeof SVGDefsElement = SVGDefsElement
+  public SVGDescElement: typeof SVGDescElement = SVGDescElement
+  public SVGEllipseElement: typeof SVGEllipseElement = SVGEllipseElement
+  public SVGFilterElement: typeof SVGFilterElement = SVGFilterElement
+  public SVGForeignObjectElement: typeof SVGForeignObjectElement = SVGForeignObjectElement
+  public SVGGElement: typeof SVGGElement = SVGGElement
+  public SVGImageElement: typeof VHDSVGImageElement = VHDSVGImageElement
+  public SVGLineElement: typeof SVGLineElement = SVGLineElement
+  public SVGLinearGradientElement: typeof SVGLinearGradientElement = SVGLinearGradientElement
+  public SVGMarkerElement: typeof SVGMarkerElement = SVGMarkerElement
+  public SVGMaskElement: typeof SVGMaskElement = SVGMaskElement
+  public SVGMetadataElement: typeof SVGMetadataElement = SVGMetadataElement
+  public SVGPathElement: typeof SVGPathElement = SVGPathElement
+  public SVGPatternElement: typeof SVGPatternElement = SVGPatternElement
+  public SVGPolygonElement: typeof SVGPolygonElement = SVGPolygonElement
+  public SVGPolylineElement: typeof SVGPolylineElement = SVGPolylineElement
+  public SVGRadialGradientElement: typeof SVGRadialGradientElement = SVGRadialGradientElement
+  public SVGRectElement: typeof SVGRectElement = SVGRectElement
+  public SVGScriptElement: typeof SVGScriptElement = SVGScriptElement
+  public SVGStopElement: typeof SVGStopElement = SVGStopElement
+  public SVGStyleElement: typeof SVGStyleElement = SVGStyleElement
+  public SVGSwitchElement: typeof SVGSwitchElement = SVGSwitchElement
+  public SVGSymbolElement: typeof SVGSymbolElement = SVGSymbolElement
+  public SVGTextElement: typeof SVGTextElement = SVGTextElement
+  public SVGTextPathElement: typeof SVGTextPathElement = SVGTextPathElement
+  public SVGTitleElement: typeof SVGTitleElement = SVGTitleElement
+  public SVGTSpanElement: typeof SVGTSpanElement = SVGTSpanElement
+  public SVGUseElement: typeof SVGUseElement = SVGUseElement
+  public SVGViewElement: typeof SVGViewElement = SVGViewElement
+  public SVGFEBlendElement: typeof SVGFEBlendElement = SVGFEBlendElement
+  public SVGFEColorMatrixElement: typeof SVGFEColorMatrixElement = SVGFEColorMatrixElement
+  public SVGFEComponentTransferElement: typeof SVGFEComponentTransferElement = SVGFEComponentTransferElement
+  public SVGFECompositeElement: typeof SVGFECompositeElement = SVGFECompositeElement
+  public SVGFEConvolveMatrixElement: typeof SVGFEConvolveMatrixElement = SVGFEConvolveMatrixElement
+  public SVGFEDiffuseLightingElement: typeof SVGFEDiffuseLightingElement = SVGFEDiffuseLightingElement
+  public SVGFEDisplacementMapElement: typeof SVGFEDisplacementMapElement = SVGFEDisplacementMapElement
+  public SVGFEDistantLightElement: typeof SVGFEDistantLightElement = SVGFEDistantLightElement
+  public SVGFEFloodElement: typeof SVGFEFloodElement = SVGFEFloodElement
+  public SVGFEGaussianBlurElement: typeof SVGFEGaussianBlurElement = SVGFEGaussianBlurElement
+  public SVGFEImageElement: typeof SVGFEImageElement = SVGFEImageElement
+  public SVGFEMergeElement: typeof SVGFEMergeElement = SVGFEMergeElement
+  public SVGFEMergeNodeElement: typeof SVGFEMergeNodeElement = SVGFEMergeNodeElement
+  public SVGFEMorphologyElement: typeof SVGFEMorphologyElement = SVGFEMorphologyElement
+  public SVGFEOffsetElement: typeof SVGFEOffsetElement = SVGFEOffsetElement
+  public SVGFEPointLightElement: typeof SVGFEPointLightElement = SVGFEPointLightElement
+  public SVGFESpecularLightingElement: typeof SVGFESpecularLightingElement = SVGFESpecularLightingElement
+  public SVGFESpotLightElement: typeof SVGFESpotLightElement = SVGFESpotLightElement
+  public SVGFETileElement: typeof SVGFETileElement = SVGFETileElement
+  public SVGFETurbulenceElement: typeof SVGFETurbulenceElement = SVGFETurbulenceElement
+
+  // SVG Data classes
+  public SVGAngle: typeof SVGAngle = SVGAngle
+  public SVGLength: typeof SVGLength = SVGLength
+  public SVGNumber: typeof SVGNumber = SVGNumber
+  public SVGPoint: typeof SVGPoint = SVGPoint
+  public SVGRect: typeof SVGRect = SVGRect
+  public SVGMatrix: typeof SVGMatrix = SVGMatrix
+  public SVGTransform: typeof SVGTransform = SVGTransform
+
+  // CSSOM classes
+  public CSSStyleSheet: typeof VHDCSSStyleSheet = VHDCSSStyleSheet
+  public CSSStyleDeclaration: typeof VHDCSSStyleDeclaration = VHDCSSStyleDeclaration
+  public CSSRule: typeof VHDCSSRule = VHDCSSRule
+  public CSSStyleRule: typeof VHDCSSStyleRule = VHDCSSStyleRule
+  public CSSMediaRule: typeof VHDCSSMediaRule = VHDCSSMediaRule
+  public CSSKeyframesRule: typeof VHDCSSKeyframesRule = VHDCSSKeyframesRule
+  public CSSKeyframeRule: typeof VHDCSSKeyframeRule = VHDCSSKeyframeRule
+  public CSSFontFaceRule: typeof VHDCSSFontFaceRule = VHDCSSFontFaceRule
+  public CSSSupportsRule: typeof VHDCSSSupportsRule = VHDCSSSupportsRule
+  public CSSContainerRule: typeof VHDCSSContainerRule = VHDCSSContainerRule
+  public CSSConditionRule: typeof VHDCSSConditionRule = VHDCSSConditionRule
+  public CSSGroupingRule: typeof VHDCSSGroupingRule = VHDCSSGroupingRule
+  public CSSScopeRule: typeof VHDCSSScopeRule = VHDCSSScopeRule
+  public CSS: typeof VHD_CSS = VHD_CSS
+  public MediaList: typeof VHDMediaList = VHDMediaList
+  public StylePropertyMap: typeof VHDStylePropertyMap = VHDStylePropertyMap
+  public StylePropertyMapReadOnly: typeof VHDStylePropertyMapReadOnly = VHDStylePropertyMapReadOnly
+
+  // DOM geometry classes
+  public DOMRect: typeof VHDDOMRect = VHDDOMRect
+  public DOMRectReadOnly: typeof VHDDOMRectReadOnly = VHDDOMRectReadOnly
+  public DOMPoint: typeof VHDDOMPoint = VHDDOMPoint
+  public DOMPointReadOnly: typeof VHDDOMPointReadOnly = VHDDOMPointReadOnly
+  public DOMMatrix: typeof VHDDOMMatrix = VHDDOMMatrix
+  public DOMMatrixReadOnly: typeof VHDDOMMatrixReadOnly = VHDDOMMatrixReadOnly
+
+  // DOM collection classes
+  public NodeList: typeof VHDNodeList = VHDNodeList
+  public HTMLCollection: typeof VHDHTMLCollection = VHDHTMLCollection
+  public NamedNodeMap: typeof VHDNamedNodeMap = VHDNamedNodeMap
+  public Attr: typeof VHDAttr = VHDAttr
+
+  // DOM utility classes
+  public XMLSerializer: typeof VHDXMLSerializer = VHDXMLSerializer
+  public ValidityState: typeof VHDValidityState = VHDValidityState
+  public Screen: typeof VHDScreen = VHDScreen
+  public MediaQueryList: typeof VHDMediaQueryList = VHDMediaQueryList
+  public DocumentType: typeof VHDDocumentType = VHDDocumentType
+
+  // Document type aliases
+  public HTMLDocument: typeof VirtualDocument = VirtualDocument
+  public XMLDocument: typeof VirtualDocument = VirtualDocument
 
   // Event subclass constructors
   public UIEvent: typeof VHDUIEvent = VHDUIEvent
@@ -548,24 +758,8 @@ export class Window extends VirtualEventTarget {
     return this.document.getComputedStyle(element)
   }
 
-  get screen(): {
-    width: number
-    height: number
-    availWidth: number
-    availHeight: number
-    colorDepth: number
-    pixelDepth: number
-    orientation: { type: string, angle: number }
-  } {
-    return {
-      width: this._width,
-      height: this._height,
-      availWidth: this._width,
-      availHeight: this._height,
-      colorDepth: 24,
-      pixelDepth: 24,
-      orientation: { type: 'landscape-primary', angle: 0 },
-    }
+  get screen(): VHDScreen {
+    return new VHDScreen(this._width, this._height)
   }
 
   get isSecureContext(): boolean {
@@ -576,16 +770,7 @@ export class Window extends VirtualEventTarget {
     return this._location.origin
   }
 
-  matchMedia(query: string): {
-    matches: boolean
-    media: string
-    onchange: null
-    addListener: (cb: any) => void
-    removeListener: (cb: any) => void
-    addEventListener: (type: string, cb: any) => void
-    removeEventListener: (type: string, cb: any) => void
-    dispatchEvent: () => true
-  } {
+  matchMedia(query: string): VHDMediaQueryList {
     let matches = false
 
     // prefers-color-scheme
@@ -631,17 +816,7 @@ export class Window extends VirtualEventTarget {
       matches = reducedMotionMatch[1] === 'no-preference'
     }
 
-    const listeners = new Set<(event: any) => void>()
-    return {
-      matches,
-      media: query,
-      onchange: null,
-      addListener: (cb: any) => { if (cb) listeners.add(cb) },
-      removeListener: (cb: any) => { listeners.delete(cb) },
-      addEventListener: (_type: string, cb: any) => { if (cb) listeners.add(cb) },
-      removeEventListener: (_type: string, cb: any) => { listeners.delete(cb) },
-      dispatchEvent: () => true,
-    }
+    return new VHDMediaQueryList(query, matches)
   }
 
   // History proxy — delegates to document.history
