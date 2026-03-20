@@ -1,3 +1,57 @@
+### 🧹 Chores
+
+- update lockfile ([20fd613](https://github.com/stacksjs/very-happy-dom/commit/20fd613)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([272c703](https://github.com/stacksjs/very-happy-dom/commit/272c703)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([a33e60b](https://github.com/stacksjs/very-happy-dom/commit/a33e60b)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([3b9170a](https://github.com/stacksjs/very-happy-dom/commit/3b9170a)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: update all non-major dependencies (#970) ([b18093e](https://github.com/stacksjs/very-happy-dom/commit/b18093e)) _(by [renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>](https://github.com/renovate[bot]))_ ([#970](https://github.com/stacksjs/very-happy-dom/issues/970), [#970](https://github.com/stacksjs/very-happy-dom/issues/970))
+- wip ([a96612d](https://github.com/stacksjs/very-happy-dom/commit/a96612d)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([825ad6a](https://github.com/stacksjs/very-happy-dom/commit/825ad6a)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([1bca840](https://github.com/stacksjs/very-happy-dom/commit/1bca840)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([dfab3e1](https://github.com/stacksjs/very-happy-dom/commit/dfab3e1)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([0fc377f](https://github.com/stacksjs/very-happy-dom/commit/0fc377f)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([b21d859](https://github.com/stacksjs/very-happy-dom/commit/b21d859)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([8371b2a](https://github.com/stacksjs/very-happy-dom/commit/8371b2a)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([133d1ce](https://github.com/stacksjs/very-happy-dom/commit/133d1ce)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([53f5296](https://github.com/stacksjs/very-happy-dom/commit/53f5296)) _(by Chris <chrisbreuer93@gmail.com>)_
+- readme updates ([34e416c](https://github.com/stacksjs/very-happy-dom/commit/34e416c)) _(by Chris <chrisbreuer93@gmail.com>)_
+- housekeeping ([c870115](https://github.com/stacksjs/very-happy-dom/commit/c870115)) _(by Chris <chrisbreuer93@gmail.com>)_
+- add pantry lockfile ([4304aac](https://github.com/stacksjs/very-happy-dom/commit/4304aac)) _(by Chris <chrisbreuer93@gmail.com>)_
+- several minor improvements ([eaf5977](https://github.com/stacksjs/very-happy-dom/commit/eaf5977)) _(by Chris <chrisbreuer93@gmail.com>)_
+- use Pantry action for publish-commit and add job dependencies ([bb2e2de](https://github.com/stacksjs/very-happy-dom/commit/bb2e2de)) _(by Chris <chrisbreuer93@gmail.com>)_
+- update better-dx to ^0.2.7 ([df76592](https://github.com/stacksjs/very-happy-dom/commit/df76592)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- enrich CLAUDE.md with detailed project context from README ([239fc90](https://github.com/stacksjs/very-happy-dom/commit/239fc90)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- update CLAUDE.md with project context and crosswind details ([9fe8d4d](https://github.com/stacksjs/very-happy-dom/commit/9fe8d4d)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- add proper claude code guidelines ([9f06591](https://github.com/stacksjs/very-happy-dom/commit/9f06591)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- wip ([db5f0b7](https://github.com/stacksjs/very-happy-dom/commit/db5f0b7)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([dd3380e](https://github.com/stacksjs/very-happy-dom/commit/dd3380e)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([52c5062](https://github.com/stacksjs/very-happy-dom/commit/52c5062)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([a4cbe1a](https://github.com/stacksjs/very-happy-dom/commit/a4cbe1a)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([aca44ac](https://github.com/stacksjs/very-happy-dom/commit/aca44ac)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([9acb64b](https://github.com/stacksjs/very-happy-dom/commit/9acb64b)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([3248309](https://github.com/stacksjs/very-happy-dom/commit/3248309)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([5734e8a](https://github.com/stacksjs/very-happy-dom/commit/5734e8a)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([2a164f3](https://github.com/stacksjs/very-happy-dom/commit/2a164f3)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([e77ea3b](https://github.com/stacksjs/very-happy-dom/commit/e77ea3b)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([89d8074](https://github.com/stacksjs/very-happy-dom/commit/89d8074)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- wip ([3b54556](https://github.com/stacksjs/very-happy-dom/commit/3b54556)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- wip ([688eaf3](https://github.com/stacksjs/very-happy-dom/commit/688eaf3)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- wip ([0834e2e](https://github.com/stacksjs/very-happy-dom/commit/0834e2e)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- wip ([ea12191](https://github.com/stacksjs/very-happy-dom/commit/ea12191)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deps**: update dependency actions/cache to v5.0.3 (#539) ([99967c7](https://github.com/stacksjs/very-happy-dom/commit/99967c7)) _(by Chris <chrisbreuer93@gmail.com>)_ ([#539](https://github.com/stacksjs/very-happy-dom/issues/539), [#539](https://github.com/stacksjs/very-happy-dom/issues/539))
+- **deps**: update dependency actions/checkout to v6.0.2 (#540) ([7217b61](https://github.com/stacksjs/very-happy-dom/commit/7217b61)) _(by Chris <chrisbreuer93@gmail.com>)_ ([#540](https://github.com/stacksjs/very-happy-dom/issues/540), [#540](https://github.com/stacksjs/very-happy-dom/issues/540))
+- **deps**: update all non-major dependencies (#541) ([a7c7d82](https://github.com/stacksjs/very-happy-dom/commit/a7c7d82)) _(by Chris <chrisbreuer93@gmail.com>)_ ([#541](https://github.com/stacksjs/very-happy-dom/issues/541), [#541](https://github.com/stacksjs/very-happy-dom/issues/541))
+- wip ([5c94e25](https://github.com/stacksjs/very-happy-dom/commit/5c94e25)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([c9e0424](https://github.com/stacksjs/very-happy-dom/commit/c9e0424)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([99911f9](https://github.com/stacksjs/very-happy-dom/commit/99911f9)) _(by Chris <chrisbreuer93@gmail.com>)_
+- initial commit ([1a785d8](https://github.com/stacksjs/very-happy-dom/commit/1a785d8)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+### Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+- _[renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>](https://github.com/renovate[bot])_
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 <!-- eslint-disable markdown/no-duplicate-heading -->
 
 ## v0.3.1...main
