@@ -9,6 +9,30 @@ const SKIP_KEYS = new Set([
 let registeredWindow: Window | null = null
 const registeredKeys: string[] = []
 
+// When a Window instance method (e.g. getComputedStyle) or accessor gets
+// copied to globalThis, calling it as a free function loses its `this`.
+// Re-bind method descriptors and wrap accessors so `this` is the Window.
+function bindDescriptor(descriptor: PropertyDescriptor, thisArg: object): PropertyDescriptor {
+  if (typeof descriptor.value === 'function') {
+    return {
+      ...descriptor,
+      value: descriptor.value.bind(thisArg),
+    }
+  }
+  if (typeof descriptor.get === 'function' || typeof descriptor.set === 'function') {
+    const result: PropertyDescriptor = {
+      configurable: descriptor.configurable,
+      enumerable: descriptor.enumerable,
+    }
+    if (descriptor.get)
+      result.get = descriptor.get.bind(thisArg)
+    if (descriptor.set)
+      result.set = descriptor.set.bind(thisArg)
+    return result
+  }
+  return descriptor
+}
+
 export class GlobalRegistrator {
   static register(options: WindowOptions = {}): void {
     if (registeredWindow) {
@@ -26,7 +50,7 @@ export class GlobalRegistrator {
       if (!descriptor) continue
 
       Object.defineProperty(globalThis, key, {
-        ...descriptor,
+        ...bindDescriptor(descriptor, win),
         configurable: true,
       })
       registeredKeys.push(key)
@@ -41,7 +65,7 @@ export class GlobalRegistrator {
       if (!descriptor) continue
 
       Object.defineProperty(globalThis, key, {
-        ...descriptor,
+        ...bindDescriptor(descriptor, win),
         configurable: true,
       })
       registeredKeys.push(key)

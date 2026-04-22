@@ -22,10 +22,15 @@
     "jsdom",
     "virtual-dom"
   ],
-  "sideEffects": false,
+  "sideEffects": [
+    "./src/index.ts",
+    "./dist/index.js",
+    "./dist/index.d.ts"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "bun": "./src/index.ts",
       "import": "./dist/index.js"
     },
     "./*": {

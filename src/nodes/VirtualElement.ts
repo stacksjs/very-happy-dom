@@ -40,6 +40,7 @@ export class VirtualElement extends VirtualNodeBase {
   private _checkedDirty = false
   private _selectedState: boolean | null = null
   private _selectedDirty = false
+  private _capturedPointerIds: Set<number> | null = null
 
   // children should only contain element nodes, per DOM spec
   get children(): VirtualNode[] {
@@ -2145,19 +2146,19 @@ export class VirtualElement extends VirtualNodeBase {
   }
 
   get clientWidth(): number {
-    return 0
+    return this._resolveInlineSize('width')
   }
 
   get clientHeight(): number {
-    return 0
+    return this._resolveInlineSize('height')
   }
 
   get offsetWidth(): number {
-    return 0
+    return this._resolveInlineSize('width')
   }
 
   get offsetHeight(): number {
-    return 0
+    return this._resolveInlineSize('height')
   }
 
   get offsetTop(): number {
@@ -2166,6 +2167,71 @@ export class VirtualElement extends VirtualNodeBase {
 
   get offsetLeft(): number {
     return 0
+  }
+
+  /**
+   * Resolve an inline size (width/height) from the element's inline style or
+   * width/height attribute. Returns a numeric pixel value, or 0 when no
+   * inline size is known.
+   *
+   * very-happy-dom doesn't run a layout engine, so we honor the inline style
+   * value as the "resolved" pixel size. This is faithful enough for testing:
+   *  - `style.width = '800px'` -> 800
+   *  - `style.width = '50%'` combined with a parent that has an inline width
+   *    -> percentage of the parent
+   *  - `width="800"` attribute (used by <svg>, <canvas>, <img>) -> 800
+   */
+  private _resolveInlineSize(dimension: 'width' | 'height'): number {
+    const inline = this._internalStyles?.get(dimension)
+    if (inline) {
+      const parsed = this._parseCssSize(inline, dimension)
+      if (parsed !== null)
+        return parsed
+    }
+
+    // Fall back to the width/height attribute (common for SVG, <canvas>, <img>).
+    const attrValue = this.attributes.get(dimension)
+    if (attrValue !== undefined && attrValue !== '') {
+      const parsed = this._parseCssSize(attrValue, dimension)
+      if (parsed !== null)
+        return parsed
+    }
+
+    return 0
+  }
+
+  /**
+   * Parse a CSS length value. Supports px, plain numbers (treated as px),
+   * and percentage values when the parent has a resolvable size.
+   * Returns null if the value can't be resolved.
+   */
+  private _parseCssSize(value: string, dimension: 'width' | 'height'): number | null {
+    const trimmed = value.trim()
+    if (trimmed === '' || trimmed === 'auto')
+      return null
+
+    // Percentage -> resolve against the parent's inline size, if any.
+    if (trimmed.endsWith('%')) {
+      const pct = Number.parseFloat(trimmed)
+      if (!Number.isFinite(pct))
+        return null
+      const parent = this.parentElement
+      if (!parent)
+        return null
+      const parentSize = parent._resolveInlineSize(dimension)
+      if (parentSize === 0)
+        return null
+      return (pct / 100) * parentSize
+    }
+
+    // px value or bare number (common for SVG width="800" and <canvas>).
+    const match = /^(-?\d*\.?\d+)(px)?$/i.exec(trimmed)
+    if (match) {
+      const n = Number.parseFloat(match[1])
+      return Number.isFinite(n) ? n : null
+    }
+
+    return null
   }
 
   get offsetParent(): VirtualElement | null {
@@ -2200,7 +2266,26 @@ export class VirtualElement extends VirtualNodeBase {
   }
 
   getBoundingClientRect(): DOMRect {
-    return new DOMRect()
+    // Align the rect's width/height with the inline layout. Position stays
+    // at (0, 0) since we don't run an actual layout pass.
+    const width = this._resolveInlineSize('width')
+    const height = this._resolveInlineSize('height')
+    return new DOMRect(0, 0, width, height)
+  }
+
+  // Pointer capture API — no-op book-keeping so libraries that capture
+  // pointers during drag/zoom interactions don't throw in tests.
+  setPointerCapture(pointerId: number): void {
+    this._capturedPointerIds ??= new Set()
+    this._capturedPointerIds.add(pointerId)
+  }
+
+  releasePointerCapture(pointerId: number): void {
+    this._capturedPointerIds?.delete(pointerId)
+  }
+
+  hasPointerCapture(pointerId: number): boolean {
+    return this._capturedPointerIds?.has(pointerId) ?? false
   }
 
   // Visibility check - walks ancestor chain
