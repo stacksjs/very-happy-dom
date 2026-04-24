@@ -3,10 +3,11 @@
  * Comprehensive tests for the screenshot functionality
  */
 
-import { describe, expect, it } from 'bun:test'
+import { beforeAll, describe, expect, it } from 'bun:test'
 import {
   adler32,
   blendColors,
+  canRenderWithWebView,
   captureHtml,
   captureHtmlWithWebView,
   compareImages,
@@ -757,6 +758,15 @@ describe('Screenshot Module', () => {
   })
 
   describe('WebView-backed Capture', () => {
+    // `isWebViewAvailable()` is a cheap constructor-presence check; a real
+    // render additionally needs a working browser backend (WebKit on macOS,
+    // Chromium on Linux). Probe that once so headless CI runners skip the
+    // capture-assertion tests instead of hanging on `navigate()`.
+    let canRender = false
+    beforeAll(async () => {
+      canRender = await canRenderWithWebView(1500)
+    })
+
     it('reports availability based on Bun.WebView presence', () => {
       const bun = (globalThis as { Bun?: { WebView?: unknown } }).Bun
       const expected = typeof bun?.WebView === 'function'
@@ -783,7 +793,7 @@ describe('Screenshot Module', () => {
     })
 
     it('renders a real PNG via Bun.WebView', async () => {
-      if (!isWebViewAvailable())
+      if (!canRender)
         return
 
       const capture = new WebViewCapture()
@@ -798,7 +808,7 @@ describe('Screenshot Module', () => {
     })
 
     it('honors the css option via the decoration injector', async () => {
-      if (!isWebViewAvailable())
+      if (!canRender)
         return
 
       const wv = new WebViewCapture()
@@ -818,7 +828,7 @@ describe('Screenshot Module', () => {
     })
 
     it('enforces a timeout when navigate hangs', async () => {
-      if (!isWebViewAvailable())
+      if (!canRender)
         return
 
       // Serve that accepts but never responds.
@@ -835,7 +845,7 @@ describe('Screenshot Module', () => {
     }, 10_000)
 
     it('reuses a pooled WebView instance across captures', async () => {
-      if (!isWebViewAvailable())
+      if (!canRender)
         return
 
       const capture = new WebViewCapture({ reuse: true, width: 60, height: 60 })

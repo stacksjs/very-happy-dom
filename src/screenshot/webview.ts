@@ -132,9 +132,69 @@ function getWebViewConstructor(): BunWebViewConstructor | null {
 
 /**
  * Returns true if the current runtime exposes Bun.WebView.
+ *
+ * Note: this only checks the constructor is present. Headless runners (e.g.
+ * Ubuntu CI without WebKit/Chromium installed) have the constructor but
+ * cannot actually render — use `canRenderWithWebView` for that.
  */
 export function isWebViewAvailable(): boolean {
   return getWebViewConstructor() !== null
+}
+
+let probedRender: boolean | null = null
+let probeInFlight: Promise<boolean> | null = null
+
+/**
+ * Probe whether the runtime can actually render through Bun.WebView, not just
+ * expose the constructor. Constructs a 1×1 headless view and runs a trivial
+ * `data:` navigation under a short timeout; caches the result for the lifetime
+ * of the process. Safe to call from tests that want to skip real-capture
+ * assertions on environments without a working browser backend (e.g. headless
+ * Linux CI without WebKit/Chromium).
+ */
+export async function canRenderWithWebView(timeoutMs = 1500): Promise<boolean> {
+  if (probedRender !== null) return probedRender
+  if (probeInFlight) return probeInFlight
+
+  probeInFlight = (async () => {
+    const WebView = getWebViewConstructor()
+    if (!WebView) return false
+
+    // Defer construction one tick so we can race it against the timeout.
+    // Some backends throw synchronously when they can't initialize (expected);
+    // if the runtime were to hang synchronously we'd still block the whole
+    // event loop, but Bun.WebView today only blocks inside async ops.
+    const probe = (async () => {
+      let view: BunWebViewInstance | null = null
+      try {
+        view = new WebView({ width: 1, height: 1, headless: true, dataStore: 'ephemeral' })
+      }
+      catch {
+        return false
+      }
+      try {
+        await view.navigate('data:text/html,<!doctype html>')
+        return true
+      }
+      catch {
+        return false
+      }
+      finally {
+        disposeView(view)
+      }
+    })()
+
+    return Promise.race([
+      probe,
+      new Promise<boolean>(resolve => setTimeout(() => resolve(false), timeoutMs)),
+    ])
+  })().then((result) => {
+    probedRender = result
+    probeInFlight = null
+    return result
+  })
+
+  return probeInFlight
 }
 
 /**

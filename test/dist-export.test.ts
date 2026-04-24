@@ -16,13 +16,12 @@ import { resolve } from 'node:path'
 const DIST = resolve(import.meta.dir, '../dist/index.js')
 
 describe('dist/index.js standalone import', () => {
-  test.skipIf(!existsSync(DIST))('dist/index.js imports cleanly when built', () => {
+  test('dist/index.js exists (run `bun run build` first)', () => {
     expect(existsSync(DIST)).toBe(true)
   })
 
   test('imports succeed without syntax errors', async () => {
-    if (!existsSync(DIST))
-      return
+    expect(existsSync(DIST)).toBe(true)
     // Dynamic import so failures produce a thrown rejection we can assert on.
     const mod = await import(DIST)
 
@@ -38,8 +37,7 @@ describe('dist/index.js standalone import', () => {
   })
 
   test('instantiating Window from dist works', async () => {
-    if (!existsSync(DIST))
-      return
+    expect(existsSync(DIST)).toBe(true)
     const { Window } = await import(DIST)
     const w = new Window()
     expect(typeof w.document).toBe('object')

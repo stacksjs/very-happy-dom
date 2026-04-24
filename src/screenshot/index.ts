@@ -30,6 +30,7 @@ export { decodeWebP, encodeWebP, isWebP, type WebPOptions } from './webp'
 
 // Bun.WebView-backed capture (real browser-rendered screenshots)
 export {
+  canRenderWithWebView,
   captureHtmlWithWebView,
   captureUrlWithWebView,
   isWebViewAvailable,
