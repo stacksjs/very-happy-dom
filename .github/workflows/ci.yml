@@ -97,8 +97,6 @@ jobs:
 
       - name: Setup Pantry
         uses: home-lang/pantry/packages/action@main
-        with:
-          install: 'false'
 
       - name: Install Dependencies
         run: bun install
