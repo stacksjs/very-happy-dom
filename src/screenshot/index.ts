@@ -34,9 +34,13 @@ export {
   captureUrlWithWebView,
   isWebViewAvailable,
   WebViewCapture,
+  type WebViewCaptureConstructorOptions,
+  type WebViewConsoleHook,
   type WebViewEncoding,
+  type WebViewFont,
   type WebViewImageFormat,
   type WebViewScreenshotOptions,
   type WebViewScreenshotResult,
+  WebViewTimeoutError,
   WebViewUnavailableError,
 } from './webview'

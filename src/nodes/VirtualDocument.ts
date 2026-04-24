@@ -27,12 +27,41 @@ export class VirtualDocument extends VirtualNodeBase {
   defaultView: any = null
   _idIndex: Map<string, VirtualElement> = new Map()
 
+  /**
+   * Happy-DOM alias for defaultView. Lets tests written against happy-dom
+   * that reach for `document.parentWindow.someWindowAPI` work unchanged.
+   */
+  get parentWindow(): any {
+    return this.defaultView
+  }
+
   documentElement: VirtualElement | null = null
   head: VirtualElement | null = null
   body: VirtualElement | null = null
   location: Location
   history: History
-  title = ''
+
+  private _fallbackTitle = ''
+
+  get title(): string {
+    const el = this.head?.querySelector('title')
+    return el?.textContent ?? this._fallbackTitle
+  }
+
+  set title(value: string) {
+    this._fallbackTitle = value
+    if (!this.head)
+      return
+    let el: VirtualElement | null = this.head.querySelector('title')
+    if (!el) {
+      el = this.createElement('title')
+      if (!el)
+        return
+      this.head.appendChild(el)
+    }
+    el.textContent = value
+  }
+
   readyState: string = 'complete'
   compatMode: string = 'CSS1Compat'
   contentType: string = 'text/html'
@@ -218,18 +247,20 @@ export class VirtualDocument extends VirtualNodeBase {
       },
       replaceState(state: any, title: string, url?: string) {
         const resolvedUrl = url ? doc._resolveLocationString(url) : doc.location.href
-        if (doc._historyIndex >= 0) {
+        // Ensure there is at least one entry so replaceState always succeeds.
+        if (doc._historyIndex < 0) {
+          doc._historyStack.push({ state, title, url: resolvedUrl })
+          doc._historyIndex = 0
+        }
+        else {
           doc._historyStack[doc._historyIndex] = {
             state,
             title,
             url: resolvedUrl,
           }
-
-          // Update location if URL provided
-          if (url) {
-            doc._updateLocation(resolvedUrl, { triggerHashchange: false })
-          }
         }
+        if (url)
+          doc._updateLocation(resolvedUrl, { triggerHashchange: false })
       },
       back() {
         if (doc._historyIndex > 0) {
@@ -261,13 +292,10 @@ export class VirtualDocument extends VirtualNodeBase {
       },
     }
 
-    // Don't initialize history stack - let pushState be the first entry
-    // this._historyStack.push({
-    //   state: null,
-    //   title: '',
-    //   url: this.location.href,
-    // })
-    // this._historyIndex = 0
+    // Don't seed the initial history entry — existing tests rely on
+    // length 1 after a single pushState (not length 2 with the seeded
+    // entry). replaceState's impl updates the URL even when the stack is
+    // empty, so this stays spec-adjacent without breaking them.
   }
 
   private _createLocation(): Location {
@@ -369,8 +397,18 @@ export class VirtualDocument extends VirtualNodeBase {
     const previousHash = this._locationState.hash
 
     try {
-      const base = this.location.href || this.defaultView?.location?.href || 'http://localhost/'
-      const parsed = new URL(url, base)
+      // Only use a base URL when the current document location is itself a
+      // valid URL — an `about:blank` document cannot resolve relative inputs,
+      // and bare strings like "not-a-valid-url" must stay as-is (matching
+      // browser behavior when assigning to location.href on a blank page).
+      const baseCandidate = this.location.href || this.defaultView?.location?.href || ''
+      let parsed: URL
+      if (baseCandidate && !baseCandidate.startsWith('about:')) {
+        parsed = new URL(url, baseCandidate)
+      }
+      else {
+        parsed = new URL(url)
+      }
       this._locationState.href = parsed.href
       this._locationState.protocol = parsed.protocol
       this._locationState.host = parsed.host
@@ -719,30 +757,106 @@ export class VirtualDocument extends VirtualNodeBase {
 
   // Get computed styles
   getComputedStyle(element: VirtualElement, _pseudoElt?: string | null): any {
-    // Define default display values for common elements
     const defaultDisplay: Record<string, string> = {
-      DIV: 'block',
-      P: 'block',
-      H1: 'block',
-      H2: 'block',
-      H3: 'block',
-      H4: 'block',
-      H5: 'block',
-      H6: 'block',
-      UL: 'block',
-      OL: 'block',
+      // Block
+      ADDRESS: 'block', ARTICLE: 'block', ASIDE: 'block', BLOCKQUOTE: 'block',
+      BODY: 'block', DETAILS: 'block', DIALOG: 'block', DIV: 'block',
+      DL: 'block', DT: 'block', FIELDSET: 'block', FIGCAPTION: 'block',
+      FIGURE: 'block', FOOTER: 'block', FORM: 'block', H1: 'block',
+      H2: 'block', H3: 'block', H4: 'block', H5: 'block', H6: 'block',
+      HEADER: 'block', HR: 'block', HTML: 'block', LEGEND: 'block',
+      MAIN: 'block', NAV: 'block', OL: 'block', P: 'block',
+      PRE: 'block', SECTION: 'block', UL: 'block',
+      // List-item
       LI: 'list-item',
-      TABLE: 'table',
-      TR: 'table-row',
-      TD: 'table-cell',
-      TH: 'table-cell',
-      SPAN: 'inline',
-      A: 'inline',
-      EM: 'inline',
-      STRONG: 'inline',
-      SCRIPT: 'none',
-      STYLE: 'none',
-      HEAD: 'none',
+      // Table
+      TABLE: 'table', CAPTION: 'table-caption',
+      THEAD: 'table-header-group', TBODY: 'table-row-group',
+      TFOOT: 'table-footer-group', TR: 'table-row',
+      TH: 'table-cell', TD: 'table-cell', COLGROUP: 'table-column-group',
+      COL: 'table-column',
+      // Inline-block
+      BUTTON: 'inline-block', INPUT: 'inline-block', SELECT: 'inline-block',
+      TEXTAREA: 'inline-block',
+      // Inline (default for everything else) — these are explicit for clarity
+      A: 'inline', ABBR: 'inline', B: 'inline', CITE: 'inline', CODE: 'inline',
+      DFN: 'inline', EM: 'inline', I: 'inline', KBD: 'inline',
+      LABEL: 'inline', MARK: 'inline', Q: 'inline', S: 'inline',
+      SAMP: 'inline', SMALL: 'inline', SPAN: 'inline', STRONG: 'inline',
+      SUB: 'inline', SUP: 'inline', TIME: 'inline', U: 'inline',
+      VAR: 'inline', IMG: 'inline', BR: 'inline',
+      // Hidden
+      SCRIPT: 'none', STYLE: 'none', HEAD: 'none', TITLE: 'none',
+      META: 'none', LINK: 'none',
+      // Flex by default? No — keep author-specified.
+    }
+
+    const computedDefaults = (prop: string, tagName: string): string => {
+      switch (prop) {
+        case 'display': return defaultDisplay[tagName] || 'inline'
+        case 'visibility': return 'visible'
+        case 'opacity': return '1'
+        case 'position': return 'static'
+        case 'float': return 'none'
+        case 'clear': return 'none'
+        case 'overflow':
+        case 'overflow-x':
+        case 'overflow-y':
+          return 'visible'
+        case 'box-sizing': return 'content-box'
+        case 'z-index': return 'auto'
+        case 'flex-direction': return 'row'
+        case 'flex-wrap': return 'nowrap'
+        case 'justify-content': return 'normal'
+        case 'align-items': return 'normal'
+        case 'align-content': return 'normal'
+        case 'text-align': return 'start'
+        case 'text-transform': return 'none'
+        case 'text-decoration':
+        case 'text-decoration-line':
+          return 'none'
+        case 'font-size': return '16px'
+        case 'font-family': return 'serif'
+        case 'font-weight': return '400'
+        case 'font-style': return 'normal'
+        case 'line-height': return 'normal'
+        case 'color': return 'rgb(0, 0, 0)'
+        case 'background-color': return 'rgba(0, 0, 0, 0)'
+        case 'border-width':
+        case 'border-top-width':
+        case 'border-right-width':
+        case 'border-bottom-width':
+        case 'border-left-width':
+          return '0px'
+        case 'border-style':
+        case 'border-top-style':
+        case 'border-right-style':
+        case 'border-bottom-style':
+        case 'border-left-style':
+          return 'none'
+        case 'margin':
+        case 'margin-top':
+        case 'margin-right':
+        case 'margin-bottom':
+        case 'margin-left':
+        case 'padding':
+        case 'padding-top':
+        case 'padding-right':
+        case 'padding-bottom':
+        case 'padding-left':
+          return '0px'
+        case 'width':
+        case 'height':
+        case 'min-width':
+        case 'min-height':
+          return 'auto'
+        case 'max-width':
+        case 'max-height':
+          return 'none'
+        case 'cursor': return 'auto'
+        case 'pointer-events': return 'auto'
+        default: return ''
+      }
     }
 
     const self = element
@@ -750,40 +864,22 @@ export class VirtualDocument extends VirtualNodeBase {
       {
         getPropertyValue(property: string): string {
           const value = self.style.getPropertyValue(property)
-          if (value)
-            return value
-
-          // Return default display value for the element type
-          if (property === 'display' && !value) {
-            return defaultDisplay[self.tagName] || 'block'
-          }
-
-          return value || ''
+          if (value) return value
+          return computedDefaults(property, self.tagName)
         },
         getPropertyPriority(property: string): string {
           return self.style.getPropertyPriority(property)
         },
       },
       {
-        get(target, prop: string) {
-          if (prop === 'getPropertyValue') {
-            return target.getPropertyValue
-          }
-          if (prop === 'getPropertyPriority') {
-            return target.getPropertyPriority
-          }
-          // Convert camelCase to kebab-case
-          const kebabProp = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)
-          const value = self.style.getPropertyValue(kebabProp)
-          if (value)
-            return value
-
-          // Return default display value for the element type
-          if (kebabProp === 'display' && !value) {
-            return defaultDisplay[self.tagName] || 'block'
-          }
-
-          return value || ''
+        get(target, prop: string | symbol) {
+          if (prop === 'getPropertyValue') return target.getPropertyValue
+          if (prop === 'getPropertyPriority') return target.getPropertyPriority
+          if (typeof prop !== 'string') return undefined
+          const kebab = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)
+          const value = self.style.getPropertyValue(kebab)
+          if (value) return value
+          return computedDefaults(kebab, self.tagName)
         },
       },
     )

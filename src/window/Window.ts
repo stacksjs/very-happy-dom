@@ -38,8 +38,14 @@ import {
 } from '../css/CSSOM'
 import { DataTransfer, Notification, Performance } from '../apis/BrowserAPIs'
 import { CanvasRenderingContext2D, HTMLCanvasElement } from '../apis/Canvas'
+import { BroadcastChannel as VHDBroadcastChannel, MessageChannel as VHDMessageChannel, MessagePort as VHDMessagePort } from '../apis/Channel'
 import { Navigator as VeryHappyNavigator } from '../apis/Clipboard'
+import { ClipboardItem as VHDClipboardItem } from '../apis/Clipboard'
+import { EventSource as VHDEventSource } from '../apis/EventSource'
 import { VeryHappyFile, VeryHappyFileList, VeryHappyFileReader } from '../apis/FileAPI'
+import { VeryHappyFormData } from '../apis/FormData'
+import { createIndexedDB, IDBDatabase, IDBFactory, IDBObjectStore, IDBOpenDBRequest, IDBRequest, IDBTransaction } from '../apis/IndexedDB'
+import { PerformanceObserver as VHDPerformanceObserver } from '../apis/PerformanceObserver'
 import { CustomEvent as VeryHappyCustomEvent } from '../events/CustomEvent'
 import {
   AnimationEvent as VHDAnimationEvent,
@@ -264,7 +270,8 @@ export class Window extends VirtualEventTarget {
   public Request: typeof globalThis.Request = globalThis.Request
   public Response: typeof globalThis.Response = globalThis.Response
   public Headers: typeof globalThis.Headers = globalThis.Headers
-  public FormData: typeof globalThis.FormData = globalThis.FormData
+  public FormData: typeof globalThis.FormData = VeryHappyFormData
+  public ClipboardItem: typeof VHDClipboardItem = VHDClipboardItem
   public URL: typeof globalThis.URL = globalThis.URL
   public URLSearchParams: typeof globalThis.URLSearchParams = globalThis.URLSearchParams
   public AbortController: typeof globalThis.AbortController = globalThis.AbortController
@@ -521,6 +528,22 @@ export class Window extends VirtualEventTarget {
   public DataTransfer: typeof DataTransfer = DataTransfer
   public crypto: Crypto = globalThis.crypto
 
+  // Messaging / streaming
+  public BroadcastChannel: typeof VHDBroadcastChannel = VHDBroadcastChannel
+  public MessageChannel: typeof VHDMessageChannel = VHDMessageChannel
+  public MessagePort: typeof VHDMessagePort = VHDMessagePort
+  public EventSource: typeof VHDEventSource = VHDEventSource
+  public PerformanceObserver: typeof VHDPerformanceObserver = VHDPerformanceObserver
+
+  // IndexedDB (in-memory)
+  public indexedDB: IDBFactory = createIndexedDB()
+  public IDBFactory: typeof IDBFactory = IDBFactory
+  public IDBDatabase: typeof IDBDatabase = IDBDatabase
+  public IDBObjectStore: typeof IDBObjectStore = IDBObjectStore
+  public IDBTransaction: typeof IDBTransaction = IDBTransaction
+  public IDBRequest: typeof IDBRequest = IDBRequest
+  public IDBOpenDBRequest: typeof IDBOpenDBRequest = IDBOpenDBRequest
+
   // DOMParser
   public DOMParser: { new(): { parseFromString(html: string, mimeType: string): VirtualDocument } } = class DOMParser {
     parseFromString(html: string, mimeType: string): VirtualDocument {
@@ -637,7 +660,16 @@ export class Window extends VirtualEventTarget {
     this.document.defaultView = this
     this.customElements._setDocument(this.document)
 
-    // Create location object
+    // Push the URL into the document's live location state so the window
+    // and document share a single source of truth (history.pushState, etc.).
+    if (url) {
+      try {
+        this.document.location.href = url
+      }
+      catch {
+        // Fall through to fallback _location below.
+      }
+    }
     this._location = this._createLocation(url)
 
     // Import DetachedWindowAPI lazily to avoid circular dependency
@@ -647,12 +679,17 @@ export class Window extends VirtualEventTarget {
   }
 
   get location(): Location {
-    return this._location
+    // Delegate to the document's live location so history.pushState and
+    // direct URL mutation stay in sync with window.location.
+    return (this.document?.location as unknown as Location) ?? this._location
   }
 
   set location(url: string | Location) {
     const urlString = typeof url === 'string' ? url : url.href
-    this._location = this._createLocation(urlString)
+    if (this.document)
+      this.document.location.href = urlString
+    else
+      this._location = this._createLocation(urlString)
   }
 
   get innerWidth(): number {
@@ -876,13 +913,29 @@ export class Window extends VirtualEventTarget {
   moveTo(_x: number, _y: number): void {}
   moveBy(_dx: number, _dy: number): void {}
 
-  scrollTo(_x?: number | ScrollToOptions, _y?: number): void {}
+  scrollTo(x?: number | ScrollToOptions, y?: number): void {
+    if (typeof x === 'object' && x !== null) {
+      if (typeof x.left === 'number') this.scrollX = x.left
+      if (typeof x.top === 'number') this.scrollY = x.top
+      return
+    }
+    if (typeof x === 'number') this.scrollX = x
+    if (typeof y === 'number') this.scrollY = y
+  }
 
   scroll(x?: number | ScrollToOptions, y?: number): void {
     this.scrollTo(x, y)
   }
 
-  scrollBy(_x?: number | ScrollToOptions, _y?: number): void {}
+  scrollBy(x?: number | ScrollToOptions, y?: number): void {
+    if (typeof x === 'object' && x !== null) {
+      if (typeof x.left === 'number') this.scrollX += x.left
+      if (typeof x.top === 'number') this.scrollY += x.top
+      return
+    }
+    if (typeof x === 'number') this.scrollX += x
+    if (typeof y === 'number') this.scrollY += y
+  }
 
   alert(_message?: string): void {}
 

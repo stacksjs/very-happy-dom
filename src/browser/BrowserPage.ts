@@ -490,6 +490,11 @@ export class BrowserPage {
    * By default this returns a simple SVG representation of the DOM (virtual).
    * Pass `useWebView: true` to route through Bun.WebView for a real
    * browser-rendered capture — requires a Bun version that ships WebView.
+   *
+   * When `useWebView` is active and the page has a real URL, the WebView
+   * navigates to it directly (preserving asset resolution); otherwise it
+   * loads the rendered HTML as a data URL with optional css/baseUrl/fonts
+   * injection, and the page's `virtualConsolePrinter` is wired through.
    */
   async screenshot(options: {
     type?: 'png' | 'jpeg' | 'webp'
@@ -498,7 +503,16 @@ export class BrowserPage {
     clip?: { x: number, y: number, width: number, height: number }
     omitBackground?: boolean
     encoding?: 'base64' | 'binary'
-    useWebView?: boolean | { backend?: 'webkit' | 'chrome', waitFor?: number }
+    useWebView?: boolean | {
+      backend?: 'webkit' | 'chrome'
+      waitFor?: number
+      timeout?: number
+      css?: string
+      baseUrl?: string
+      fonts?: Array<{ family: string, url: string, weight?: string, style?: string }>
+      // eslint-disable-next-line pickier/no-unused-vars
+      console?: true | ((event: unknown) => void)
+    }
   } = {}): Promise<string | Buffer> {
     const {
       type = 'png',
@@ -509,18 +523,41 @@ export class BrowserPage {
     } = options
 
     if (useWebView) {
-      const { captureHtmlWithWebView } = await import('../screenshot/webview')
+      const { WebViewCapture } = await import('../screenshot/webview')
       const overrides = typeof useWebView === 'object' ? useWebView : {}
-      const shot = await captureHtmlWithWebView(this.content, {
-        width: this._viewport.width,
-        height: this._viewport.height,
-        format: type,
-        quality,
-        encoding: encoding === 'base64' ? 'base64' : 'buffer',
-        ...overrides,
-      })
-      // Encoding selected above guarantees string | Buffer here.
-      return shot as string | Buffer
+
+      // Forward the page's virtualConsolePrinter when the caller has not
+      // supplied their own console hook. Reshape `(type, ...args) => void`
+      // into the event-callback shape Bun.WebView expects.
+      const printer = this.virtualConsolePrinter
+      const consoleHook = overrides.console
+        ?? (printer
+          ? (event: unknown) => {
+              const e = event as { type?: string, args?: unknown[] } | undefined
+              printer(e?.type ?? 'log', ...(e?.args ?? [event]))
+            }
+          : undefined)
+
+      const capture = new WebViewCapture()
+      try {
+        const pageUrl = this._realPageUrl()
+        const opts = {
+          width: this._viewport.width,
+          height: this._viewport.height,
+          format: type,
+          quality,
+          encoding: encoding === 'base64' ? ('base64' as const) : ('buffer' as const),
+          ...overrides,
+          console: consoleHook,
+        }
+        const shot = pageUrl
+          ? await capture.captureUrl(pageUrl, opts)
+          : await capture.captureHtml(this.content, opts)
+        return shot as string | Buffer
+      }
+      finally {
+        capture.dispose()
+      }
     }
 
     // Virtual-DOM fallback: emit an SVG snapshot of the HTML.
@@ -532,6 +569,13 @@ export class BrowserPage {
     }
 
     return Buffer.from(svg)
+  }
+
+  private _realPageUrl(): string | null {
+    const url = this.url
+    if (!url || url === 'about:blank' || url.startsWith('data:'))
+      return null
+    return /^[a-z][\w+.-]*:/i.test(url) ? url : null
   }
 
   /**

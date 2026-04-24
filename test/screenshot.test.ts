@@ -30,6 +30,7 @@ import {
   renderLayoutTree,
   ScreenshotCapture,
   WebViewCapture,
+  WebViewTimeoutError,
   WebViewUnavailableError,
   type RGBA,
 } from '../src/screenshot'
@@ -780,5 +781,77 @@ describe('Screenshot Module', () => {
         capture.captureHtml('<h1>hi</h1>', { useWebView: true }),
       ).rejects.toBeInstanceOf(WebViewUnavailableError)
     })
+
+    it('renders a real PNG via Bun.WebView', async () => {
+      if (!isWebViewAvailable())
+        return
+
+      const capture = new WebViewCapture()
+      const result = await capture.captureHtml(
+        '<body style="margin:0;background:#0000ff">hello</body>',
+        { width: 80, height: 80, waitFor: 100 },
+      )
+      expect(Buffer.isBuffer(result)).toBe(true)
+      const buf = result as Buffer
+      // PNG magic bytes
+      expect(Array.from(buf.subarray(0, 4))).toEqual([137, 80, 78, 71])
+    })
+
+    it('honors the css option via the decoration injector', async () => {
+      if (!isWebViewAvailable())
+        return
+
+      const wv = new WebViewCapture()
+      const opts = { width: 60, height: 60, waitFor: 100 } as const
+      const red = await wv.captureHtml(
+        '<body style="margin:0">x</body>',
+        { ...opts, css: 'body { background: #ff0000 !important }' },
+      ) as Buffer
+      const blue = await wv.captureHtml(
+        '<body style="margin:0">x</body>',
+        { ...opts, css: 'body { background: #0000ff !important }' },
+      ) as Buffer
+
+      // Different backgrounds must produce different PNG bytes — proves the
+      // css injection reached the browser and affected rendering.
+      expect(Buffer.compare(red, blue)).not.toBe(0)
+    })
+
+    it('enforces a timeout when navigate hangs', async () => {
+      if (!isWebViewAvailable())
+        return
+
+      // Serve that accepts but never responds.
+      const server = Bun.serve({ port: 0, fetch: () => new Promise<Response>(() => {}) })
+      try {
+        const capture = new WebViewCapture()
+        await expect(
+          capture.captureUrl(`http://localhost:${server.port}/`, { timeout: 200 }),
+        ).rejects.toBeInstanceOf(WebViewTimeoutError)
+      }
+      finally {
+        server.stop(true)
+      }
+    }, 10_000)
+
+    it('reuses a pooled WebView instance across captures', async () => {
+      if (!isWebViewAvailable())
+        return
+
+      const capture = new WebViewCapture({ reuse: true, width: 60, height: 60 })
+      // Private field is observable at runtime — TS private does not gate access.
+      const internals = capture as unknown as { pooled: object | null }
+
+      expect(internals.pooled).toBeNull()
+      await capture.captureHtml('<body>a</body>', { waitFor: 50 })
+      const first = internals.pooled
+      expect(first).not.toBeNull()
+
+      await capture.captureHtml('<body>b</body>', { waitFor: 50 })
+      expect(internals.pooled).toBe(first)
+
+      capture.dispose()
+      expect(internals.pooled).toBeNull()
+    }, 15_000)
   })
 })

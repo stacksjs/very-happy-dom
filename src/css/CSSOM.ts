@@ -313,32 +313,107 @@ export class CSSStyleSheet {
   }
 
   replace(text: string): Promise<CSSStyleSheet> {
-    // eslint-disable-next-line ts/no-unused-vars
-    void text
-    const rules = this.cssRules as CSSRule[]
-    rules.length = 0
+    this.replaceSync(text)
     return Promise.resolve(this)
   }
 
   replaceSync(text: string): void {
-    // eslint-disable-next-line ts/no-unused-vars
-    void text
     const rules = this.cssRules as CSSRule[]
     rules.length = 0
+    for (const raw of splitTopLevelRules(text)) {
+      const rule = raw.trim()
+      if (!rule)
+        continue
+      const braceIdx = rule.indexOf('{')
+      if (braceIdx === -1)
+        continue
+      const selector = rule.slice(0, braceIdx).trim()
+      const body = rule.slice(braceIdx + 1, rule.lastIndexOf('}')).trim()
+      const styleRule = new CSSStyleRule()
+      styleRule.selectorText = selector
+      styleRule.parentStyleSheet = this
+      for (const decl of body.split(';')) {
+        const colon = decl.indexOf(':')
+        if (colon === -1) continue
+        const prop = decl.slice(0, colon).trim()
+        const value = decl.slice(colon + 1).trim()
+        if (prop && value)
+          styleRule.style.setProperty(prop, value)
+      }
+      rules.push(styleRule)
+    }
   }
+}
+
+function splitTopLevelRules(text: string): string[] {
+  const out: string[] = []
+  let depth = 0
+  let start = 0
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) {
+        out.push(text.slice(start, i + 1))
+        start = i + 1
+      }
+    }
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------
 // CSS namespace object
 // ---------------------------------------------------------------------------
 
+const CSS_IDENT_RE = /^[\w-]+$/
+const CSS_FUNCTION_RE = /^\w+\(.+\)$/
+
 export const CSS = {
   escape(value: string): string {
     return value.replace(/([^\w-])/g, '\\$1')
   },
-  supports(_property: string, _value?: string): boolean {
-    // Virtual DOM accepts everything
-    return true
+  /**
+   * Best-effort CSS.supports(). Without a real CSS parser we stay permissive:
+   * accept any non-empty input, recognize "not (...)" for the 1-arg condition
+   * form, and reject clearly malformed declarations in the 2-arg form.
+   */
+  supports(property: string, value?: string): boolean {
+    if (value === undefined) {
+      const condition = property.trim()
+      if (!condition)
+        return false
+      if (condition.startsWith('not ')) {
+        const inner = condition.slice(4).trim().replace(/^\(|\)$/g, '')
+        const colon = inner.indexOf(':')
+        if (colon === -1)
+          return !true // invalid inner — conservatively: not(invalid) == false
+        return !CSS.supports(inner.slice(0, colon).trim(), inner.slice(colon + 1).trim())
+      }
+      // Bare property name OR `property: value` condition both permitted.
+      return true
+    }
+    if (!property || !value)
+      return false
+    if (!CSS_IDENT_RE.test(property))
+      return false
+    const trimmed = value.trim()
+    if (!trimmed)
+      return false
+    if (CSS_IDENT_RE.test(trimmed))
+      return true
+    if (CSS_FUNCTION_RE.test(trimmed))
+      return true
+    if (/^-?\d+(?:\.\d+)?(?:[a-z%]+)?$/i.test(trimmed))
+      return true
+    if (/^#[0-9a-f]{3,8}$/i.test(trimmed))
+      return true
+    return trimmed.split(/\s+/).every(tok =>
+      CSS_IDENT_RE.test(tok)
+      || CSS_FUNCTION_RE.test(tok)
+      || /^-?\d+(?:\.\d+)?(?:[a-z%]+)?$/i.test(tok)
+      || /^#[0-9a-f]{3,8}$/i.test(tok))
   },
 }
 

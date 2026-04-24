@@ -22,6 +22,23 @@ export type WebViewImageFormat = 'png' | 'jpeg' | 'webp'
 export type WebViewEncoding = 'buffer' | 'binary' | 'base64' | 'blob' | 'shmem'
 
 /**
+ * Font face to preload via an injected @font-face rule.
+ */
+export interface WebViewFont {
+  family: string
+  url: string
+  weight?: string
+  style?: string
+}
+
+/**
+ * Console hook forwarded to Bun.WebView's `console` constructor option.
+ * The exact event shape is defined by Bun; passed through unchanged.
+ */
+// eslint-disable-next-line pickier/no-unused-vars
+export type WebViewConsoleHook = true | ((event: unknown) => void)
+
+/**
  * WebView-backed screenshot options
  */
 export interface WebViewScreenshotOptions {
@@ -45,6 +62,37 @@ export interface WebViewScreenshotOptions {
   dataStore?: 'ephemeral' | { directory: string }
   /** Delay in ms between page load and capture — gives async content time to render */
   waitFor?: number
+  /** Maximum total ms for navigate + screenshot; rejects if exceeded */
+  timeout?: number
+  /** Inline CSS injected into the document head (HTML captures only) */
+  css?: string
+  /** Base URL used to resolve relative asset paths (HTML captures only) */
+  baseUrl?: string
+  /** Fonts preloaded via @font-face (HTML captures only) */
+  fonts?: WebViewFont[]
+  /** Capture page console calls; forwarded to Bun.WebView's `console` option */
+  console?: WebViewConsoleHook
+}
+
+/**
+ * Construction-time options for WebViewCapture. These configure the underlying
+ * WebView lifecycle — most apply only in `reuse` mode.
+ */
+export interface WebViewCaptureConstructorOptions {
+  /**
+   * Keep one WebView alive across captures instead of creating and disposing
+   * per call. Large speedup for test suites that take many screenshots.
+   */
+  reuse?: boolean
+  /** Default viewport width for the reused instance */
+  width?: number
+  /** Default viewport height for the reused instance */
+  height?: number
+  backend?: 'webkit' | 'chrome'
+  headless?: boolean
+  dataStore?: 'ephemeral' | { directory: string }
+  /** Default console hook applied to the reused instance */
+  console?: WebViewConsoleHook
 }
 
 /**
@@ -62,15 +110,18 @@ interface BunWebViewInstance {
   [Symbol.dispose]?: () => void
 }
 
+interface BunWebViewConstructorOptions {
+  url?: string
+  width?: number
+  height?: number
+  backend?: 'webkit' | 'chrome'
+  headless?: boolean
+  dataStore?: 'ephemeral' | { directory: string }
+  console?: unknown
+}
+
 interface BunWebViewConstructor {
-  new (options: {
-    url?: string
-    width?: number
-    height?: number
-    backend?: 'webkit' | 'chrome'
-    headless?: boolean
-    dataStore?: 'ephemeral' | { directory: string }
-  }): BunWebViewInstance
+  new (options: BunWebViewConstructorOptions): BunWebViewInstance
 }
 
 function getWebViewConstructor(): BunWebViewConstructor | null {
@@ -100,6 +151,16 @@ export class WebViewUnavailableError extends Error {
 }
 
 /**
+ * Thrown when a capture exceeds its `timeout` budget.
+ */
+export class WebViewTimeoutError extends Error {
+  constructor(phase: string, ms: number) {
+    super(`Bun.WebView ${phase} timed out after ${ms}ms`)
+    this.name = 'WebViewTimeoutError'
+  }
+}
+
+/**
  * Return type of a capture call, determined by the requested encoding.
  */
 export type WebViewScreenshotResult = Buffer | string | Blob | { name: string, size: number }
@@ -108,6 +169,14 @@ export type WebViewScreenshotResult = Buffer | string | Blob | { name: string, s
  * WebView-backed screenshot capture.
  */
 export class WebViewCapture {
+  private init: WebViewCaptureConstructorOptions
+  private pooled: BunWebViewInstance | null = null
+  private pooledKey = ''
+
+  constructor(init: WebViewCaptureConstructorOptions = {}) {
+    this.init = init
+  }
+
   /**
    * Navigate to a URL inside a headless Bun.WebView and capture a screenshot.
    */
@@ -117,30 +186,45 @@ export class WebViewCapture {
       throw new WebViewUnavailableError()
 
     const {
-      width = 1024,
-      height = 768,
+      width = this.init.width ?? 1024,
+      height = this.init.height ?? 768,
       format = 'png',
       quality = 90,
       encoding = 'buffer',
-      backend,
-      headless = true,
-      dataStore = 'ephemeral',
+      backend = this.init.backend,
+      headless = this.init.headless ?? true,
+      dataStore = this.init.dataStore ?? 'ephemeral',
       waitFor = 0,
+      timeout,
       path,
+      console: consoleOpt = this.init.console,
     } = options
 
     // 'binary' is a project-local alias for Bun's 'buffer' encoding.
     const bunEncoding: 'buffer' | 'base64' | 'blob' | 'shmem'
       = encoding === 'binary' ? 'buffer' : encoding
 
-    const view = new WebView({ width, height, backend, headless, dataStore })
+    const viewConfig: BunWebViewConstructorOptions = {
+      width,
+      height,
+      backend,
+      headless,
+      dataStore,
+      console: consoleOpt,
+    }
+
+    const view = this.acquire(WebView, viewConfig)
 
     try {
-      await view.navigate(url)
+      await withTimeout(view.navigate(url), timeout, 'navigate')
       if (waitFor > 0)
         await new Promise(resolve => setTimeout(resolve, waitFor))
 
-      const shot = await view.screenshot({ encoding: bunEncoding, format, quality })
+      const shot = await withTimeout(
+        view.screenshot({ encoding: bunEncoding, format, quality }),
+        timeout,
+        'screenshot',
+      )
 
       if (path)
         await writeScreenshotToPath(path, shot)
@@ -148,17 +232,18 @@ export class WebViewCapture {
       return shot
     }
     finally {
-      const disposer = view.close ?? view[Symbol.dispose]
-      if (typeof disposer === 'function')
-        disposer.call(view)
+      this.release(view)
     }
   }
 
   /**
    * Capture a screenshot of an HTML string by loading it as a data URL.
+   * When `css`, `baseUrl`, or `fonts` are provided, they are injected into
+   * the document head before encoding.
    */
   async captureHtml(html: string, options: WebViewScreenshotOptions = {}): Promise<WebViewScreenshotResult> {
-    const url = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
+    const decorated = decorateHtml(html, options)
+    const url = `data:text/html;charset=utf-8,${encodeURIComponent(decorated)}`
     return this.capture(url, options)
   }
 
@@ -168,6 +253,73 @@ export class WebViewCapture {
   async captureUrl(url: string, options: WebViewScreenshotOptions = {}): Promise<WebViewScreenshotResult> {
     return this.capture(url, options)
   }
+
+  /**
+   * Close any pooled WebView. Safe to call repeatedly.
+   */
+  dispose(): void {
+    if (this.pooled) {
+      disposeView(this.pooled)
+      this.pooled = null
+      this.pooledKey = ''
+    }
+  }
+
+  [Symbol.dispose](): void {
+    this.dispose()
+  }
+
+  private acquire(WebView: BunWebViewConstructor, config: BunWebViewConstructorOptions): BunWebViewInstance {
+    if (!this.init.reuse)
+      return new WebView(config)
+
+    const key = poolKey(config)
+    if (this.pooled && this.pooledKey === key)
+      return this.pooled
+
+    // Config changed (e.g. dimensions) — drop the stale instance.
+    if (this.pooled)
+      disposeView(this.pooled)
+
+    this.pooled = new WebView(config)
+    this.pooledKey = key
+    return this.pooled
+  }
+
+  private release(view: BunWebViewInstance): void {
+    if (this.init.reuse && this.pooled === view)
+      return
+    disposeView(view)
+  }
+}
+
+function disposeView(view: BunWebViewInstance): void {
+  const disposer = view.close ?? view[Symbol.dispose]
+  if (typeof disposer === 'function')
+    disposer.call(view)
+}
+
+function poolKey(config: BunWebViewConstructorOptions): string {
+  const ds = typeof config.dataStore === 'string' ? config.dataStore : config.dataStore?.directory ?? ''
+  return `${config.width ?? ''}x${config.height ?? ''}|${config.backend ?? ''}|${config.headless ?? ''}|${ds}`
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeout: number | undefined, phase: string): Promise<T> {
+  if (!timeout || timeout <= 0)
+    return promise
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new WebViewTimeoutError(phase, timeout)), timeout)
+  })
+
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  }
+  finally {
+    if (timer)
+      clearTimeout(timer)
+  }
 }
 
 async function writeScreenshotToPath(path: string, shot: WebViewScreenshotResult): Promise<void> {
@@ -175,8 +327,47 @@ async function writeScreenshotToPath(path: string, shot: WebViewScreenshotResult
   if (typeof shot === 'object' && shot !== null && 'name' in shot && 'size' in shot)
     return
 
-  // Bun.write accepts Blob | BufferSource | string.
   await Bun.write(path, shot as Blob | Buffer | string)
+}
+
+function decorateHtml(html: string, options: WebViewScreenshotOptions): string {
+  const { css, baseUrl, fonts } = options
+  const hasExtras = Boolean(css || baseUrl || (fonts && fonts.length > 0))
+  if (!hasExtras)
+    return html
+
+  const parts: string[] = []
+  if (baseUrl)
+    parts.push(`<base href="${escapeAttr(baseUrl)}">`)
+
+  const fontRules = (fonts ?? []).map((font) => {
+    const weight = font.weight != null ? ` font-weight: ${font.weight};` : ''
+    const style = font.style ? ` font-style: ${font.style};` : ''
+    return `@font-face { font-family: '${escapeAttr(font.family)}'; src: url('${escapeAttr(font.url)}');${weight}${style} }`
+  }).join('\n')
+
+  if (fontRules || css)
+    parts.push(`<style>${fontRules}${css ?? ''}</style>`)
+
+  const injection = parts.join('')
+
+  if (/<\/head>/i.test(html))
+    return html.replace(/<\/head>/i, `${injection}</head>`)
+
+  const htmlOpen = /<html\b[^>]*>/i.exec(html)
+  if (htmlOpen)
+    return html.replace(htmlOpen[0], `${htmlOpen[0]}<head>${injection}</head>`)
+
+  return `<!DOCTYPE html><html><head>${injection}</head><body>${html}</body></html>`
+}
+
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/'/g, '&apos;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 }
 
 /**

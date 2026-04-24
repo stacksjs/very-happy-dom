@@ -893,7 +893,12 @@ function getAttrOperatorRegex(operator: string): RegExp {
   let re = attrOperatorPatterns.get(operator)
   if (re) return re
   const escapedOperator = operator.replace(/([\^$*~|])/g, '\\$1')
-  re = new RegExp(`^([a-z0-9:-]+)${escapedOperator}(["'])(.*?)\\2(?:\\s+[is])?$`, 'i')
+  // Accept both quoted values (["'](.*?)\2) and unquoted CSS idents.
+  // Per CSS-SEL-4, unquoted values must be CSS identifiers.
+  re = new RegExp(
+    `^([a-z0-9:_-]+)${escapedOperator}(?:(["'])(.*?)\\2|([^\\s"'\\]]+))(?:\\s+([is]))?$`,
+    'i',
+  )
   attrOperatorPatterns.set(operator, re)
   return re
 }
@@ -901,11 +906,12 @@ function getAttrOperatorRegex(operator: string): RegExp {
 function parseAttributeMatch(selector: string, operator: string): [string, string, string | null] | null {
   const re = getAttrOperatorRegex(operator)
   const match = selector.match(re)
-  if (!match) {
+  if (!match)
     return null
-  }
-  const flagMatch = selector.match(/\s+([is])$/i)
-  return [match[1], match[3], flagMatch ? flagMatch[1].toLowerCase() : null]
+  // Quoted capture at [3], unquoted fallback at [4], optional [is] flag at [5].
+  const value = match[3] !== undefined ? match[3] : match[4]
+  const flag = match[5] ? match[5].toLowerCase() : null
+  return [match[1], value, flag]
 }
 
 function normalizeAttributeValue(value: string, flag: string | null): string {

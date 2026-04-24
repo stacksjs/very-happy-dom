@@ -6,6 +6,45 @@ const SKIP_KEYS = new Set([
   'self', 'window', 'parent', 'top', 'frames',
 ])
 
+// Keys that must reflect the Window instance even if the host runtime
+// already defines them (Bun exposes some of these — navigator, performance,
+// fetch — and tests expect the Window's versions to win).
+const OVERRIDE_KEYS = new Set([
+  'navigator', 'localStorage', 'sessionStorage',
+  'location', 'history',
+  'innerWidth', 'innerHeight', 'outerWidth', 'outerHeight',
+  'devicePixelRatio', 'scrollX', 'scrollY', 'pageXOffset', 'pageYOffset',
+  'matchMedia', 'getComputedStyle', 'getSelection',
+  'customElements', 'indexedDB',
+  'addEventListener', 'removeEventListener', 'dispatchEvent',
+  'postMessage', 'alert', 'confirm', 'prompt',
+  'scrollTo', 'scroll', 'scrollBy',
+  'requestAnimationFrame', 'cancelAnimationFrame',
+  'requestIdleCallback', 'cancelIdleCallback',
+  'BroadcastChannel', 'MessageChannel', 'MessagePort',
+  'EventSource', 'PerformanceObserver',
+  'MutationObserver', 'IntersectionObserver', 'ResizeObserver',
+  'CustomElementRegistry', 'HTMLElement',
+  'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent',
+  'FocusEvent', 'InputEvent', 'SubmitEvent', 'PointerEvent',
+  'TouchEvent', 'WheelEvent', 'DragEvent', 'ClipboardEvent',
+  'AnimationEvent', 'TransitionEvent',
+  'ProgressEvent', 'MessageEvent', 'CloseEvent',
+  'StorageEvent', 'PopStateEvent', 'HashChangeEvent',
+  'ErrorEvent', 'MediaQueryListEvent', 'CompositionEvent',
+  'Document', 'Element', 'Node', 'Text', 'Comment',
+  'DocumentFragment', 'HTMLTemplateElement', 'SVGElement',
+  'NodeFilter', 'NodeIterator', 'TreeWalker', 'Range', 'Selection',
+  'DOMParser', 'XMLSerializer',
+  'XMLHttpRequest', 'WebSocket',
+  'File', 'FileReader', 'FileList',
+  'HTMLCanvasElement', 'CanvasRenderingContext2D',
+  'Image', 'Audio',
+  'IDBFactory', 'IDBDatabase', 'IDBObjectStore',
+  'IDBTransaction', 'IDBRequest', 'IDBOpenDBRequest',
+  'Notification', 'DataTransfer',
+])
+
 let registeredWindow: Window | null = null
 const registeredKeys: string[] = []
 
@@ -44,7 +83,7 @@ export class GlobalRegistrator {
 
     for (const key of Object.getOwnPropertyNames(win)) {
       if (SKIP_KEYS.has(key)) continue
-      if (key in globalThis) continue
+      if (key in globalThis && !OVERRIDE_KEYS.has(key)) continue
 
       const descriptor = Object.getOwnPropertyDescriptor(win, key)
       if (!descriptor) continue
@@ -59,7 +98,7 @@ export class GlobalRegistrator {
     const proto = Object.getPrototypeOf(win)
     for (const key of Object.getOwnPropertyNames(proto)) {
       if (SKIP_KEYS.has(key)) continue
-      if (key in globalThis) continue
+      if (key in globalThis && !OVERRIDE_KEYS.has(key)) continue
 
       const descriptor = Object.getOwnPropertyDescriptor(proto, key)
       if (!descriptor) continue

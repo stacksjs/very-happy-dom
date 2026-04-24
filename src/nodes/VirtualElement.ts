@@ -504,6 +504,24 @@ export class VirtualElement extends VirtualNodeBase {
     return this._serializeNode(this)
   }
 
+  set outerHTML(html: string) {
+    const parent = this.parentNode
+    if (!parent)
+      throw new DOMException('This element has no parent node.', 'NoModificationAllowedError')
+    const parsed = parseHTML(html, this.ownerDocument)
+    const index = parent.childNodes.indexOf(this)
+    // Detach self via tree-operations so the id index is cleaned up.
+    removeNode(parent as any, this)
+    for (let i = 0; i < parsed.length; i++) {
+      const node = parsed[i]
+      parent.childNodes.splice(index + i, 0, node)
+      ;(node as any).parentNode = parent
+      const doc = this.ownerDocument
+      if (doc)
+        setOwnerDocumentRecursive(node as VirtualNode, doc)
+    }
+  }
+
   // className getter/setter
   get className(): string {
     return this.getAttribute('class') || ''
@@ -1893,34 +1911,235 @@ export class VirtualElement extends VirtualNodeBase {
     return super.dispatchEvent(event)
   }
 
-  // Focus/blur with actual focus tracking
+  // Focus/blur with actual focus tracking.
+  // Fires both the non-bubbling focus/blur and the bubbling focusin/focusout
+  // so listeners on ancestor elements (e.g. delegated focus handlers) work.
   focus(): void {
     const doc = this.ownerDocument
     if (doc) {
       const previouslyFocused = doc.activeElement
       if (previouslyFocused && previouslyFocused !== this && previouslyFocused !== doc.body) {
-        const blurEvent = new VirtualEvent('blur', { bubbles: false })
-        previouslyFocused.dispatchEvent(blurEvent)
+        previouslyFocused.dispatchEvent(new VirtualEvent('blur', { bubbles: false }))
+        previouslyFocused.dispatchEvent(new VirtualEvent('focusout', { bubbles: true }))
       }
       doc._setFocusedElement(this)
     }
-    const event = new VirtualEvent('focus', { bubbles: false })
-    this.dispatchEvent(event)
+    this.dispatchEvent(new VirtualEvent('focus', { bubbles: false }))
+    this.dispatchEvent(new VirtualEvent('focusin', { bubbles: true }))
   }
 
   blur(): void {
     const doc = this.ownerDocument
-    if (doc && doc.activeElement === this) {
+    if (doc && doc.activeElement === this)
       doc._setFocusedElement(null)
-    }
-    const event = new VirtualEvent('blur', { bubbles: false })
+    this.dispatchEvent(new VirtualEvent('blur', { bubbles: false }))
+    this.dispatchEvent(new VirtualEvent('focusout', { bubbles: true }))
+  }
+
+  // Scroll methods — virtual layout, but update scroll state and fire events.
+  scrollIntoView(_arg?: boolean | ScrollIntoViewOptions): void {
+    this._scrollTop = 0
+    this._scrollLeft = 0
+    const event = new VirtualEvent('scroll', { bubbles: false })
     this.dispatchEvent(event)
   }
 
-  // Scroll methods (no-op in virtual DOM)
-  scrollIntoView(_arg?: boolean | ScrollIntoViewOptions): void {}
+  scrollTo(x?: number | { left?: number, top?: number }, y?: number): void {
+    if (typeof x === 'object' && x !== null) {
+      if (typeof x.left === 'number') this._scrollLeft = x.left
+      if (typeof x.top === 'number') this._scrollTop = x.top
+    }
+    else {
+      if (typeof x === 'number') this._scrollLeft = x
+      if (typeof y === 'number') this._scrollTop = y
+    }
+    const event = new VirtualEvent('scroll', { bubbles: false })
+    this.dispatchEvent(event)
+  }
 
-  scrollTo(_x?: number, _y?: number): void {}
+  scrollBy(x?: number | { left?: number, top?: number }, y?: number): void {
+    if (typeof x === 'object' && x !== null) {
+      if (typeof x.left === 'number') this._scrollLeft += x.left
+      if (typeof x.top === 'number') this._scrollTop += x.top
+    }
+    else {
+      if (typeof x === 'number') this._scrollLeft += x
+      if (typeof y === 'number') this._scrollTop += y
+    }
+    const event = new VirtualEvent('scroll', { bubbles: false })
+    this.dispatchEvent(event)
+  }
+
+  // ---- HTMLMediaElement surface (gated on tag) ----
+
+  private _isMediaElement(): boolean {
+    return this.tagName === 'AUDIO' || this.tagName === 'VIDEO'
+  }
+
+  private _mediaPaused: boolean = true
+  private _mediaEnded: boolean = false
+  private _mediaCurrentTime: number = 0
+  private _mediaDuration: number = Number.NaN
+  private _mediaVolume: number = 1
+  private _mediaMuted: boolean = false
+  private _mediaPlaybackRate: number = 1
+  private _mediaReadyState: number = 0
+  private _mediaNetworkState: number = 0
+
+  get paused(): boolean {
+    if (!this._isMediaElement()) return true
+    return this._mediaPaused
+  }
+
+  get ended(): boolean {
+    if (!this._isMediaElement()) return false
+    return this._mediaEnded
+  }
+
+  get currentTime(): number {
+    if (!this._isMediaElement()) return 0
+    return this._mediaCurrentTime
+  }
+
+  set currentTime(value: number) {
+    if (!this._isMediaElement()) return
+    this._mediaCurrentTime = value
+    this.dispatchEvent(new VirtualEvent('timeupdate', { bubbles: false }))
+  }
+
+  get duration(): number {
+    if (!this._isMediaElement()) return 0
+    return this._mediaDuration
+  }
+
+  get volume(): number {
+    if (!this._isMediaElement()) return 1
+    return this._mediaVolume
+  }
+
+  set volume(value: number) {
+    if (!this._isMediaElement()) return
+    this._mediaVolume = Math.max(0, Math.min(1, value))
+    this.dispatchEvent(new VirtualEvent('volumechange', { bubbles: false }))
+  }
+
+  get muted(): boolean {
+    if (!this._isMediaElement()) return false
+    return this._mediaMuted
+  }
+
+  set muted(value: boolean) {
+    if (!this._isMediaElement()) return
+    this._mediaMuted = Boolean(value)
+    this.dispatchEvent(new VirtualEvent('volumechange', { bubbles: false }))
+  }
+
+  get playbackRate(): number {
+    if (!this._isMediaElement()) return 1
+    return this._mediaPlaybackRate
+  }
+
+  set playbackRate(value: number) {
+    if (!this._isMediaElement()) return
+    this._mediaPlaybackRate = value
+    this.dispatchEvent(new VirtualEvent('ratechange', { bubbles: false }))
+  }
+
+  get readyState(): number {
+    if (!this._isMediaElement()) return 0
+    return this._mediaReadyState
+  }
+
+  get networkState(): number {
+    if (!this._isMediaElement()) return 0
+    return this._mediaNetworkState
+  }
+
+  play(): Promise<void> {
+    if (!this._isMediaElement())
+      return Promise.reject(new DOMException('Not a media element', 'InvalidStateError'))
+    const wasPaused = this._mediaPaused
+    this._mediaPaused = false
+    this._mediaEnded = false
+    if (wasPaused) {
+      queueMicrotask(() => {
+        this.dispatchEvent(new VirtualEvent('play', { bubbles: false }))
+        this.dispatchEvent(new VirtualEvent('playing', { bubbles: false }))
+      })
+    }
+    return Promise.resolve()
+  }
+
+  pause(): void {
+    if (!this._isMediaElement()) return
+    if (this._mediaPaused) return
+    this._mediaPaused = true
+    queueMicrotask(() => {
+      this.dispatchEvent(new VirtualEvent('pause', { bubbles: false }))
+    })
+  }
+
+  load(): void {
+    if (!this._isMediaElement()) return
+    this._mediaCurrentTime = 0
+    this._mediaEnded = false
+    this._mediaPaused = true
+    queueMicrotask(() => {
+      this.dispatchEvent(new VirtualEvent('loadstart', { bubbles: false }))
+      this.dispatchEvent(new VirtualEvent('loadedmetadata', { bubbles: false }))
+    })
+  }
+
+  canPlayType(_type: string): string {
+    if (!this._isMediaElement()) return ''
+    // Probably is the most permissive and what tests usually want.
+    return 'maybe'
+  }
+
+  addTextTrack(_kind: string, _label?: string, _language?: string): { kind: string, label: string, language: string, mode: string } {
+    return { kind: _kind, label: _label ?? '', language: _language ?? '', mode: 'disabled' }
+  }
+
+  // ---- HTMLImageElement.decode ----
+  decode(): Promise<void> {
+    return Promise.resolve()
+  }
+
+  // ---- Element.animate — returns a minimal Animation stub ----
+  animate(_keyframes: unknown, _options?: unknown): {
+    play: () => void
+    pause: () => void
+    cancel: () => void
+    finish: () => void
+    reverse: () => void
+    finished: Promise<{ currentTime: number }>
+    playState: string
+    currentTime: number | null
+    // eslint-disable-next-line pickier/no-unused-vars
+    onfinish: ((event: Event) => void) | null
+    // eslint-disable-next-line pickier/no-unused-vars
+    oncancel: ((event: Event) => void) | null
+  } {
+    const animation = {
+      play: (): void => {},
+      pause: (): void => {},
+      cancel: (): void => {},
+      finish: (): void => {
+        if (animation.onfinish)
+          try { animation.onfinish(new VirtualEvent('finish') as unknown as Event) }
+          catch {}
+      },
+      reverse: (): void => {},
+      finished: Promise.resolve({ currentTime: 0 }),
+      playState: 'finished',
+      currentTime: 0 as number | null,
+      // eslint-disable-next-line pickier/no-unused-vars
+      onfinish: null as ((event: Event) => void) | null,
+      // eslint-disable-next-line pickier/no-unused-vars
+      oncancel: null as ((event: Event) => void) | null,
+    }
+    return animation
+  }
 
   // Client rects
   getClientRects(): DOMRect[] {

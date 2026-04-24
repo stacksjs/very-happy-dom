@@ -329,3 +329,44 @@ export { XPathResult, XPathResultType } from './xpath/XPathResult'
 export { captureHtml, captureUrl, ScreenshotCapture, type ScreenshotOptions } from './screenshot/capture'
 export { compareImages, ImageDiff, type DiffOptions, type DiffResult } from './screenshot/diff'
 export { createRenderer, HtmlRenderer, type RenderOptions, type RenderResult } from './screenshot/renderer'
+
+// Export jsdom-compatible surface
+export {
+  CookieJar,
+  type CookieJarGetCookiesOptions,
+  type CookieJarSetCookieOptions,
+  JSDOM,
+  type JSDOMConstructorOptions,
+  type JSDOMReconfigureSettings,
+  type JSDOMResources,
+  type JSDOMRunScripts,
+  ResourceLoader,
+  type ResourceLoaderConstructorOptions,
+  type ResourceLoaderFetchOptions,
+  VirtualConsole,
+  type VirtualConsoleListener,
+  type VirtualConsoleSendToOptions,
+} from './jsdom'
+
+// Export extra browser APIs
+export { BroadcastChannel, MessageChannel, MessagePort } from './apis/Channel'
+export { EventSource, type EventSourceInit } from './apis/EventSource'
+export {
+  createIndexedDB,
+  IDBDatabase,
+  IDBFactory,
+  IDBObjectStore,
+  type IDBObjectStoreParameters,
+  IDBOpenDBRequest,
+  IDBRequest,
+  IDBTransaction,
+  type IDBTransactionMode,
+} from './apis/IndexedDB'
+export {
+  PerformanceObserver,
+  type PerformanceObserverCallback,
+  type PerformanceObserverEntryList,
+  type PerformanceObserverInit,
+} from './apis/PerformanceObserver'
+export { ClipboardItem, Permissions, PermissionStatus, StorageManager } from './apis/Clipboard'
+export { createFormData, VeryHappyFormData } from './apis/FormData'

@@ -7,7 +7,12 @@ import { Buffer } from 'node:buffer'
 import type { BrowserPage } from '../browser/BrowserPage'
 import { crc32, deflate, inflate } from './deflate'
 import { HtmlRenderer, type RenderOptions, type RenderResult } from './renderer'
-import { WebViewCapture, type WebViewScreenshotOptions } from './webview'
+import {
+  WebViewCapture,
+  type WebViewCaptureConstructorOptions,
+  type WebViewConsoleHook,
+  type WebViewScreenshotOptions,
+} from './webview'
 
 /**
  * Screenshot options
@@ -31,9 +36,16 @@ export interface ScreenshotOptions extends RenderOptions {
   /**
    * Route through Bun.WebView for real browser-rendered output instead of
    * the pure-JS pipeline. Pass `true` to enable with defaults, or an object
-   * to configure the WebView backend/dataStore/waitFor.
+   * to configure the WebView backend/dataStore/waitFor/timeout/console/fonts.
    */
-  useWebView?: boolean | Pick<WebViewScreenshotOptions, 'backend' | 'headless' | 'dataStore' | 'waitFor'>
+  useWebView?: boolean | Pick<
+    WebViewScreenshotOptions,
+    'backend' | 'headless' | 'dataStore' | 'waitFor' | 'timeout' | 'baseUrl' | 'fonts' | 'console'
+  >
+  /** Maximum total ms for navigate + screenshot when `useWebView` is active */
+  timeout?: number
+  /** Capture page console calls (WebView captures) */
+  console?: WebViewConsoleHook
 }
 
 /**
@@ -52,9 +64,20 @@ export class ScreenshotCapture {
   private renderer: HtmlRenderer
   private webView: WebViewCapture
 
-  constructor() {
+  constructor(options: { webView?: WebViewCaptureConstructorOptions } = {}) {
     this.renderer = new HtmlRenderer()
-    this.webView = new WebViewCapture()
+    this.webView = new WebViewCapture(options.webView)
+  }
+
+  /**
+   * Dispose any pooled WebView held by this capture. Safe to call repeatedly.
+   */
+  dispose(): void {
+    this.webView.dispose()
+  }
+
+  [Symbol.dispose](): void {
+    this.dispose()
   }
 
   /**
@@ -68,8 +91,12 @@ export class ScreenshotCapture {
     const viewport = page.viewport
 
     if (options.useWebView) {
+      const pageUrl = realPageUrl(page.url)
+      const wvOptions = this.buildWebViewOptions(options, viewport)
       return this.captureViaWebView(
-        wv => wv.captureHtml(html, this.buildWebViewOptions(options, viewport)),
+        (wv) => {
+          return pageUrl ? wv.captureUrl(pageUrl, wvOptions) : wv.captureHtml(html, wvOptions)
+        },
         options,
       )
     }
@@ -143,6 +170,11 @@ export class ScreenshotCapture {
       height: options.height ?? viewport?.height,
       format,
       quality: options.quality,
+      css: options.css,
+      baseUrl: options.baseUrl,
+      fonts: options.fonts,
+      timeout: options.timeout,
+      console: options.console,
       ...overrides,
     }
   }
@@ -470,6 +502,21 @@ export async function captureUrl(
 ): Promise<Buffer | string> {
   const capture = new ScreenshotCapture()
   return capture.captureUrl(url, options)
+}
+
+/**
+ * Return the page URL when it is a real, fetchable URL; null otherwise.
+ * Avoids loading `about:blank`, empty strings, or `data:` URLs as if they
+ * were authoritative sources.
+ */
+function realPageUrl(url: string | null | undefined): string | null {
+  if (!url)
+    return null
+  if (url === 'about:blank')
+    return null
+  if (url.startsWith('data:'))
+    return null
+  return /^[a-z][\w+.-]*:/i.test(url) ? url : null
 }
 
 /**
