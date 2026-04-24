@@ -515,6 +515,7 @@ export class VirtualElement extends VirtualNodeBase {
     for (let i = 0; i < parsed.length; i++) {
       const node = parsed[i]
       parent.childNodes.splice(index + i, 0, node)
+      // eslint-disable-next-line max-statements-per-line
       ;(node as any).parentNode = parent
       const doc = this.ownerDocument
       if (doc)

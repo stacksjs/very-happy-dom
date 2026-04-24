@@ -247,12 +247,10 @@ export class VirtualDocument extends VirtualNodeBase {
       },
       replaceState(state: any, title: string, url?: string) {
         const resolvedUrl = url ? doc._resolveLocationString(url) : doc.location.href
-        // Ensure there is at least one entry so replaceState always succeeds.
-        if (doc._historyIndex < 0) {
-          doc._historyStack.push({ state, title, url: resolvedUrl })
-          doc._historyIndex = 0
-        }
-        else {
+        // Replace current entry when one exists; otherwise update URL only,
+        // matching the "no history entry to replace" edge case. Never grow
+        // the stack.
+        if (doc._historyIndex >= 0) {
           doc._historyStack[doc._historyIndex] = {
             state,
             title,

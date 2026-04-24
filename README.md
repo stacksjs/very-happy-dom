@@ -13,11 +13,13 @@ A blazingly fast, lightweight virtual DOM implementation powered by Bun. Drop-in
 ## Features
 
 - **Comprehensive DOM** - Full DOM manipulation, CSS selectors, XPath, events with bubbling/capturing
-- **Network APIs** - Fetch, XMLHttpRequest, WebSocket, and request interception
-- **Browser APIs** - Storage, Timers, Canvas 2D, Observers, Clipboard, History, Cookies, File API
+- **Network APIs** - Fetch, XMLHttpRequest, WebSocket, Server-Sent Events, BroadcastChannel, MessageChannel, request interception
+- **Browser APIs** - Storage, Timers, Canvas 2D, Observers (Mutation/Intersection/Resize/Performance), Clipboard, History, Cookies, File API, IndexedDB, Web Storage
 - **Web Components** - Custom Elements and Shadow DOM
 - **Framework Agnostic** - Works with Bun, Vitest, or any testing framework
-- **Easy Migration** - API-compatible with happy-dom; one-line switch from jsdom
+- **jsdom-compatible** - Real `JSDOM` class with `.serialize()`, `.reconfigure()`, `.fromURL()`, `.fromFile()`, `.fragment()`, `VirtualConsole`, `CookieJar`, `ResourceLoader`
+- **happy-dom-compatible** - Drop-in for `GlobalRegistrator`, `window.happyDOM` API, virtual consoles
+- **Screenshot** - Pure-JS PNG/JPEG/WebP rendering + optional `Bun.WebView` real-browser screenshots
 
 ## Installation
 
@@ -68,7 +70,19 @@ describe('MyComponent', () => {
 
 ### Global DOM Environment
 
-For Testing Library, React, and other frameworks that expect browser globals (`document`, `window`, etc.), use `GlobalRegistrator`:
+For Testing Library, React, and other frameworks that expect browser globals (`document`, `window`, etc.), either use the one-line preload subpath or call `GlobalRegistrator` manually.
+
+**Easiest — the `/register` subpath:**
+
+```toml
+# bunfig.toml
+[test]
+preload = ["very-happy-dom/register"]
+```
+
+You can override the URL with `VERY_HAPPY_DOM_URL` or `HAPPY_DOM_URL` env vars.
+
+**Manual — drop-in for `@happy-dom/global-registrator`:**
 
 ```typescript
 // happy-dom.ts (preload script)
@@ -290,18 +304,33 @@ import { Window } from 'very-happy-dom'
 
 ### From jsdom
 
+very-happy-dom ships a jsdom-compatible `JSDOM` class — the exact idiom works unchanged:
+
 ```typescript
 // Before (jsdom)
 import { JSDOM } from 'jsdom'
-const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+
+// After (very-happy-dom) — one-line change
+import { JSDOM } from 'very-happy-dom'
+// or: import { JSDOM } from 'very-happy-dom/jsdom'
+
+const dom = new JSDOM('<!DOCTYPE html><html><body><h1>Hi</h1></body></html>', {
+  url: 'https://example.com/',
+  runScripts: 'dangerously',
+})
 const { window } = dom
 const { document } = window
 
-// After (very-happy-dom)
-import { Window } from 'very-happy-dom'
-const window = new Window()
-const document = window.document
+dom.serialize()                       // full HTML string
+dom.reconfigure({ url: '...' })       // change URL mid-test
+JSDOM.fragment('<p>x</p>')            // DocumentFragment
+await JSDOM.fromFile('./page.html')   // parse a local file
+await JSDOM.fromURL('https://x.test') // fetch + parse
 ```
+
+Full surface: `JSDOM`, `VirtualConsole`, `CookieJar`, `ResourceLoader` — each with the same method names and overloads as jsdom.
+
+See [drop-in compatibility guide](./docs/drop-in-compat.md) for the complete migration reference.
 
 ## API Reference
 
@@ -322,57 +351,111 @@ const document = window.document
 #### DOM
 
 - Document, Element, TextNode, CommentNode, DocumentFragment
-- Attributes, ClassList, Style
+- Attributes, ClassList (iterable, `toggle(x, force)`, `replace`), Style, dataset
+- `innerHTML`, `outerHTML` (getter + setter), `insertAdjacentHTML`
+- `document.readyState` lifecycle (loading → interactive → complete) + `DOMContentLoaded` + `load`
+- `document.cookie` read/write, `document.title` live getter/setter, `document.parentWindow` alias
 
 #### Selectors
 
-- querySelector / querySelectorAll
-- getElementById / getElementsByClassName / getElementsByTagName
-- CSS Selectors (all combinators)
-- XPath
+- `querySelector` / `querySelectorAll`, `matches`, `closest`
+- `getElementById` / `getElementsByClassName` / `getElementsByTagName` / `getElementsByTagNameNS`
+- Full CSS selectors — combinators, attribute selectors (quoted + unquoted), `:not`, `:is`, `:where`, `:has`, `:nth-child`, etc.
+- XPath (`document.evaluate`, `XPathEvaluator`, `XPathResult`)
 
 #### Events
 
-- addEventListener / removeEventListener
-- Event bubbling and capturing
-- CustomEvent
-- Event.preventDefault / stopPropagation
+- `addEventListener` / `removeEventListener` with `{ once, passive, capture, signal }`
+- Bubbling, capturing, `stopPropagation`, `stopImmediatePropagation`
+- Full event classes: `Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent`, `PointerEvent`, `TouchEvent`, `WheelEvent`, `InputEvent`, `FocusEvent`, `SubmitEvent`, `DragEvent`, `ClipboardEvent`, `AnimationEvent`, `TransitionEvent`, `CompositionEvent`, `ProgressEvent`, `MessageEvent`, `CloseEvent`, `StorageEvent`, `PopStateEvent`, `HashChangeEvent`, `ErrorEvent`, `MediaQueryListEvent`
+- Focus model: `focus`/`blur` + bubbling `focusin`/`focusout`, `document.activeElement` tracking
 
 #### Network
 
-- fetch(), Request / Response / Headers, FormData
-- XMLHttpRequest
-- WebSocket
-- Request Interception
+- `fetch()`, `Request`, `Response`, `Headers`, `FormData` (with `new FormData(form)` populating from a form element)
+- `XMLHttpRequest` with full event handling
+- `WebSocket` (backed by Bun's native)
+- `EventSource` (Server-Sent Events) — real `fetch` + stream parsing
+- `BroadcastChannel`, `MessageChannel`, `MessagePort`
+- `navigator.sendBeacon()`
+- Request Interception via `RequestInterceptor`
 
 #### Storage
 
-- localStorage, sessionStorage
+- `localStorage`, `sessionStorage` (isolated per instance)
+- `document.cookie` → `CookieContainer`
+- `indexedDB` — in-memory `IDBFactory`/`IDBDatabase`/`IDBObjectStore`/`IDBTransaction`
+- `navigator.storage` with `estimate()`/`persist()`/`persisted()`
 
 #### Timers
 
-- setTimeout / clearTimeout
-- setInterval / clearInterval
-- requestAnimationFrame / cancelAnimationFrame
+- `setTimeout` / `clearTimeout`, `setInterval` / `clearInterval`
+- `requestAnimationFrame` / `cancelAnimationFrame`
+- `requestIdleCallback` / `cancelIdleCallback`
+- `queueMicrotask`
 
 #### Observers
 
-- MutationObserver, IntersectionObserver, ResizeObserver
+- `MutationObserver` (childList, attributes, characterData, subtree, oldValue, filters)
+- `IntersectionObserver`, `ResizeObserver`
+- `PerformanceObserver` with `supportedEntryTypes`
 
-#### Canvas
+#### Canvas + Screenshots
 
-- Canvas element, 2D rendering context
-- Basic drawing operations, toDataURL / toBlob
+- `HTMLCanvasElement.getContext('2d')`, `toDataURL`/`toBlob`
+- `CanvasRenderingContext2D` with full drawing surface
+- Pure-JS rendering pipeline: `ScreenshotCapture`, `captureHtml`, `captureUrl`, `compareImages`, WebP/PNG encoders
+- Optional `Bun.WebView`-backed real-browser screenshots (`useWebView: true`)
 
-#### Web Components
+#### Web Components + CSS
 
-- Custom Elements, Shadow DOM
+- `customElements.define/.get/.whenDefined`, lifecycle callbacks (`connected`/`disconnected`/`adopted`/`attributeChanged`)
+- Shadow DOM (open + closed), event retargeting, slot support
+- `CSSStyleSheet` with `replaceSync()` parsing declarations into `cssRules`
+- `document.adoptedStyleSheets`
+- `CSS.supports()`, `CSS.escape()`
+- `getComputedStyle()` with per-tag `display` defaults + common computed fallbacks
+
+#### Forms
+
+- Constraint validation: `checkValidity`, `reportValidity`, `setCustomValidity`, `validity`, `validationMessage`, `willValidate`
+- `form.submit()`, `form.requestSubmit(submitter?)`, `form.reset()`
+- `new FormData(form)` populates from disabled/checkbox/radio/select/file fields
+
+#### Media
+
+- `HTMLMediaElement.play()` → Promise, `pause()`, `load()`, `canPlayType()`
+- `currentTime`, `duration`, `paused`, `ended`, `volume`, `muted`, `playbackRate`, `readyState`, `networkState`
+- Dispatches `play`, `playing`, `pause`, `timeupdate`, `volumechange`, `ratechange`, `loadstart`, `loadedmetadata`
+- `HTMLImageElement.decode()`, `Element.animate()`
+
+#### jsdom-compatible surface
+
+- `JSDOM` class with `.window`, `.serialize()`, `.reconfigure()`, `.nodeLocation()`, static `fragment`/`fromURL`/`fromFile`
+- `VirtualConsole` with `on/off/emit/sendTo`, `jsdomError` for uncaught exceptions
+- `CookieJar` (tough-cookie-style callback + promise API)
+- `ResourceLoader` (subclassable fetch interceptor)
+- `runScripts: 'outside-only' | 'dangerously'` — opt-in inline-script execution
+
+#### happy-dom-compatible surface
+
+- `Window` with `url`, `width`, `height`, `console`, `settings` options
+- `window.happyDOM` with `close/abort/waitUntilComplete/setURL/setViewport`
+- `GlobalRegistrator.register/unregister`
+- `/register` subpath for one-line preload
 
 #### Other
 
-- Performance API, Console API, Clipboard API, Navigator API
-- Geolocation API, Notification API, History API, Location API
-- Cookie API, File API, FileReader API
+- Performance API + `PerformanceObserver`
+- `navigator.permissions.query()`, `navigator.sendBeacon()`
+- Clipboard API + `ClipboardItem`
+- Geolocation API, Notification API
+- History API (`pushState`/`replaceState`/`back`/`forward`/`go`/`state`)
+- Location API (full `href`/`protocol`/`host`/`hostname`/`port`/`pathname`/`search`/`hash`/`origin` + assignment setters)
+- File API (`File`, `FileReader`, `FileList`, `Blob`)
+- `URL`, `URLSearchParams`, `AbortController`, `AbortSignal`
+- `TextEncoder`, `TextDecoder`, `ReadableStream`, `WritableStream`, `TransformStream`
+- `DOMParser`, `XMLSerializer`, `Range`, `Selection`, `NodeIterator`, `TreeWalker`
 
 </details>
 
