@@ -146,13 +146,19 @@ let probeInFlight: Promise<boolean> | null = null
 
 /**
  * Probe whether the runtime can actually render through Bun.WebView, not just
- * expose the constructor. Constructs a 1×1 headless view and runs a trivial
- * `data:` navigation under a short timeout; caches the result for the lifetime
- * of the process. Safe to call from tests that want to skip real-capture
- * assertions on environments without a working browser backend (e.g. headless
- * Linux CI without WebKit/Chromium).
+ * expose the constructor. Constructs a 1×1 headless view, navigates to a
+ * trivial data URL, and attempts a real screenshot — all under a short
+ * timeout. Caches the result for the lifetime of the process. Safe to call
+ * from tests that want to skip real-capture assertions on environments
+ * without a working browser backend (e.g. headless Linux CI without
+ * WebKit/Chromium).
+ *
+ * We also require the screenshot step: on some runtimes `navigate('data:…')`
+ * resolves even without a backend (data URLs are synthetic), but `screenshot`
+ * needs the backend to produce pixels and hangs when it's missing. That's the
+ * scenario we must catch.
  */
-export async function canRenderWithWebView(timeoutMs = 1500): Promise<boolean> {
+export async function canRenderWithWebView(timeoutMs = 3000): Promise<boolean> {
   if (probedRender !== null) return probedRender
   if (probeInFlight) return probeInFlight
 
@@ -160,10 +166,6 @@ export async function canRenderWithWebView(timeoutMs = 1500): Promise<boolean> {
     const WebView = getWebViewConstructor()
     if (!WebView) return false
 
-    // Defer construction one tick so we can race it against the timeout.
-    // Some backends throw synchronously when they can't initialize (expected);
-    // if the runtime were to hang synchronously we'd still block the whole
-    // event loop, but Bun.WebView today only blocks inside async ops.
     const probe = (async () => {
       let view: BunWebViewInstance | null = null
       try {
@@ -174,7 +176,9 @@ export async function canRenderWithWebView(timeoutMs = 1500): Promise<boolean> {
       }
       try {
         await view.navigate('data:text/html,<!doctype html>')
-        return true
+        const shot = await view.screenshot({ encoding: 'buffer', format: 'png', quality: 80 })
+        // Buffer (real capture) ≠ shmem descriptor or empty — require a PNG.
+        return Buffer.isBuffer(shot) && shot.length > 0
       }
       catch {
         return false

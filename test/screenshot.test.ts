@@ -764,8 +764,8 @@ describe('Screenshot Module', () => {
     // capture-assertion tests instead of hanging on `navigate()`.
     let canRender = false
     beforeAll(async () => {
-      canRender = await canRenderWithWebView(1500)
-    })
+      canRender = await canRenderWithWebView(3000)
+    }, 10_000)
 
     it('reports availability based on Bun.WebView presence', () => {
       const bun = (globalThis as { Bun?: { WebView?: unknown } }).Bun
