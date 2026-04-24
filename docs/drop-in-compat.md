@@ -116,8 +116,11 @@ dom.window.addEventListener('load', () => {})
 ### Script execution (`runScripts`)
 
 - `'outside-only'` — installs `window.eval` and `window.Function` so code
+
   evaluated via `window.eval('...')` runs in the Window's realm.
+
 - `'dangerously'` — additionally scans the parsed document for inline
+
   `<script>` tags (no `src`, with JS MIME) and executes each via
   `new Function('window', 'document', 'with (window) { ...code... }')`. Errors
   are forwarded to `virtualConsole.emit('jsdomError', err)`.
@@ -279,7 +282,7 @@ await anim.finished
 ### Observers
 
 ```ts
-const mo = new MutationObserver((records) => { /* ... */ })
+const mo = new MutationObserver((records) => { /_ ... _/ })
 mo.observe(el, { attributes: true, childList: true, subtree: true })
 
 const io = new IntersectionObserver((entries) => {})
@@ -321,7 +324,7 @@ input.blur()    // fires blur + bubbling focusout
 
 ## Scoped differences vs. jsdom
 
-- **Script sandboxing:** `runScripts: 'dangerously'` uses `new Function` + `with (window)`. It works for trusted DOM-manipulation snippets but does **not** create an isolated VM realm. Untrusted code should not be executed.
+- **Script sandboxing:**`runScripts: 'dangerously'` uses `new Function` + `with (window)`. It works for trusted DOM-manipulation snippets but does**not** create an isolated VM realm. Untrusted code should not be executed.
 - **Node locations:** `JSDOM.nodeLocation(node)` always returns `null` — source-map tracking is not implemented.
 - **Resource fetching:** `ResourceLoader.fetch()` is available but the parser doesn't automatically load `<script src>` or external stylesheets.
 
@@ -367,9 +370,13 @@ are all on `globalThis` via the preload.
 Use this when deciding if a given test suite will migrate cleanly:
 
 - [ ] Does it rely on a real JS engine sandbox (e.g., scripts mutating
-      `window.__proto__` from untrusted content)? — Out of scope.
+
+      `window.**proto**` from untrusted content)? — Out of scope.
+
 - [ ] Does it rely on pixel-accurate layout measurement (`getBoundingClientRect`
+
       returning measured geometry)? — Best-effort only.
+
 - [ ] Does it depend on node source locations? — Not tracked.
 - [ ] Does it depend on Service Workers / Web Workers? — Not implemented.
 - [ ] Everything else — should migrate unchanged.
