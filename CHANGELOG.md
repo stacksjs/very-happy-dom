@@ -1,3 +1,62 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.0...v0.1.1)
+
+### 🧪 Tests
+
+- **screenshot**: strengthen WebView probe with screenshot step ([2ef41cd](https://github.com/stacksjs/very-happy-dom/commit/2ef41cd)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+### 🤖 Continuous Integration
+
+- let pantry install bun in publish-commit ([6b99c15](https://github.com/stacksjs/very-happy-dom/commit/6b99c15)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+### 🧹 Chores
+
+- release v0.1.1 ([da5d441](https://github.com/stacksjs/very-happy-dom/commit/da5d441)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([938ecba](https://github.com/stacksjs/very-happy-dom/commit/938ecba)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([ea537ff](https://github.com/stacksjs/very-happy-dom/commit/ea537ff)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([b850548](https://github.com/stacksjs/very-happy-dom/commit/b850548)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([666897f](https://github.com/stacksjs/very-happy-dom/commit/666897f)) _(by Chris <chrisbreuer93@gmail.com>)_
+- get CI to pass ([8ac369b](https://github.com/stacksjs/very-happy-dom/commit/8ac369b)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([ad180f4](https://github.com/stacksjs/very-happy-dom/commit/ad180f4)) _(by Chris <chrisbreuer93@gmail.com>)_
+- minor stability improvements ([e3cb9a5](https://github.com/stacksjs/very-happy-dom/commit/e3cb9a5)) _(by Chris <chrisbreuer93@gmail.com>)_
+- fresh install to pick up pickier 0.1.21 ([2a84b87](https://github.com/stacksjs/very-happy-dom/commit/2a84b87)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- gitignore pantry directory ([b7dda45](https://github.com/stacksjs/very-happy-dom/commit/b7dda45)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- update vscode config ([8689954](https://github.com/stacksjs/very-happy-dom/commit/8689954)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- repo cleanup and modernization ([c4a97b0](https://github.com/stacksjs/very-happy-dom/commit/c4a97b0)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+### Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+- _glennmichael123 <gtorregosa@gmail.com>_
+
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.0...HEAD)
+
+### 🧪 Tests
+
+- **screenshot**: strengthen WebView probe with screenshot step ([2ef41cd](https://github.com/stacksjs/very-happy-dom/commit/2ef41cd)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+### 🤖 Continuous Integration
+
+- let pantry install bun in publish-commit ([6b99c15](https://github.com/stacksjs/very-happy-dom/commit/6b99c15)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+### 🧹 Chores
+
+- wip ([938ecba](https://github.com/stacksjs/very-happy-dom/commit/938ecba)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([ea537ff](https://github.com/stacksjs/very-happy-dom/commit/ea537ff)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([b850548](https://github.com/stacksjs/very-happy-dom/commit/b850548)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([666897f](https://github.com/stacksjs/very-happy-dom/commit/666897f)) _(by Chris <chrisbreuer93@gmail.com>)_
+- get CI to pass ([8ac369b](https://github.com/stacksjs/very-happy-dom/commit/8ac369b)) _(by Chris <chrisbreuer93@gmail.com>)_
+- wip ([ad180f4](https://github.com/stacksjs/very-happy-dom/commit/ad180f4)) _(by Chris <chrisbreuer93@gmail.com>)_
+- minor stability improvements ([e3cb9a5](https://github.com/stacksjs/very-happy-dom/commit/e3cb9a5)) _(by Chris <chrisbreuer93@gmail.com>)_
+- fresh install to pick up pickier 0.1.21 ([2a84b87](https://github.com/stacksjs/very-happy-dom/commit/2a84b87)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- gitignore pantry directory ([b7dda45](https://github.com/stacksjs/very-happy-dom/commit/b7dda45)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- update vscode config ([8689954](https://github.com/stacksjs/very-happy-dom/commit/8689954)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- repo cleanup and modernization ([c4a97b0](https://github.com/stacksjs/very-happy-dom/commit/c4a97b0)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+### Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 ### 🧹 Chores
 
 - update lockfile ([20fd613](https://github.com/stacksjs/very-happy-dom/commit/20fd613)) _(by Chris <chrisbreuer93@gmail.com>)_
