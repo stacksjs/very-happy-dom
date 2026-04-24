@@ -12,7 +12,7 @@ describe('Inline layout: clientWidth / offsetWidth / getBoundingClientRect honor
   test('div with style.width=800px / style.height=600px reports 800x600', () => {
     const w = new Window()
     const d = w.document.createElement('div')
-    w.document.body.appendChild(d)
+    w.document.body!.appendChild(d)
     d.style.width = '800px'
     d.style.height = '600px'
 
@@ -29,7 +29,7 @@ describe('Inline layout: clientWidth / offsetWidth / getBoundingClientRect honor
   test('inline style set via setAttribute reports size', () => {
     const w = new Window()
     const d = w.document.createElement('div')
-    w.document.body.appendChild(d)
+    w.document.body!.appendChild(d)
     d.setAttribute('style', 'width: 1024px; height: 768px;')
 
     expect(d.clientWidth).toBe(1024)
@@ -41,7 +41,7 @@ describe('Inline layout: clientWidth / offsetWidth / getBoundingClientRect honor
   test('element without inline size still returns 0', () => {
     const w = new Window()
     const d = w.document.createElement('div')
-    w.document.body.appendChild(d)
+    w.document.body!.appendChild(d)
 
     expect(d.clientWidth).toBe(0)
     expect(d.clientHeight).toBe(0)
@@ -79,7 +79,7 @@ describe('Inline layout: clientWidth / offsetWidth / getBoundingClientRect honor
     const parent = w.document.createElement('div')
     parent.style.width = '1000px'
     parent.style.height = '500px'
-    w.document.body.appendChild(parent)
+    w.document.body!.appendChild(parent)
 
     const child = w.document.createElement('div')
     child.style.width = '50%'
@@ -101,7 +101,7 @@ describe('Inline layout: clientWidth / offsetWidth / getBoundingClientRect honor
   test('fractional px values are preserved', () => {
     const w = new Window()
     const d = w.document.createElement('div')
-    w.document.body.appendChild(d)
+    w.document.body!.appendChild(d)
     d.style.width = '123.5px'
     expect(d.clientWidth).toBeCloseTo(123.5)
   })
@@ -109,7 +109,7 @@ describe('Inline layout: clientWidth / offsetWidth / getBoundingClientRect honor
   test('bare numeric style values (no unit) are treated as px', () => {
     const w = new Window()
     const d = w.document.createElement('div')
-    w.document.body.appendChild(d)
+    w.document.body!.appendChild(d)
     d.style.width = '300'
     expect(d.clientWidth).toBe(300)
   })
@@ -117,7 +117,7 @@ describe('Inline layout: clientWidth / offsetWidth / getBoundingClientRect honor
   test('auto / invalid style values return 0', () => {
     const w = new Window()
     const d = w.document.createElement('div')
-    w.document.body.appendChild(d)
+    w.document.body!.appendChild(d)
     d.style.width = 'auto'
     expect(d.clientWidth).toBe(0)
 

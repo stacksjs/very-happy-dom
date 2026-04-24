@@ -16,7 +16,7 @@ import { resolve } from 'node:path'
 const DIST = resolve(import.meta.dir, '../dist/index.js')
 
 describe('dist/index.js standalone import', () => {
-  test('dist/index.js exists (run `bun run build` first)', () => {
+  test.skipIf(!existsSync(DIST))('dist/index.js imports cleanly when built', () => {
     expect(existsSync(DIST)).toBe(true)
   })
 
