@@ -27,3 +27,16 @@ export { PixelBuffer, renderHtmlToPixels, renderLayoutTree } from './pixel-rende
 
 // WebP support
 export { decodeWebP, encodeWebP, isWebP, type WebPOptions } from './webp'
+
+// Bun.WebView-backed capture (real browser-rendered screenshots)
+export {
+  captureHtmlWithWebView,
+  captureUrlWithWebView,
+  isWebViewAvailable,
+  WebViewCapture,
+  type WebViewEncoding,
+  type WebViewImageFormat,
+  type WebViewScreenshotOptions,
+  type WebViewScreenshotResult,
+  WebViewUnavailableError,
+} from './webview'

@@ -8,6 +8,7 @@ import {
   adler32,
   blendColors,
   captureHtml,
+  captureHtmlWithWebView,
   compareImages,
   computeLayout,
   crc32,
@@ -18,6 +19,7 @@ import {
   ImageDiff,
   inflate,
   isWebP,
+  isWebViewAvailable,
   parseBoxValues,
   parseColor,
   parseCSS,
@@ -27,6 +29,8 @@ import {
   PixelBuffer,
   renderLayoutTree,
   ScreenshotCapture,
+  WebViewCapture,
+  WebViewUnavailableError,
   type RGBA,
 } from '../src/screenshot'
 
@@ -748,6 +752,33 @@ describe('Screenshot Module', () => {
       expect(result.data).toBeInstanceOf(Buffer)
       expect(result.width).toBe(2000)
       expect(result.height).toBe(2000)
+    })
+  })
+
+  describe('WebView-backed Capture', () => {
+    it('reports availability based on Bun.WebView presence', () => {
+      const bun = (globalThis as { Bun?: { WebView?: unknown } }).Bun
+      const expected = typeof bun?.WebView === 'function'
+      expect(isWebViewAvailable()).toBe(expected)
+    })
+
+    it('throws WebViewUnavailableError when Bun.WebView is missing', async () => {
+      if (isWebViewAvailable())
+        return // real WebView available — nothing to assert
+
+      const capture = new WebViewCapture()
+      await expect(capture.captureHtml('<h1>hi</h1>')).rejects.toBeInstanceOf(WebViewUnavailableError)
+      await expect(captureHtmlWithWebView('<h1>hi</h1>')).rejects.toBeInstanceOf(WebViewUnavailableError)
+    })
+
+    it('ScreenshotCapture.useWebView surfaces unavailability', async () => {
+      if (isWebViewAvailable())
+        return
+
+      const capture = new ScreenshotCapture()
+      await expect(
+        capture.captureHtml('<h1>hi</h1>', { useWebView: true }),
+      ).rejects.toBeInstanceOf(WebViewUnavailableError)
     })
   })
 })

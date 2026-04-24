@@ -485,8 +485,11 @@ export class BrowserPage {
   }
 
   /**
-   * Takes a screenshot of the page
-   * Note: In virtual DOM, this generates a simple SVG representation
+   * Takes a screenshot of the page.
+   *
+   * By default this returns a simple SVG representation of the DOM (virtual).
+   * Pass `useWebView: true` to route through Bun.WebView for a real
+   * browser-rendered capture — requires a Bun version that ships WebView.
    */
   async screenshot(options: {
     type?: 'png' | 'jpeg' | 'webp'
@@ -495,20 +498,35 @@ export class BrowserPage {
     clip?: { x: number, y: number, width: number, height: number }
     omitBackground?: boolean
     encoding?: 'base64' | 'binary'
+    useWebView?: boolean | { backend?: 'webkit' | 'chrome', waitFor?: number }
   } = {}): Promise<string | Buffer> {
     const {
-      type: _type = 'png',
-      quality: _quality = 100,
+      type = 'png',
+      quality = 100,
       fullPage: _fullPage = false,
       encoding = 'binary',
+      useWebView,
     } = options
 
-    // Generate a simple SVG representation of the DOM
+    if (useWebView) {
+      const { captureHtmlWithWebView } = await import('../screenshot/webview')
+      const overrides = typeof useWebView === 'object' ? useWebView : {}
+      const shot = await captureHtmlWithWebView(this.content, {
+        width: this._viewport.width,
+        height: this._viewport.height,
+        format: type,
+        quality,
+        encoding: encoding === 'base64' ? 'base64' : 'buffer',
+        ...overrides,
+      })
+      // Encoding selected above guarantees string | Buffer here.
+      return shot as string | Buffer
+    }
+
+    // Virtual-DOM fallback: emit an SVG snapshot of the HTML.
     const html = this.content
     const svg = this._generateSVG(html)
 
-    // In a real implementation, this would render the DOM and capture pixels
-    // For now, we return the SVG as the screenshot
     if (encoding === 'base64') {
       return Buffer.from(svg).toString('base64')
     }

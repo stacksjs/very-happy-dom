@@ -7,6 +7,7 @@ import { Buffer } from 'node:buffer'
 import type { BrowserPage } from '../browser/BrowserPage'
 import { crc32, deflate, inflate } from './deflate'
 import { HtmlRenderer, type RenderOptions, type RenderResult } from './renderer'
+import { WebViewCapture, type WebViewScreenshotOptions } from './webview'
 
 /**
  * Screenshot options
@@ -27,6 +28,12 @@ export interface ScreenshotOptions extends RenderOptions {
   path?: string
   /** Omit background (transparent) */
   omitBackground?: boolean
+  /**
+   * Route through Bun.WebView for real browser-rendered output instead of
+   * the pure-JS pipeline. Pass `true` to enable with defaults, or an object
+   * to configure the WebView backend/dataStore/waitFor.
+   */
+  useWebView?: boolean | Pick<WebViewScreenshotOptions, 'backend' | 'headless' | 'dataStore' | 'waitFor'>
 }
 
 /**
@@ -43,9 +50,11 @@ interface DecodedPng {
  */
 export class ScreenshotCapture {
   private renderer: HtmlRenderer
+  private webView: WebViewCapture
 
   constructor() {
     this.renderer = new HtmlRenderer()
+    this.webView = new WebViewCapture()
   }
 
   /**
@@ -57,6 +66,13 @@ export class ScreenshotCapture {
   ): Promise<Buffer | string> {
     const html = page.content
     const viewport = page.viewport
+
+    if (options.useWebView) {
+      return this.captureViaWebView(
+        wv => wv.captureHtml(html, this.buildWebViewOptions(options, viewport)),
+        options,
+      )
+    }
 
     const renderOptions: RenderOptions = {
       width: options.width || viewport.width,
@@ -81,6 +97,13 @@ export class ScreenshotCapture {
     html: string,
     options: ScreenshotOptions = {},
   ): Promise<Buffer | string> {
+    if (options.useWebView) {
+      return this.captureViaWebView(
+        wv => wv.captureHtml(html, this.buildWebViewOptions(options)),
+        options,
+      )
+    }
+
     const result = await this.renderer.render(html, options)
     return this.processResult(result, options)
   }
@@ -92,8 +115,61 @@ export class ScreenshotCapture {
     url: string,
     options: ScreenshotOptions = {},
   ): Promise<Buffer | string> {
+    if (options.useWebView) {
+      return this.captureViaWebView(
+        wv => wv.captureUrl(url, this.buildWebViewOptions(options)),
+        options,
+      )
+    }
+
     const result = await this.renderer.renderUrl(url, options)
     return this.processResult(result, options)
+  }
+
+  /**
+   * Translate ScreenshotOptions into WebView options. Clip, omitBackground, and
+   * deviceScaleFactor are not forwarded — Bun.WebView does not model them, and
+   * clipping can still be applied post-capture via `clipImage`.
+   */
+  private buildWebViewOptions(
+    options: ScreenshotOptions,
+    viewport?: { width: number, height: number },
+  ): WebViewScreenshotOptions {
+    const overrides = typeof options.useWebView === 'object' ? options.useWebView : {}
+    const format = options.format === 'svg' ? 'png' : (options.format ?? 'png')
+
+    return {
+      width: options.width ?? viewport?.width,
+      height: options.height ?? viewport?.height,
+      format,
+      quality: options.quality,
+      ...overrides,
+    }
+  }
+
+  /**
+   * Drive the WebView capture, apply optional clipping, and honor
+   * encoding/path the same way `processResult` does for the JS pipeline.
+   */
+  private async captureViaWebView(
+    run: (wv: WebViewCapture) => Promise<unknown>,
+    options: ScreenshotOptions,
+  ): Promise<Buffer | string> {
+    const raw = await run(this.webView)
+    let data = await coerceToBuffer(raw)
+
+    if (options.clip) {
+      // Clipping requires a PNG — fall back to PNG format for clip operations.
+      data = await this.clipImage(data, 0, 0, options.clip)
+    }
+
+    if (options.path)
+      await Bun.write(options.path, data)
+
+    if (options.encoding === 'base64')
+      return data.toString('base64')
+
+    return data
   }
 
   /**
@@ -394,4 +470,23 @@ export async function captureUrl(
 ): Promise<Buffer | string> {
   const capture = new ScreenshotCapture()
   return capture.captureUrl(url, options)
+}
+
+/**
+ * Normalize the various return shapes of Bun.WebView.screenshot into a Buffer.
+ * Rejects 'shmem' descriptors since they are non-transferable through this API.
+ */
+async function coerceToBuffer(value: unknown): Promise<Buffer> {
+  if (Buffer.isBuffer(value))
+    return value
+  if (value instanceof Uint8Array)
+    return Buffer.from(value)
+  if (typeof Blob !== 'undefined' && value instanceof Blob)
+    return Buffer.from(await value.arrayBuffer())
+  if (typeof value === 'string')
+    return Buffer.from(value, 'base64')
+
+  throw new TypeError(
+    'WebView screenshot returned an unsupported encoding; use encoding: "buffer" | "base64" | "blob" when routing through ScreenshotCapture.',
+  )
 }
