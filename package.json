@@ -1,7 +1,7 @@
 {
   "name": "very-happy-dom",
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Like a light-weight version of `happy-dom` powered by Bun.",
   "author": "Chris Breuer <chris@stacksjs.org>",
   "license": "MIT",

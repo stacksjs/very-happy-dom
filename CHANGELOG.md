@@ -1,3 +1,30 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.1...v0.1.2)
+
+### 🧹 Chores
+
+- release v0.1.2 ([fa9df61](https://github.com/stacksjs/very-happy-dom/commit/fa9df61)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- revert release v0.1.2 ([782f6c0](https://github.com/stacksjs/very-happy-dom/commit/782f6c0)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- release v0.1.2 ([85e42ce](https://github.com/stacksjs/very-happy-dom/commit/85e42ce)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: bump bun.sh to ^1.3.13 and refresh pantry.lock ([26c13eb](https://github.com/stacksjs/very-happy-dom/commit/26c13eb)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+### Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+- _glennmichael123 <gtorregosa@gmail.com>_
+
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.1...HEAD)
+
+### 🧹 Chores
+
+- revert release v0.1.2 ([782f6c0](https://github.com/stacksjs/very-happy-dom/commit/782f6c0)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- release v0.1.2 ([85e42ce](https://github.com/stacksjs/very-happy-dom/commit/85e42ce)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: bump bun.sh to ^1.3.13 and refresh pantry.lock ([26c13eb](https://github.com/stacksjs/very-happy-dom/commit/26c13eb)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+### Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.0...v0.1.1)
 
 ### 🧪 Tests
