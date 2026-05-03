@@ -1,3 +1,56 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.3...v0.1.4)
+
+### 🐛 Bug Fixes
+
+- add setup-bun to publish-commit job ([0e0af08](https://github.com/stacksjs/very-happy-dom/commit/0e0af08)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- ship dist only, remove bun export condition pointing to unpublished src ([bc412ee](https://github.com/stacksjs/very-happy-dom/commit/bc412ee)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- include src/ in published files for bun export condition ([b0ba4fa](https://github.com/stacksjs/very-happy-dom/commit/b0ba4fa)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+### 🤖 Continuous Integration
+
+- drop redundant setup-bun (pantry installs bun via deps.yaml) ([88ed1d6](https://github.com/stacksjs/very-happy-dom/commit/88ed1d6)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+### 🧹 Chores
+
+- release v0.1.4 ([c3006e8](https://github.com/stacksjs/very-happy-dom/commit/c3006e8)) _(by Chris <chrisbreuer93@gmail.com>)_
+- move dtsx deps to devDependencies and bump to ^0.9.17 ([719c347](https://github.com/stacksjs/very-happy-dom/commit/719c347)) _(by Chris <chrisbreuer93@gmail.com>)_
+- refresh bun.lock to pick up latest pickier ([8e873c2](https://github.com/stacksjs/very-happy-dom/commit/8e873c2)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- fresh install to pick up dtsx 0.9.14 and bunfig 0.15.9 ([85d5b2c](https://github.com/stacksjs/very-happy-dom/commit/85d5b2c)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- bump to 0.1.3 with src/ in published files ([7809b72](https://github.com/stacksjs/very-happy-dom/commit/7809b72)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- release v0.1.2 ([2e2a463](https://github.com/stacksjs/very-happy-dom/commit/2e2a463)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- revert release v0.1.2 ([782f6c0](https://github.com/stacksjs/very-happy-dom/commit/782f6c0)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+### Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+- _glennmichael123 <gtorregosa@gmail.com>_
+
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.2...HEAD)
+
+### 🐛 Bug Fixes
+
+- add setup-bun to publish-commit job ([0e0af08](https://github.com/stacksjs/very-happy-dom/commit/0e0af08)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- ship dist only, remove bun export condition pointing to unpublished src ([bc412ee](https://github.com/stacksjs/very-happy-dom/commit/bc412ee)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- include src/ in published files for bun export condition ([b0ba4fa](https://github.com/stacksjs/very-happy-dom/commit/b0ba4fa)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+### 🤖 Continuous Integration
+
+- drop redundant setup-bun (pantry installs bun via deps.yaml) ([88ed1d6](https://github.com/stacksjs/very-happy-dom/commit/88ed1d6)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+### 🧹 Chores
+
+- move dtsx deps to devDependencies and bump to ^0.9.17 ([719c347](https://github.com/stacksjs/very-happy-dom/commit/719c347)) _(by Chris <chrisbreuer93@gmail.com>)_
+- refresh bun.lock to pick up latest pickier ([8e873c2](https://github.com/stacksjs/very-happy-dom/commit/8e873c2)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- fresh install to pick up dtsx 0.9.14 and bunfig 0.15.9 ([85d5b2c](https://github.com/stacksjs/very-happy-dom/commit/85d5b2c)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- bump to 0.1.3 with src/ in published files ([7809b72](https://github.com/stacksjs/very-happy-dom/commit/7809b72)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- release v0.1.2 ([2e2a463](https://github.com/stacksjs/very-happy-dom/commit/2e2a463)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- revert release v0.1.2 ([782f6c0](https://github.com/stacksjs/very-happy-dom/commit/782f6c0)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+### Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.1...v0.1.2)
 
 ### 🧹 Chores
