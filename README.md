@@ -330,7 +330,7 @@ await JSDOM.fromURL('https://x.test') // fetch + parse
 
 Full surface: `JSDOM`, `VirtualConsole`, `CookieJar`, `ResourceLoader` — each with the same method names and overloads as jsdom.
 
-See [drop-in compatibility guide](./docs/drop-in-compat.md) for the complete migration reference.
+See the [drop-in compatibility guide][drop-in-compat-href] for the complete migration reference.
 
 ## API Reference
 
@@ -520,6 +520,7 @@ Made with 💙
 [jetbrains-href]: https://www.jetbrains.com/
 [solana-href]: https://solana.com/
 [license-href]: LICENSE.md
+[drop-in-compat-href]: ./docs/drop-in-compat.md
 
 <!-- [codecov-src]: https://img.shields.io/codecov/c/gh/stacksjs/very-happy-dom/main?style=flat-square
 [codecov-href]: https://codecov.io/gh/stacksjs/very-happy-dom -->
