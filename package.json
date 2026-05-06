@@ -71,10 +71,10 @@
   },
   "devDependencies": {
     "@stacksjs/bunpress": "^0.1.4",
-    "better-dx": "^0.2.7",
-    "@stacksjs/dtsx": "^0.9.17",
-    "bun-plugin-dtsx": "^0.9.17",
-    "bunfig": "^0.15.6",
+    "better-dx": "^0.2.12",
+    "@stacksjs/dtsx": "^0.9.19",
+    "bun-plugin-dtsx": "^0.9.18",
+    "bunfig": "^0.15.11",
     "mitata": "^1.0.34"
   },
   "git-hooks": {
