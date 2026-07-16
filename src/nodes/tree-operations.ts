@@ -1,5 +1,6 @@
 import { MutationObserver } from '../observers/MutationObserver'
 import { invokeAdoptedCallback, invokeConnectedCallback, invokeDisconnectedCallback } from '../webcomponents/custom-element-utils'
+import { notifySlotAssignmentChange } from '../webcomponents/slot-utils'
 import { COMMENT_NODE, DOCUMENT_FRAGMENT_NODE, DOCUMENT_NODE, ELEMENT_NODE, TEXT_NODE, type VirtualNode } from './VirtualNode'
 
 interface VirtualParentNode extends VirtualNode {
@@ -29,6 +30,7 @@ function queueChildListMutation(
     attributeNamespace: null,
     oldValue: null,
   })
+  notifySlotAssignmentChange(target)
 }
 
 function getOwnerDocumentForChild(parent: VirtualParentNode): any {
@@ -143,6 +145,7 @@ export function detachNode(node: VirtualNode): void {
   ;(node as any)._lastTraversalNextSibling = nextSibling
   /* eslint-enable max-statements-per-line */
   node.parentNode = null
+  notifySlotAssignmentChange(parent)
   if (wasConnected) {
     invokeDisconnectedCallback(node)
   }

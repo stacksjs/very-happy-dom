@@ -1,4 +1,6 @@
 import { VirtualElement } from './VirtualElement'
+import { getAssignedElements, getAssignedNodes } from '../webcomponents/slot-utils'
+import type { VirtualNode } from './VirtualNode'
 
 // HTML Element subclasses - lightweight aliases for drop-in compatibility with happy-dom/jsdom.
 // very-happy-dom uses a single VirtualElement class internally, but user code may rely on
@@ -144,6 +146,14 @@ export class HTMLSelectElement extends VirtualElement {
 }
 export class HTMLSlotElement extends VirtualElement {
   constructor() { super('slot') }
+
+  assignedNodes(options: { flatten?: boolean } = {}): VirtualNode[] {
+    return getAssignedNodes(this, options)
+  }
+
+  assignedElements(options: { flatten?: boolean } = {}): VirtualElement[] {
+    return getAssignedElements(this, options)
+  }
 }
 export class HTMLSourceElement extends VirtualElement {
   constructor() { super('source') }

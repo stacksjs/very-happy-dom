@@ -6,6 +6,7 @@ import { escapeHtmlAttribute, escapeHtmlText } from '../parsers/html-utils'
 import { hasCombinators, matchesComplexSelector, matchesSimpleSelector, querySelectorAllEngine, querySelectorEngine } from '../selectors/engine'
 import { ShadowRoot } from '../webcomponents/ShadowRoot'
 import { invokeAttributeChangedCallback } from '../webcomponents/custom-element-utils'
+import { notifySlotAssignmentChange } from '../webcomponents/slot-utils'
 import { MutationObserver } from '../observers/MutationObserver'
 import {
   COMMENT_NODE,
@@ -97,6 +98,9 @@ export class VirtualElement extends VirtualNodeBase {
     }
 
     invokeAttributeChangedCallback(this, normalizedName, oldValue, normalizedValue)
+    if (normalizedName === 'slot' || (normalizedName === 'name' && this.tagName === 'SLOT')) {
+      notifySlotAssignmentChange(this)
+    }
 
     MutationObserver._queueMutationRecord({
       type: 'attributes',
@@ -136,6 +140,9 @@ export class VirtualElement extends VirtualNodeBase {
     }
 
     invokeAttributeChangedCallback(this, normalizedName, oldValue, null)
+    if (normalizedName === 'slot' || (normalizedName === 'name' && this.tagName === 'SLOT')) {
+      notifySlotAssignmentChange(this)
+    }
 
     MutationObserver._queueMutationRecord({
       type: 'attributes',
@@ -419,6 +426,7 @@ export class VirtualElement extends VirtualNodeBase {
       attributeNamespace: null,
       oldValue: null,
     })
+    notifySlotAssignmentChange(this)
   }
 
   private _setStylesFromAttribute(styleText: string): void {
@@ -498,6 +506,7 @@ export class VirtualElement extends VirtualNodeBase {
         }
       }
     }
+    notifySlotAssignmentChange(this)
   }
 
   get outerHTML(): string {

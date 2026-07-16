@@ -16,6 +16,7 @@ import { querySelectorAllEngine, querySelectorEngine } from '../selectors/engine
 import { VirtualElement } from './VirtualElement'
 import { VirtualSVGElement } from './VirtualSVGElement'
 import { VirtualTemplateElement } from './VirtualTemplateElement'
+import { HTMLSlotElement } from './HTMLElementClasses'
 import { VirtualTextNode } from './VirtualTextNode'
 import { DOCUMENT_NODE, ELEMENT_NODE, VirtualNodeBase } from './VirtualNode'
 import { appendNode, setOwnerDocumentRecursive } from './tree-operations'
@@ -527,6 +528,11 @@ export class VirtualDocument extends VirtualNodeBase {
       const el = new VirtualTemplateElement()
       el.ownerDocument = this
       el.content.ownerDocument = this
+      return el
+    }
+    if (tagName.toLowerCase() === 'slot') {
+      const el = new HTMLSlotElement()
+      el.ownerDocument = this
       return el
     }
     const customElement = this.defaultView?.customElements?.get?.(tagName.toLowerCase())
