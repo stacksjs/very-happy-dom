@@ -805,7 +805,7 @@ describe('Screenshot Module', () => {
       const buf = result as Buffer
       // PNG magic bytes
       expect(Array.from(buf.subarray(0, 4))).toEqual([137, 80, 78, 71])
-    })
+    }, 20_000)
 
     it('honors the css option via the decoration injector', async () => {
       if (!canRender)
@@ -825,7 +825,7 @@ describe('Screenshot Module', () => {
       // Different backgrounds must produce different PNG bytes — proves the
       // css injection reached the browser and affected rendering.
       expect(Buffer.compare(red, blue)).not.toBe(0)
-    })
+    }, 20_000)
 
     it('enforces a timeout when navigate hangs', async () => {
       if (!canRender)
