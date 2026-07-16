@@ -3,6 +3,7 @@
  */
 
 import { VirtualElement } from '../nodes/VirtualElement'
+import { constructCustomElement, getCustomElementOwnerDocument } from './custom-element-context'
 import { invokeAttributeChangedCallback, invokeConnectedCallback } from './custom-element-utils'
 
 export interface CustomElementConstructor {
@@ -51,7 +52,7 @@ function mergeEventListeners(existing: any, initialized: any): any {
 
 function initializeUpgradedElement(node: any, constructor: CustomElementConstructor): void {
   const existingShadowRoot = node._getInternalShadowRoot?.() ?? null
-  const initialized: any = new constructor()
+  const initialized: any = constructCustomElement(constructor, node.ownerDocument)
   const initializedShadowRoot = initialized._getInternalShadowRoot?.() ?? null
   const existingListeners = node._eventListeners
 
@@ -191,6 +192,7 @@ export class HTMLElement extends VirtualElement {
   constructor(tagName?: string) {
     const ctor = new.target as any
     super(tagName || ctor.__veryHappyCustomElementName || 'div')
+    this.ownerDocument = getCustomElementOwnerDocument(ctor)
   }
 
   connectedCallback?(): void

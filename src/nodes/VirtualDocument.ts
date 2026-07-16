@@ -17,6 +17,7 @@ import { VirtualElement } from './VirtualElement'
 import { VirtualSVGElement } from './VirtualSVGElement'
 import { VirtualTemplateElement } from './VirtualTemplateElement'
 import { HTMLSlotElement } from './HTMLElementClasses'
+import { constructCustomElement } from '../webcomponents/custom-element-context'
 import { VirtualTextNode } from './VirtualTextNode'
 import { DOCUMENT_NODE, ELEMENT_NODE, VirtualNodeBase } from './VirtualNode'
 import { appendNode, setOwnerDocumentRecursive } from './tree-operations'
@@ -536,7 +537,9 @@ export class VirtualDocument extends VirtualNodeBase {
       return el
     }
     const customElement = this.defaultView?.customElements?.get?.(tagName.toLowerCase())
-    const el = customElement ? new customElement(tagName) : new VirtualElement(tagName)
+    const el: any = customElement
+      ? constructCustomElement<any>(customElement as any, this, tagName)
+      : new VirtualElement(tagName)
     el.ownerDocument = this
     return el
   }

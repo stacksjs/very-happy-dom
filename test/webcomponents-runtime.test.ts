@@ -2,6 +2,51 @@ import { describe, expect, test } from 'bun:test'
 import { Window } from '../src/index'
 
 describe('custom element runtime semantics', () => {
+  test('provides ownerDocument while constructors create shadow content', () => {
+    const window = new Window()
+
+    class ConstructorShadow extends window.HTMLElement {
+      internalRoot: any
+
+      constructor() {
+        super()
+        this.internalRoot = this.attachShadow({ mode: 'closed' })
+        this.internalRoot.innerHTML = '<slot></slot>'
+      }
+    }
+
+    window.customElements.define('constructor-shadow', ConstructorShadow)
+    const element = window.document.createElement('constructor-shadow') as ConstructorShadow
+    const slot = element.internalRoot.querySelector('slot')
+
+    expect(element.ownerDocument as any).toBe(window.document as any)
+    expect(element.internalRoot.ownerDocument as any).toBe(window.document as any)
+    expect(slot).toBeInstanceOf(window.HTMLSlotElement)
+    expect(typeof (slot as any).assignedNodes).toBe('function')
+  })
+
+  test('provides ownerDocument while upgrading constructors create shadow content', () => {
+    const window = new Window()
+    const element = window.document.createElement('upgrade-shadow-content')
+    window.document.body!.appendChild(element)
+
+    class UpgradeShadowContent extends window.HTMLElement {
+      constructor() {
+        super()
+        const root = this.attachShadow({ mode: 'open' })
+        root.innerHTML = '<slot name="content"></slot>'
+      }
+    }
+
+    window.customElements.define('upgrade-shadow-content', UpgradeShadowContent)
+    const slot = element.shadowRoot?.querySelector('slot')
+
+    expect(element).toBeInstanceOf(UpgradeShadowContent)
+    expect(element.shadowRoot?.ownerDocument as any).toBe(window.document as any)
+    expect(slot).toBeInstanceOf(window.HTMLSlotElement)
+    expect(typeof (slot as any).assignedNodes).toBe('function')
+  })
+
   test('runs constructors when upgrading existing elements without replacing their identity', () => {
     const window = new Window()
     const element = window.document.createElement('upgrade-state')
