@@ -2,6 +2,19 @@ import { describe, expect, test } from 'bun:test'
 import { Window } from '../src/index'
 
 describe('custom element runtime semantics', () => {
+  test('exposes standard Node constants on constructors and instances', () => {
+    const window = new Window()
+    const node = window.document.createElement('div')
+
+    expect(window.Node.ELEMENT_NODE).toBe(1)
+    expect(window.Node.TEXT_NODE).toBe(3)
+    expect(window.Node.DOCUMENT_FRAGMENT_NODE).toBe(11)
+    expect(window.Node.DOCUMENT_POSITION_CONTAINED_BY).toBe(16)
+    expect(node.ELEMENT_NODE).toBe(window.Node.ELEMENT_NODE)
+    expect(node.ATTRIBUTE_NODE).toBe(2)
+    expect(node.DOCUMENT_TYPE_NODE).toBe(10)
+  })
+
   test('provides ownerDocument while constructors create shadow content', () => {
     const window = new Window()
 
