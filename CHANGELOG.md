@@ -1,3 +1,22 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.6...v0.1.7)
+
+## 🐛 Bug Fixes
+
+- **custom-elements**: set document during construction ([469ccd3](https://github.com/stacksjs/very-happy-dom/commit/469ccd3)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 🧪 Tests
+
+- **screenshot**: allow cold WebView startup ([49fdcbd](https://github.com/stacksjs/very-happy-dom/commit/49fdcbd)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 🧹 Chores
+
+- release v0.1.7 ([3c6d0e8](https://github.com/stacksjs/very-happy-dom/commit/3c6d0e8)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **release**: add patch release command ([59693d5](https://github.com/stacksjs/very-happy-dom/commit/59693d5)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.5...v0.1.6)
 
 ## 🐛 Bug Fixes
