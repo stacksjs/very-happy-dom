@@ -1,3 +1,48 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.4...v0.1.5)
+
+## 🐛 Bug Fixes
+
+- **web-components**: complete upgrade and slot semantics ([9d60632](https://github.com/stacksjs/very-happy-dom/commit/9d60632)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 🧹 Chores
+
+- release v0.1.5 ([9f9fe7d](https://github.com/stacksjs/very-happy-dom/commit/9f9fe7d)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: declare bun ^1.3.14 in deps.yaml ([d0af529](https://github.com/stacksjs/very-happy-dom/commit/d0af529)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: refresh bun.lock to pick up pickier 0.1.37 ([e7bdd28](https://github.com/stacksjs/very-happy-dom/commit/e7bdd28)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deps**: refresh bun.lock to pick up pickier 0.1.35 ([b49b7fb](https://github.com/stacksjs/very-happy-dom/commit/b49b7fb)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deps**: refresh bun.lock to pick up pickier 0.1.33 ([a0855f4](https://github.com/stacksjs/very-happy-dom/commit/a0855f4)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deps**: refresh bun.lock to pick up @stacksjs/logsmith 0.2.3 ([70b7241](https://github.com/stacksjs/very-happy-dom/commit/70b7241)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deps**: refresh bun.lock to pick up buddy-bot 0.9.20 ([9a00efe](https://github.com/stacksjs/very-happy-dom/commit/9a00efe)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deps**: bump better-dx to ^0.2.15 ([9d67b87](https://github.com/stacksjs/very-happy-dom/commit/9d67b87)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **docs**: fix pickier markdown errors ([f5c9108](https://github.com/stacksjs/very-happy-dom/commit/f5c9108)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+- _glennmichael123 <gtorregosa@gmail.com>_
+
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.4...HEAD)
+
+## 🐛 Bug Fixes
+
+- **web-components**: complete upgrade and slot semantics ([9d60632](https://github.com/stacksjs/very-happy-dom/commit/9d60632)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 🧹 Chores
+
+- **deps**: declare bun ^1.3.14 in deps.yaml ([d0af529](https://github.com/stacksjs/very-happy-dom/commit/d0af529)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: refresh bun.lock to pick up pickier 0.1.37 ([e7bdd28](https://github.com/stacksjs/very-happy-dom/commit/e7bdd28)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deps**: refresh bun.lock to pick up pickier 0.1.35 ([b49b7fb](https://github.com/stacksjs/very-happy-dom/commit/b49b7fb)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deps**: refresh bun.lock to pick up pickier 0.1.33 ([a0855f4](https://github.com/stacksjs/very-happy-dom/commit/a0855f4)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deps**: refresh bun.lock to pick up @stacksjs/logsmith 0.2.3 ([70b7241](https://github.com/stacksjs/very-happy-dom/commit/70b7241)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deps**: refresh bun.lock to pick up buddy-bot 0.9.20 ([9a00efe](https://github.com/stacksjs/very-happy-dom/commit/9a00efe)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deps**: bump better-dx to ^0.2.15 ([9d67b87](https://github.com/stacksjs/very-happy-dom/commit/9d67b87)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **docs**: fix pickier markdown errors ([f5c9108](https://github.com/stacksjs/very-happy-dom/commit/f5c9108)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.3...v0.1.4)
 
 ### 🐛 Bug Fixes
