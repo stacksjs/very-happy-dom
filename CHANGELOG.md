@@ -1,3 +1,27 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.5...v0.1.6)
+
+## 🐛 Bug Fixes
+
+- **websocket**: defer connection failure state ([e6af131](https://github.com/stacksjs/very-happy-dom/commit/e6af131)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 🧹 Chores
+
+- release v0.1.6 ([4b3b9b2](https://github.com/stacksjs/very-happy-dom/commit/4b3b9b2)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.5...HEAD)
+
+## 🐛 Bug Fixes
+
+- **websocket**: defer connection failure state ([e6af131](https://github.com/stacksjs/very-happy-dom/commit/e6af131)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.4...v0.1.5)
 
 ## 🐛 Bug Fixes
