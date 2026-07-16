@@ -139,6 +139,26 @@ describe('custom element runtime semantics', () => {
 })
 
 describe('shadow DOM slot assignment', () => {
+  test('preserves specialized slots cloned from template content', () => {
+    const window = new Window()
+    const template = window.document.createElement('template')
+    template.innerHTML = '<article><slot name="heading">Fallback</slot></article>'
+    const fragment = template.content.cloneNode(true)
+    const slot = fragment.querySelector('slot')
+
+    expect(slot).toBeInstanceOf(window.HTMLSlotElement)
+    expect(typeof (slot as any).assignedNodes).toBe('function')
+
+    const host = window.document.createElement('template-slot-host')
+    const root = host.attachShadow({ mode: 'open' })
+    root.appendChild(fragment)
+    const heading = window.document.createElement('h2')
+    heading.slot = 'heading'
+    host.appendChild(heading)
+
+    expect((root.querySelector('slot') as any).assignedElements()).toEqual([heading])
+  })
+
   test('assigns default and named light DOM children', () => {
     const window = new Window()
     const host = window.document.createElement('slot-host')

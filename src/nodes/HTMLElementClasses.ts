@@ -147,6 +147,25 @@ export class HTMLSelectElement extends VirtualElement {
 export class HTMLSlotElement extends VirtualElement {
   constructor() { super('slot') }
 
+  cloneNode(deep = false): HTMLSlotElement {
+    const clone = new HTMLSlotElement()
+    clone.namespaceURI = this.namespaceURI
+    clone.nodeName = this.nodeName
+    clone.tagName = this.tagName
+    clone.ownerDocument = this.ownerDocument
+
+    for (const [name, value] of this.attributes) {
+      clone.setAttribute(name, value)
+    }
+    if (deep) {
+      for (const child of this.childNodes) {
+        const childClone = (child as any).cloneNode?.(true)
+        if (childClone) clone.appendChild(childClone)
+      }
+    }
+    return clone
+  }
+
   assignedNodes(options: { flatten?: boolean } = {}): VirtualNode[] {
     return getAssignedNodes(this, options)
   }
