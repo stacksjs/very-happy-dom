@@ -1,3 +1,17 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.7...v0.1.8)
+
+## 🐛 Bug Fixes
+
+- **slots**: preserve APIs when cloning templates ([d0e5a38](https://github.com/stacksjs/very-happy-dom/commit/d0e5a38)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 🧹 Chores
+
+- release v0.1.8 ([b35f9c6](https://github.com/stacksjs/very-happy-dom/commit/b35f9c6)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.6...v0.1.7)
 
 ## 🐛 Bug Fixes
