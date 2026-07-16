@@ -1,3 +1,17 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.8...v0.1.9)
+
+## 🐛 Bug Fixes
+
+- **dom**: expose static Node constants ([dc96a41](https://github.com/stacksjs/very-happy-dom/commit/dc96a41)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 🧹 Chores
+
+- release v0.1.9 ([fa986d5](https://github.com/stacksjs/very-happy-dom/commit/fa986d5)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.7...v0.1.8)
 
 ## 🐛 Bug Fixes
