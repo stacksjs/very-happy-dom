@@ -2283,6 +2283,28 @@ export class VirtualElement extends VirtualNodeBase {
         this.form.requestSubmit(this)
       }
     }
+
+    if (this.tagName === 'A' && this.href) {
+      const view = this.ownerDocument?.defaultView
+      if (!view) return
+
+      let destination = this.href
+      try {
+        destination = new URL(destination, view.location.href).href
+      }
+      catch {
+        // Preserve the raw href when URL resolution fails.
+      }
+
+      if (this.target === '_blank') {
+        const rel = this.rel.toLowerCase().split(/\s+/)
+        const features = rel.filter(value => value === 'noopener' || value === 'noreferrer').join(',')
+        view.open(destination, '_blank', features)
+      }
+      else {
+        view.location.href = destination
+      }
+    }
   }
 
   submit(): void {
