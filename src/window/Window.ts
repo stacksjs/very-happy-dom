@@ -899,8 +899,29 @@ export class Window extends VirtualEventTarget {
   print(): void {}
   stop(): void {}
 
-  open(): null {
-    return null
+  open(url: string | URL = 'about:blank', target = '_blank', features = ''): Window {
+    let destination = String(url || 'about:blank')
+    try {
+      destination = new URL(destination, this.location.href).href
+    }
+    catch {
+      // Preserve the requested value for compatibility with browser fallbacks.
+    }
+
+    const child = new Window({
+      url: destination,
+      width: this._width,
+      height: this._height,
+      console: this.console,
+      settings: this._settings,
+    })
+    child.name = target && target !== '_blank' ? target : ''
+
+    const featureNames = features
+      .split(/[\s,]+/)
+      .map(feature => feature.split('=', 1)[0]?.toLowerCase())
+    child.opener = featureNames.includes('noopener') || featureNames.includes('noreferrer') ? null : this
+    return child
   }
 
   close(): void {

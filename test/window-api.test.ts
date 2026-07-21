@@ -86,9 +86,16 @@ describe('Window: dialog methods', () => {
     expect(win.prompt('test')).toBeNull()
   })
 
-  test('open and close', () => {
-    const win = new Window()
-    expect(win.open()).toBeNull()
+  test('open creates a navigable child window', () => {
+    const win = new Window({ url: 'https://parent.example/posts/1' })
+    const child = win.open('/survey', 'survey')
+
+    expect(child.location.href).toBe('https://parent.example/survey')
+    expect(child.name).toBe('survey')
+    expect(child.opener).toBe(win)
+
+    const isolated = win.open('https://other.example/', '_blank', 'noopener,noreferrer')
+    expect(isolated.opener).toBeNull()
     expect(win.close()).toBeUndefined()
   })
 })
