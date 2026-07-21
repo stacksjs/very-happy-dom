@@ -1,3 +1,21 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.9...v0.1.10)
+
+## 🚀 Features
+
+- **dom**: activate anchor navigation ([4d67934](https://github.com/stacksjs/very-happy-dom/commit/4d67934)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **window**: emulate opened browsing contexts ([fc5b1fb](https://github.com/stacksjs/very-happy-dom/commit/fc5b1fb)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 🧹 Chores
+
+- release v0.1.10 ([4425a50](https://github.com/stacksjs/very-happy-dom/commit/4425a50)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **actions**: update action releaser ([11a17f5](https://github.com/stacksjs/very-happy-dom/commit/11a17f5)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: refresh pantry lockfile ([eca2346](https://github.com/stacksjs/very-happy-dom/commit/eca2346)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **actions**: update action releaser ([4bc62e6](https://github.com/stacksjs/very-happy-dom/commit/4bc62e6)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.8...v0.1.9)
 
 ## 🐛 Bug Fixes
