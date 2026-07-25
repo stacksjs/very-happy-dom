@@ -516,7 +516,7 @@ Made with 💙
 [contributing-href]: .github/CONTRIBUTING.md
 [releases-href]: https://github.com/stacksjs/very-happy-dom/releases
 [discussions-href]: https://github.com/stacksjs/very-happy-dom/discussions
-[discord-href]: https://discord.gg/stacksjs
+[discord-href]: https://stacksjs.com/discord
 [jetbrains-href]: https://www.jetbrains.com/
 [solana-href]: https://solana.com/
 [license-href]: LICENSE.md
