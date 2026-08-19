@@ -1,12 +1,14 @@
-import type { BunPressOptions } from 'bunpress'
+import type { BunPressOptions } from '@stacksjs/bunpress'
 
 const config: BunPressOptions = {
-  name: 'clapp',
+  title: 'clapp',
   description: 'An elegant, TypeScript-first CLI framework built on Bun for creating beautiful command-line applications with interactive prompts.',
   url: 'https://clapp.stacksjs.org',
 
-  theme: {
-    primaryColor: '#3b82f6',
+  themeConfig: {
+    colors: {
+      primary: '#3b82f6',
+    },
   },
 
   nav: [
