@@ -72,9 +72,9 @@
   },
   "devDependencies": {
     "@stacksjs/bunpress": "^0.2.11",
-    "@stacksjs/dtsx": "^0.11.8",
+    "@stacksjs/dtsx": "^0.11.10",
     "better-dx": "^0.2.15",
-    "bun-plugin-dtsx": "^0.11.8",
+    "bun-plugin-dtsx": "^0.11.10",
     "bunfig": "^0.15.6",
     "mitata": "^1.0.34"
   },
