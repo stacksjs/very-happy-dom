@@ -129,27 +129,47 @@ GlobalRegistrator.register()
 import { Browser } from 'very-happy-dom'
 
 const browser = new Browser()
-const context = browser.createContext()
-const page = context.newPage()
+const page = browser.newPage()
 
 page.goto('https://example.com')
+
+// Or an isolated context with its own storage and cookies
+const context = browser.newIncognitoContext()
+const isolatedPage = context.newPage()
+
+await browser.close()
 ```
 
 ### Request Interception
 
+Interception is attached per page. Each request is finished with exactly one of
+`continue()`, `respond()` or `abort()`.
+
 ```typescript
-import { Window } from 'very-happy-dom'
+import type { InterceptedRequest } from 'very-happy-dom'
+import { Browser } from 'very-happy-dom'
 
-const window = new Window()
+const browser = new Browser()
+const page = browser.newPage()
 
-window.interceptor.addInterceptor({
-  onRequest: (request) => {
-    if (request.url.includes('/api/')) {
-      return new Response(JSON.stringify({ mocked: true }))
-    }
-    return request
+page.on('request', (request: InterceptedRequest) => {
+  if (request.url.includes('/api/')) {
+    request.respond({
+      status: 200,
+      body: JSON.stringify({ mocked: true }),
+    })
+    return
   }
+
+  request.continue()
 })
+
+await page.setRequestInterception(true)
+
+const response = await fetch('https://example.com/api/thing')
+console.log(await response.text()) // {"mocked":true}
+
+await browser.close()
 ```
 
 ### Custom Window Configuration
@@ -252,7 +272,14 @@ ctx.strokeRect(10, 10, 80, 80)
 
 // Export canvas data
 const dataUrl = canvas.toDataURL()
-const blob = await canvas.toBlob()
+
+// toBlob is callback-based, as in the browser
+canvas.toBlob((blob) => {
+  console.log(blob?.type) // "image/png"
+})
+
+// or use the promise-returning convenience wrapper
+const blob = await canvas.toBlobAsync()
 ```
 
 ## Performance

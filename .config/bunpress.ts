@@ -1,9 +1,9 @@
 import type { BunPressOptions } from '@stacksjs/bunpress'
 
 const config: BunPressOptions = {
-  title: 'clapp',
-  description: 'An elegant, TypeScript-first CLI framework built on Bun for creating beautiful command-line applications with interactive prompts.',
-  url: 'https://clapp.stacksjs.org',
+  title: 'very-happy-dom',
+  description: 'A blazingly fast, lightweight virtual DOM powered by Bun. Drop-in replacement for happy-dom and jsdom in testing environments.',
+  url: 'https://very-happy-dom.stacksjs.org',
 
   themeConfig: {
     colors: {
@@ -12,9 +12,9 @@ const config: BunPressOptions = {
   },
 
   nav: [
-    { text: 'Guide', link: '/guide/getting-started' },
-    { text: 'Commands', link: '/guide/commands' },
-    { text: 'Prompts', link: '/guide/prompts' },
+    { text: 'Guide', link: '/intro' },
+    { text: 'Drop-in Compat', link: '/drop-in-compat' },
+    { text: 'API', link: '/api' },
     {
       text: 'Stacks',
       items: [
@@ -23,57 +23,49 @@ const config: BunPressOptions = {
         { text: 'dtsx', link: 'https://dtsx.stacksjs.org' },
       ],
     },
-    { text: 'GitHub', link: 'https://github.com/stacksjs/clapp' },
+    { text: 'GitHub', link: 'https://github.com/stacksjs/very-happy-dom' },
   ],
 
   sidebar: [
     {
       text: 'Introduction',
       items: [
-        { text: 'What is clapp?', link: '/intro' },
+        { text: 'What is very-happy-dom?', link: '/intro' },
         { text: 'Installation', link: '/install' },
+        { text: 'Usage', link: '/usage' },
       ],
     },
     {
-      text: 'Guide',
+      text: 'Migration',
       items: [
-        { text: 'Getting Started', link: '/guide/getting-started' },
-        { text: 'Commands', link: '/guide/commands' },
-        { text: 'Prompts', link: '/guide/prompts' },
-        { text: 'Testing', link: '/guide/testing' },
-      ],
-    },
-    {
-      text: 'Features',
-      items: [
-        { text: 'Arguments & Options', link: '/features/arguments' },
-        { text: 'Interactive Prompts', link: '/features/prompts' },
-        { text: 'Output Styling', link: '/features/styling' },
-        { text: 'Progress Indicators', link: '/features/progress' },
-      ],
-    },
-    {
-      text: 'Advanced',
-      items: [
-        { text: 'Configuration', link: '/advanced/configuration' },
-        { text: 'Plugins', link: '/advanced/plugins' },
-        { text: 'Performance', link: '/advanced/performance' },
-        { text: 'CI/CD Integration', link: '/advanced/ci-cd' },
+        { text: 'Drop-in Compatibility', link: '/drop-in-compat' },
       ],
     },
     {
       text: 'Reference',
       items: [
+        { text: 'API Reference', link: '/api' },
         { text: 'Configuration', link: '/config' },
-        { text: 'Styling', link: '/styling' },
-        { text: 'Usage Examples', link: '/usage' },
+        { text: 'Performance', link: '/performance' },
+      ],
+    },
+    {
+      text: 'Project',
+      items: [
+        { text: 'Showcase', link: '/showcase' },
+        { text: 'Team', link: '/team' },
+        { text: 'Sponsors', link: '/sponsors' },
+        { text: 'Partners', link: '/partners' },
+        { text: 'Postcardware', link: '/postcardware' },
+        { text: 'Stargazers', link: '/stargazers' },
+        { text: 'License', link: '/license' },
       ],
     },
   ],
 
   sitemap: {
     enabled: true,
-    baseUrl: 'https://clapp.stacksjs.org',
+    baseUrl: 'https://very-happy-dom.stacksjs.org',
   },
 
   robots: {

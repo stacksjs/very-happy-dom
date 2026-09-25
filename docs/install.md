@@ -1,118 +1,95 @@
-# Install
+# Installation
 
-This is just an example of the ts-starter docs.
+`very-happy-dom` is a library you install as a dev dependency — it has no CLI
+and ships no binaries.
 
-Installing `rpx` is easy. Simply pull it in via your package manager of choice, or download the binary directly.
+## Requirements
 
-## Package Managers
+Bun is required. The package targets the Bun runtime and relies on it for
+`fetch`, `WebSocket`, streams and other primitives.
 
-Choose your package manager of choice:
+```bash
+bun --version
+```
+
+## Package managers
 
 ::: code-group
 
-```sh [npm]
-npm install --save-dev @stacksjs/rpx
-# npm i -d @stacksjs/rpx
-
-# or, install globally via
-npm i -g @stacksjs/rpx
+```sh [bun]
+bun add --dev very-happy-dom
+# bun add -d very-happy-dom
 ```
 
-```sh [bun]
-bun install --dev @stacksjs/rpx
-# bun add --dev @stacksjs/rpx
-# bun i -d @stacksjs/rpx
-
-# or, install globally via
-bun add --global @stacksjs/rpx
+```sh [npm]
+npm install --save-dev very-happy-dom
+# npm i -D very-happy-dom
 ```
 
 ```sh [pnpm]
-pnpm add --save-dev @stacksjs/rpx
-# pnpm i -d @stacksjs/rpx
-
-# or, install globally via
-pnpm add --global @stacksjs/rpx
+pnpm add --save-dev very-happy-dom
+# pnpm add -D very-happy-dom
 ```
 
 ```sh [yarn]
-yarn add --dev @stacksjs/rpx
-# yarn i -d @stacksjs/rpx
-
-# or, install globally via
-yarn global add @stacksjs/rpx
-```
-
-```sh [brew]
-brew install rpx # coming soon
-```
-
-```sh [pkgx]
-pkgx rpx # coming soon
+yarn add --dev very-happy-dom
 ```
 
 :::
 
-Read more about how to use it in the Usage section of the documentation.
+## Entry points
 
-## Binaries
+The package exposes three entry points:
 
-Choose the binary that matches your platform and architecture:
+| Import | What it gives you |
+| --- | --- |
+| `very-happy-dom` | Everything — `Window`, `Browser`, `JSDOM`, `GlobalRegistrator`, the DOM classes |
+| `very-happy-dom/register` | Side-effect preload that installs browser globals |
+| `very-happy-dom/jsdom` | The jsdom-compatible surface on its own |
 
-::: code-group
-
-```sh [macOS (arm64)]
-# Download the binary
-curl -L https://github.com/stacksjs/rpx/releases/download/v0.9.1/rpx-darwin-arm64 -o rpx
-
-# Make it executable
-chmod +x rpx
-
-# Move it to your PATH
-mv rpx /usr/local/bin/rpx
+```typescript
+import { GlobalRegistrator, JSDOM, Window } from 'very-happy-dom'
+import { CookieJar, ResourceLoader, VirtualConsole } from 'very-happy-dom/jsdom'
 ```
 
-```sh [macOS (x64)]
-# Download the binary
-curl -L https://github.com/stacksjs/rpx/releases/download/v0.9.1/rpx-darwin-x64 -o rpx
+Classes are shared across entry points, so `instanceof` works no matter which
+one an object came from.
 
-# Make it executable
-chmod +x rpx
+## Setting up your tests
 
-# Move it to your PATH
-mv rpx /usr/local/bin/rpx
+Most projects want browser globals (`document`, `window`, …) available in every
+test. The shortest way is the `/register` preload:
+
+```toml
+# bunfig.toml
+[test]
+preload = ["very-happy-dom/register"]
 ```
 
-```sh [Linux (arm64)]
-# Download the binary
-curl -L https://github.com/stacksjs/rpx/releases/download/v0.9.1/rpx-linux-arm64 -o rpx
+Override the default URL with the `VERY_HAPPY_DOM_URL` or `HAPPY_DOM_URL`
+environment variables.
 
-# Make it executable
-chmod +x rpx
+If you would rather not register globals, create a `Window` per test instead —
+see [Usage](/usage).
 
-# Move it to your PATH
-mv rpx /usr/local/bin/rpx
+## Verifying the install
+
+```typescript
+// check.ts
+import { Window } from 'very-happy-dom'
+
+const window = new Window()
+window.document.body.innerHTML = '<h1>It works</h1>'
+console.log(window.document.querySelector('h1')?.textContent)
 ```
 
-```sh [Linux (x64)]
-# Download the binary
-curl -L https://github.com/stacksjs/rpx/releases/download/v0.9.1/rpx-linux-x64 -o rpx
-
-# Make it executable
-chmod +x rpx
-
-# Move it to your PATH
-mv rpx /usr/local/bin/rpx
+```bash
+bun run check.ts
 ```
 
-```sh [Windows (x64)]
-# Download the binary
-curl -L https://github.com/stacksjs/rpx/releases/download/v0.9.1/rpx-windows-x64.exe -o rpx.exe
+You should see `It works`.
 
-# Move it to your PATH (adjust the path as needed)
-move rpx.exe C:\Windows\System32\rpx.exe
-```
+## Migrating an existing suite
 
-::: tip
-You can also find the `rpx` binaries in GitHub [releases](https://github.com/stacksjs/rpx/releases).
-:::
+Already using happy-dom or jsdom? Both are one-line changes — see the
+[drop-in compatibility guide](/drop-in-compat).
