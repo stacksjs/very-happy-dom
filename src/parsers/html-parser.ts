@@ -1,12 +1,45 @@
 import type { VirtualNode } from '../nodes/VirtualNode'
+import type { VirtualElement } from '../nodes/VirtualElement'
+import type { VirtualSVGElement } from '../nodes/VirtualSVGElement'
 import { decodeHtmlEntities } from './html-utils'
 import { VirtualCommentNode } from '../nodes/VirtualCommentNode'
-import { VirtualElement } from '../nodes/VirtualElement'
-import { VirtualSVGElement } from '../nodes/VirtualSVGElement'
 import { VirtualTextNode } from '../nodes/VirtualTextNode'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 const MATHML_NAMESPACE = 'http://www.w3.org/1998/Math/MathML'
+
+/**
+ * `VirtualElement` imports this module to parse `innerHTML`, and
+ * `VirtualSVGElement` extends `VirtualElement`. Importing either of them here
+ * at module scope therefore closes a cycle:
+ *
+ *   VirtualElement -> html-parser -> VirtualSVGElement -> VirtualElement
+ *
+ * which throws `Cannot access 'VirtualElement' before initialization` whenever
+ * html-parser is the first of the three to initialise. Both are only needed on
+ * the fallback path below, when no `ownerDocument` was supplied, so they are
+ * resolved on first use instead. Keep these lazy.
+ *
+ * `VirtualCommentNode` and `VirtualTextNode` are imported normally above —
+ * neither reaches `VirtualElement`, so they are not part of the cycle.
+ */
+interface ElementConstructors {
+  VirtualElement: new (tagName: string) => VirtualElement
+  VirtualSVGElement: new (tagName: string) => VirtualSVGElement
+}
+
+let elementConstructors: ElementConstructors | null = null
+
+function getElementConstructors(): ElementConstructors {
+  if (!elementConstructors) {
+    elementConstructors = {
+      VirtualElement: require('../nodes/VirtualElement').VirtualElement,
+      VirtualSVGElement: require('../nodes/VirtualSVGElement').VirtualSVGElement,
+    }
+  }
+
+  return elementConstructors
+}
 
 /**
  * Parse HTML string into virtual DOM nodes
@@ -37,7 +70,8 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
       return ownerDocument.createElement(tagName)
     }
 
-    const element = namespaceURI === SVG_NAMESPACE ? new VirtualSVGElement(tagName) : new VirtualElement(tagName)
+    const { VirtualElement, VirtualSVGElement } = getElementConstructors()
+    const element: any = namespaceURI === SVG_NAMESPACE ? new VirtualSVGElement(tagName) : new VirtualElement(tagName)
     if (namespaceURI && namespaceURI !== SVG_NAMESPACE) {
       element.namespaceURI = namespaceURI
     }
