@@ -511,3 +511,156 @@ describe('Canvas API', () => {
     })
   })
 })
+
+// =============================================================================
+// Regression guard for #1556: `HTMLCanvasElement` used to be a standalone class
+// that hand-rolled a partial node interface, so a canvas had no `style`,
+// `classList`, `dataset` or event-target methods and `canvas.style.x = y` threw
+// a TypeError. It now extends `VirtualElement` like every other element.
+// =============================================================================
+
+describe('HTMLCanvasElement inherits the element API (#1556)', () => {
+  const makeCanvas = () => {
+    const window = new Window()
+    return { window, canvas: window.document.createElement('canvas') as any }
+  }
+
+  test('style is a usable CSSStyleDeclaration', () => {
+    const { canvas } = makeCanvas()
+
+    expect(canvas.style).toBeDefined()
+
+    canvas.style.position = 'absolute'
+    canvas.style.width = '100px'
+
+    expect(canvas.style.position).toBe('absolute')
+    expect(canvas.style.width).toBe('100px')
+  })
+
+  test('classList, id, className and dataset work', () => {
+    const { canvas } = makeCanvas()
+
+    canvas.classList.add('chart', 'big')
+    expect([...canvas.classList]).toEqual(['chart', 'big'])
+
+    canvas.classList.toggle('big', false)
+    expect(canvas.className).toBe('chart')
+
+    canvas.id = 'c1'
+    expect(canvas.id).toBe('c1')
+
+    canvas.dataset.kind = 'line'
+    expect(canvas.dataset.kind).toBe('line')
+  })
+
+  test('is an event target', () => {
+    const { window, canvas } = makeCanvas()
+    let clicks = 0
+
+    canvas.addEventListener('click', () => clicks++)
+    canvas.dispatchEvent(new window.Event('click'))
+
+    expect(clicks).toBe(1)
+  })
+
+  test('participates in the tree and in selector queries', () => {
+    const { window, canvas } = makeCanvas()
+    const document = window.document
+
+    canvas.id = 'c1'
+    canvas.classList.add('chart')
+    document.body!.appendChild(canvas)
+
+    expect(canvas.isConnected).toBe(true)
+    expect(canvas.parentNode).toBe(document.body)
+    expect(document.querySelector('canvas')).toBe(canvas)
+    expect(document.querySelector('#c1')).toBe(canvas)
+    expect(document.querySelector('.chart')).toBe(canvas)
+    expect(canvas.matches('canvas.chart')).toBe(true)
+    expect(canvas.closest('body')).toBe(document.body)
+    expect(canvas.outerHTML.startsWith('<canvas')).toBe(true)
+  })
+
+  test('is still an HTMLCanvasElement with a working 2D context', () => {
+    const { window, canvas } = makeCanvas()
+
+    expect(canvas).toBeInstanceOf(window.HTMLCanvasElement)
+    expect(canvas.constructor.name).toBe('HTMLCanvasElement')
+
+    const context = canvas.getContext('2d')
+    expect(context).toBeDefined()
+    expect(context.canvas).toBe(canvas)
+    expect(canvas.getContext('2d')).toBe(context)
+    expect(canvas.getContext('webgl')).toBeNull()
+  })
+
+  describe('width and height reflect their attributes', () => {
+    test('default to 300x150 when absent', () => {
+      const { canvas } = makeCanvas()
+      expect(canvas.width).toBe(300)
+      expect(canvas.height).toBe(150)
+    })
+
+    test('assignment writes the attribute', () => {
+      const { canvas } = makeCanvas()
+
+      canvas.width = 800
+      canvas.height = 600
+
+      expect(canvas.width).toBe(800)
+      expect(canvas.height).toBe(600)
+      expect(canvas.getAttribute('width')).toBe('800')
+      expect(canvas.getAttribute('height')).toBe('600')
+    })
+
+    test('the attribute drives the property', () => {
+      const { canvas } = makeCanvas()
+
+      canvas.setAttribute('width', '640')
+      canvas.setAttribute('height', '480')
+
+      expect(canvas.width).toBe(640)
+      expect(canvas.height).toBe(480)
+    })
+
+    test('absent, unparseable and negative values fall back to the default', () => {
+      const { canvas } = makeCanvas()
+
+      canvas.setAttribute('width', 'bogus')
+      expect(canvas.width).toBe(300)
+
+      canvas.setAttribute('height', '-5')
+      expect(canvas.height).toBe(150)
+
+      canvas.removeAttribute('width')
+      expect(canvas.width).toBe(300)
+    })
+  })
+
+  describe('cloneNode keeps the canvas API', () => {
+    test('the clone is a canvas, not a plain element', () => {
+      const { window, canvas } = makeCanvas()
+      canvas.width = 640
+
+      const clone = canvas.cloneNode(false) as any
+
+      expect(clone).toBeInstanceOf(window.HTMLCanvasElement)
+      expect(clone.tagName).toBe('CANVAS')
+      expect(typeof clone.getContext).toBe('function')
+      expect(clone.width).toBe(640)
+    })
+
+    test('the clone gets a fresh context rather than sharing one', () => {
+      const { canvas } = makeCanvas()
+      const context = canvas.getContext('2d')
+      context.fillStyle = 'red'
+
+      const clone = canvas.cloneNode(false) as any
+      const cloneContext = clone.getContext('2d')
+
+      expect(cloneContext).not.toBe(context)
+      expect(cloneContext.canvas).toBe(clone)
+      expect(cloneContext.fillStyle).toBe('#000000')
+    })
+  })
+})

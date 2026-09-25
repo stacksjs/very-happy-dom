@@ -16,7 +16,7 @@ import { querySelectorAllEngine, querySelectorEngine } from '../selectors/engine
 import { VirtualElement } from './VirtualElement'
 import { VirtualSVGElement } from './VirtualSVGElement'
 import { VirtualTemplateElement } from './VirtualTemplateElement'
-import { HTMLSlotElement } from './HTMLElementClasses'
+import { HTMLCanvasElement, HTMLSlotElement } from './HTMLElementClasses'
 import { constructCustomElement } from '../webcomponents/custom-element-context'
 import { VirtualTextNode } from './VirtualTextNode'
 import { DOCUMENT_NODE, ELEMENT_NODE, VirtualNodeBase } from './VirtualNode'
@@ -520,7 +520,6 @@ export class VirtualDocument extends VirtualNodeBase {
   createElement(tagName: string): VirtualElement | any {
     // Special handling for canvas elements
     if (tagName.toLowerCase() === 'canvas') {
-      const { HTMLCanvasElement } = require('../apis/Canvas')
       const el = new HTMLCanvasElement()
       el.ownerDocument = this
       return el

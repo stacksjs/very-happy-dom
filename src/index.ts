@@ -54,7 +54,7 @@ export type {
   ImageData,
   TextMetrics,
 } from './apis/Canvas'
-export { CanvasRenderingContext2D, HTMLCanvasElement } from './apis/Canvas'
+export { CanvasRenderingContext2D } from './apis/Canvas'
 export { Clipboard, Navigator } from './apis/Clipboard'
 export { VeryHappyFile as File, VeryHappyFileList as FileList, VeryHappyFileReader as FileReader } from './apis/FileAPI'
 export { Browser } from './browser/Browser'
@@ -209,6 +209,7 @@ export {
   HTMLBodyElement,
   HTMLBRElement,
   HTMLButtonElement,
+  HTMLCanvasElement,
   HTMLDataElement,
   HTMLDataListElement,
   HTMLDetailsElement,

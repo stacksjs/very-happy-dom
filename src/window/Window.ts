@@ -37,7 +37,7 @@ import {
   StylePropertyMapReadOnly as VHDStylePropertyMapReadOnly,
 } from '../css/CSSOM'
 import { DataTransfer, Notification, Performance } from '../apis/BrowserAPIs'
-import { CanvasRenderingContext2D, HTMLCanvasElement } from '../apis/Canvas'
+import { CanvasRenderingContext2D } from '../apis/Canvas'
 import { BroadcastChannel as VHDBroadcastChannel, MessageChannel as VHDMessageChannel, MessagePort as VHDMessagePort } from '../apis/Channel'
 import { Navigator as VeryHappyNavigator } from '../apis/Clipboard'
 import { ClipboardItem as VHDClipboardItem } from '../apis/Clipboard'
@@ -102,6 +102,7 @@ import {
   HTMLBodyElement,
   HTMLBRElement,
   HTMLButtonElement,
+  HTMLCanvasElement,
   HTMLDataElement,
   HTMLDataListElement,
   HTMLDetailsElement,

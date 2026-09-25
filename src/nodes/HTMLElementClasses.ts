@@ -1,3 +1,4 @@
+import { CanvasRenderingContext2D } from '../apis/Canvas'
 import { VirtualElement } from './VirtualElement'
 import { getAssignedElements, getAssignedNodes } from '../webcomponents/slot-utils'
 import type { VirtualNode } from './VirtualNode'
@@ -237,5 +238,114 @@ export class Audio extends VirtualElement {
   constructor(src?: string) {
     super('audio')
     if (src !== undefined) this.setAttribute('src', src)
+  }
+}
+
+/** Spec defaults for a canvas with no `width`/`height` attribute. */
+const DEFAULT_CANVAS_WIDTH = 300
+const DEFAULT_CANVAS_HEIGHT = 150
+
+/**
+ * Reflects a canvas dimension attribute. The attribute is an unsigned long, so
+ * anything absent, non-numeric or negative resolves to the spec default.
+ */
+function parseCanvasDimension(value: string | null, fallback: number): number {
+  if (value === null)
+    return fallback
+
+  const parsed = Number.parseInt(value, 10)
+
+  return Number.isNaN(parsed) || parsed < 0 ? fallback : parsed
+}
+
+/**
+ * Extends `VirtualElement` rather than reimplementing a partial node
+ * interface, so a canvas has `style`, `classList`, `dataset`, the event
+ * target methods and the tree-manipulation API like any other element.
+ */
+export class HTMLCanvasElement extends VirtualElement {
+  private context2d: CanvasRenderingContext2D | null = null
+
+  constructor() {
+    super('canvas')
+  }
+
+  /**
+   * `width` and `height` are reflected content attributes, so
+   * `canvas.width = 800` and `setAttribute('width', '800')` stay in sync.
+   * A missing or unparseable value falls back to the spec default.
+   */
+  get width(): number {
+    return parseCanvasDimension(this.getAttribute('width'), DEFAULT_CANVAS_WIDTH)
+  }
+
+  set width(value: number) {
+    this.setAttribute('width', String(value))
+  }
+
+  get height(): number {
+    return parseCanvasDimension(this.getAttribute('height'), DEFAULT_CANVAS_HEIGHT)
+  }
+
+  set height(value: number) {
+    this.setAttribute('height', String(value))
+  }
+
+  /**
+   * The base implementation constructs a plain `VirtualElement`, which would
+   * drop `getContext` and the reflected dimensions. `width`/`height` ride along
+   * with the attributes. The 2D context is deliberately not carried over — a
+   * cloned canvas starts with a fresh context, as it does in the browser.
+   */
+  cloneNode(deep = false): HTMLCanvasElement {
+    const clone = new HTMLCanvasElement()
+    clone.namespaceURI = this.namespaceURI
+    clone.nodeName = this.nodeName
+    clone.tagName = this.tagName
+    clone.ownerDocument = this.ownerDocument
+
+    for (const [name, value] of this.attributes) {
+      clone.setAttribute(name, value)
+    }
+    if (deep) {
+      for (const child of this.childNodes) {
+        const childClone = (child as any).cloneNode?.(true)
+        if (childClone)
+          clone.appendChild(childClone)
+      }
+    }
+    return clone
+  }
+
+  getContext(contextId: '2d'): CanvasRenderingContext2D | null
+  getContext(contextId: string): any | null
+  getContext(contextId: string): any | null {
+    if (contextId === '2d') {
+      if (!this.context2d) {
+        this.context2d = new CanvasRenderingContext2D(this)
+      }
+      return this.context2d
+    }
+    // Other contexts (webgl, webgl2, etc.) not implemented
+    return null
+  }
+
+  toDataURL(type?: string, quality?: any): string {
+    // Return a simple data URL
+    return `data:${type || 'image/png'};base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==`
+  }
+
+  toBlob(callback: (blob: Blob | null) => void, type?: string, quality?: any): void {
+    // Simulate async blob creation
+    setTimeout(() => {
+      const blob = new Blob(['fake canvas data'], { type: type || 'image/png' })
+      callback(blob)
+    }, 0)
+  }
+
+  async toBlobAsync(type?: string, quality?: any): Promise<Blob> {
+    return new Promise((resolve) => {
+      this.toBlob((blob) => { if (blob) resolve(blob) }, type, quality)
+    })
   }
 }

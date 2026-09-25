@@ -3,6 +3,8 @@
  * Provides a basic Canvas and CanvasRenderingContext2D implementation for testing
  */
 
+import type { HTMLCanvasElement } from '../nodes/HTMLElementClasses'
+
 export interface CanvasImageSource {
   width: number
   height: number
@@ -376,84 +378,3 @@ export class CanvasRenderingContext2D {
  * HTMLCanvasElement
  * A simplified canvas element for testing
  */
-export class HTMLCanvasElement {
-  public width = 300
-  public height = 150
-  public tagName = 'CANVAS'
-  public nodeName = 'CANVAS'
-  public nodeType = 1
-  public nodeKind = 'element'
-  public nodeValue: string | null = null
-  public parentNode: any = null
-  public childNodes: any[] = []
-  public attributes: Map<string, string> = new Map()
-  public ownerDocument: any = null
-  private context2d: CanvasRenderingContext2D | null = null
-
-  // children should only contain element nodes, per DOM spec
-  get children(): any[] {
-    return this.childNodes.filter(node => node.nodeType === 1)
-  }
-
-  get isConnected(): boolean {
-    let current: any = this
-    while (current) {
-      if (current.nodeType === 9) {
-        return true
-      }
-      current = current.parentNode
-    }
-    return false
-  }
-
-  // Add minimal methods to make it compatible with VirtualElement for queries
-  getAttribute(name: string): string | null {
-    return this.attributes.get(name.toLowerCase()) ?? null
-  }
-
-  setAttribute(name: string, value: string): void {
-    this.attributes.set(name.toLowerCase(), value)
-  }
-
-  hasAttribute(name: string): boolean {
-    return this.attributes.has(name.toLowerCase())
-  }
-
-  matches(selector: string): boolean {
-    // Simple matching for canvas selector
-    return selector.toLowerCase() === 'canvas'
-      || selector.toLowerCase() === this.tagName.toLowerCase()
-  }
-
-  getContext(contextId: '2d'): CanvasRenderingContext2D | null
-  getContext(contextId: string): any | null
-  getContext(contextId: string): any | null {
-    if (contextId === '2d') {
-      if (!this.context2d) {
-        this.context2d = new CanvasRenderingContext2D(this)
-      }
-      return this.context2d
-    }
-    // Other contexts (webgl, webgl2, etc.) not implemented
-    return null
-  }
-
-  toDataURL(type?: string, quality?: any): string {
-    // Return a simple data URL
-    return `data:${type || 'image/png'};base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==`
-  }
-
-  toBlob(callback: (blob: Blob | null) => void, type?: string, quality?: any): void {
-    // Simulate async blob creation
-    setTimeout(() => {
-      const blob = new Blob(['fake canvas data'], { type: type || 'image/png' })
-      callback(blob)
-    }, 0)
-  }
-
-  async toBlobAsync(type?: string, quality?: any): Promise<Blob> {
-    return new Promise((resolve) => {
-      this.toBlob((blob) => { if (blob) resolve(blob) }, type, quality)
-    })
-  }
-}
