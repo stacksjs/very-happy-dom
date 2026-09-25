@@ -554,7 +554,7 @@ export class VirtualElement extends VirtualNodeBase {
   get classList(): {
     add: (...tokens: string[]) => void
     remove: (...tokens: string[]) => void
-    toggle: (token: string) => boolean
+    toggle: (token: string, force?: boolean) => boolean
     contains: (token: string) => boolean
     replace: (oldToken: string, newToken: string) => boolean
     readonly length: number
@@ -592,9 +592,22 @@ export class VirtualElement extends VirtualNodeBase {
           element.removeAttribute('class')
         }
       },
-      toggle(token: string): boolean {
+      // `force` pins the outcome instead of flipping: `true` only ever adds,
+      // `false` only ever removes, and the return value is the resulting
+      // membership. `el.classList.toggle('active', isActive)` depends on it.
+      toggle(token: string, force?: boolean): boolean {
         const classes = getClasses()
         const index = classes.indexOf(token)
+        const shouldAdd = force === undefined ? index === -1 : force
+
+        if (shouldAdd) {
+          if (index === -1) {
+            classes.push(token)
+            element.setAttribute('class', classes.join(' '))
+          }
+          return true
+        }
+
         if (index !== -1) {
           classes.splice(index, 1)
           if (classes.length > 0) {
@@ -603,13 +616,8 @@ export class VirtualElement extends VirtualNodeBase {
           else {
             element.removeAttribute('class')
           }
-          return false
         }
-        else {
-          classes.push(token)
-          element.setAttribute('class', classes.join(' '))
-          return true
-        }
+        return false
       },
       contains(token: string): boolean {
         return getClasses().includes(token)

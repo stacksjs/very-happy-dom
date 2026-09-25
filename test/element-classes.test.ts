@@ -235,6 +235,61 @@ describe('HTML Element Subclasses - Feature tests', () => {
     expect(div.classList.contains('baz')).toBe(true)
   })
 
+  // `toggle(token, force)` pins the outcome rather than flipping. The cases
+  // that matter are the ones where `force` disagrees with a plain toggle —
+  // asserting only `toggle('x', true)` on an absent token passes even when
+  // `force` is ignored entirely.
+  describe('classList.toggle force parameter', () => {
+    test('force true adds and returns true, whatever the current state', () => {
+      const absent = new HTMLDivElement()
+      expect(absent.classList.toggle('a', true)).toBe(true)
+      expect(absent.className).toBe('a')
+
+      const present = new HTMLDivElement()
+      present.className = 'a'
+      expect(present.classList.toggle('a', true)).toBe(true)
+      expect(present.className).toBe('a')
+    })
+
+    test('force false removes and returns false, whatever the current state', () => {
+      const present = new HTMLDivElement()
+      present.className = 'a'
+      expect(present.classList.toggle('a', false)).toBe(false)
+      expect(present.classList.contains('a')).toBe(false)
+
+      const absent = new HTMLDivElement()
+      expect(absent.classList.toggle('a', false)).toBe(false)
+      expect(absent.classList.contains('a')).toBe(false)
+    })
+
+    test('omitting force flips the token', () => {
+      const div = new HTMLDivElement()
+      expect(div.classList.toggle('a')).toBe(true)
+      expect(div.classList.contains('a')).toBe(true)
+      expect(div.classList.toggle('a')).toBe(false)
+      expect(div.classList.contains('a')).toBe(false)
+    })
+
+    test('leaves sibling tokens alone', () => {
+      const div = new HTMLDivElement()
+      div.className = 'x a y'
+      div.classList.toggle('a', false)
+      expect(div.className).toBe('x y')
+
+      div.classList.toggle('a', true)
+      expect(div.className).toBe('x y a')
+    })
+
+    test('repeated force calls are idempotent', () => {
+      const div = new HTMLDivElement()
+      div.className = 'btn'
+      for (const active of [true, true, false, false, true])
+        div.classList.toggle('active', active)
+
+      expect(div.className).toBe('btn active')
+    })
+  })
+
   test('style works on them', () => {
     const div = new HTMLDivElement()
     div.style.setProperty('color', 'red')
