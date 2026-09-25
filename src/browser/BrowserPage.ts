@@ -32,7 +32,9 @@ export class BrowserPage {
   constructor(context: BrowserContext) {
     this._context = context
     this._viewport = { width: 1024, height: 768 }
-    this.console = globalThis.console
+    // Inherit the browser's console so `new Browser({ console })` reaches pages
+    // and, through them, each frame's Window.
+    this.console = context?.browser?.console ?? globalThis.console
 
     // Create main frame
     this.mainFrame = new BrowserFrame(this)
@@ -125,6 +127,12 @@ export class BrowserPage {
    */
   setViewport(viewport: IBrowserPageViewport): void {
     this._viewport = { ...viewport }
+
+    // Each frame owns a real Window, so the new size has to reach them or
+    // `innerWidth` and width media queries would keep reporting the old one.
+    for (const frame of this._frames) {
+      frame.setViewport(this._viewport)
+    }
   }
 
   /**

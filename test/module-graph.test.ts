@@ -36,6 +36,14 @@ const ENTRY_MODULES = [
   'traversal',
   'window/Window',
   'window/GlobalRegistrator',
+  // The browser layer reaches into the window graph — `BrowserFrame`
+  // constructs a real `Window`, and `VirtualDocument` imports
+  // `browser/CookieContainer` back the other way.
+  'browser/Browser',
+  'browser/BrowserContext',
+  'browser/BrowserPage',
+  'browser/BrowserFrame',
+  'browser/CookieContainer',
   'index',
   'register',
   'jsdom/index',

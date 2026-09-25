@@ -428,7 +428,12 @@ console.log('\nTest 22: Page Content vs Frame Content')
 
   page.url = 'https://example.com'
 
-  assert(page.mainFrame.url === 'https://example.com', 'Frame URL updated with page URL')
+  // A frame's URL now comes from its Window's real `Location`, so it is a
+  // serialized URL: 'https://example.com' resolves to 'https://example.com/',
+  // matching `new URL()` and `new Window({ url })`. The previous frame stub
+  // stored the raw string verbatim instead.
+  assert(page.mainFrame.url === 'https://example.com/', 'Frame URL updated with page URL')
+  assert(page.url === page.mainFrame.url, 'Page URL still tracks main frame URL')
 
   await browser.close()
 }

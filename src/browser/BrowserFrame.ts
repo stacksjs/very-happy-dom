@@ -1,38 +1,44 @@
+import type { VirtualDocument } from '../nodes/VirtualDocument'
 import type { BrowserPage } from './BrowserPage'
-import { VirtualEvent } from '../events/VirtualEvent'
-import { VirtualDocument } from '../nodes/VirtualDocument'
+import { Window } from '../window/Window'
+
+const INITIAL_FRAME_URL = 'about:blank'
 
 /**
  * BrowserFrame represents a browser frame
  * Compatible with Happy DOM's BrowserFrame API
  */
 export class BrowserFrame {
-  public window: Window & { document: VirtualDocument }
+  /**
+   * The frame's browsing context. This is a real `Window`, so page code and
+   * `evaluate()` see storage, timers, observers, `navigator`, `matchMedia` and
+   * `getComputedStyle` rather than a hand-built stand-in.
+   */
+  public window: Window
   public document: VirtualDocument
 
   private _page: BrowserPage
   private _parentFrame: BrowserFrame | null = null
   private _childFrames: BrowserFrame[] = []
-  private _url: string
   private _content: string = ''
 
   constructor(page: BrowserPage, parentFrame: BrowserFrame | null = null) {
     this._page = page
     this._parentFrame = parentFrame
-    this._url = 'about:blank'
 
-    // Create document for this frame
-    this.document = new VirtualDocument()
+    const { width, height } = page.viewport
 
-    // Create a window-like object for this frame
-    this.window = {
-      document: this.document,
-      location: {
-        href: this._url,
-        toString: () => this._url,
-      },
-      Event: VirtualEvent,
-    } as any
+    this.window = new Window({
+      url: INITIAL_FRAME_URL,
+      width,
+      height,
+      console: page.console,
+      settings: page.context?.browser?.settings,
+    })
+
+    // The window owns its document — don't build a second one alongside it, or
+    // `frame.document` and `frame.window.document` would diverge.
+    this.document = this.window.document
   }
 
   /**
@@ -72,12 +78,22 @@ export class BrowserFrame {
    * Get or set the URL without navigating
    */
   get url(): string {
-    return this._url
+    return this.window.location.href
   }
 
   set url(url: string) {
-    this._url = url
-    this.window.location = { href: url, toString: () => url } as any
+    // `setURL` keeps the window's real `Location` coherent — every part
+    // (`pathname`, `search`, `origin`, …) updates together, where the previous
+    // stub replaced `location` with a two-property object.
+    this.window.happyDOM.setURL(url)
+  }
+
+  /**
+   * Resizes the frame's browsing context, so width/height media queries and
+   * `innerWidth`/`innerHeight` follow the page's viewport.
+   */
+  setViewport(viewport: { width?: number, height?: number }): void {
+    this.window.happyDOM.setViewport(viewport)
   }
 
   /**
