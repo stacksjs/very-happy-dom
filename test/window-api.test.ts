@@ -148,6 +148,23 @@ describe('Window: matchMedia', () => {
     expect(win.matchMedia('(prefers-color-scheme: light)').matches).toBe(false)
   })
 
+  // `Navigator` hardcodes a default userAgent, so the setting has to be copied
+  // onto the instance. Asserting `win.settings` alone passes either way — it is
+  // `win.navigator` that consumers (and feature-detection code) actually read.
+  test('settings.navigator.userAgent reaches window.navigator', () => {
+    const win = new Window({
+      settings: { navigator: { userAgent: 'MyCustomUserAgent/1.0' } },
+    })
+    expect(win.navigator.userAgent).toBe('MyCustomUserAgent/1.0')
+    expect(win.settings.navigator.userAgent).toBe('MyCustomUserAgent/1.0')
+  })
+
+  test('window.navigator.userAgent falls back to the default', () => {
+    const win = new Window()
+    expect(win.navigator.userAgent).toContain('VeryHappyDOM')
+    expect(win.navigator.userAgent).toBe(win.settings.navigator.userAgent)
+  })
+
   test('matchMedia min-width', () => {
     const win = new Window({ width: 1024 })
     expect(win.matchMedia('(min-width: 768px)').matches).toBe(true)

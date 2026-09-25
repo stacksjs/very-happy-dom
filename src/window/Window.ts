@@ -643,8 +643,11 @@ export class Window extends VirtualEventTarget {
     // Use provided console or global console
     this.console = consoleInstance || globalThis.console
 
-    // Create navigator
+    // Create navigator. `Navigator` hardcodes a default userAgent, so the
+    // resolved setting has to be applied for `settings.navigator.userAgent`
+    // to have any effect.
     this.navigator = new VeryHappyNavigator()
+    this.navigator.userAgent = this._settings.navigator.userAgent
 
     this.customElements = new CustomElementRegistry()
 
