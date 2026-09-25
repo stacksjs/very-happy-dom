@@ -4,7 +4,7 @@
  */
 
 import type { RGBA } from './css-utils'
-import { blendColors, parseColor } from './css-utils'
+import { blendColors } from './css-utils'
 import type { LayoutNode } from './layout'
 
 /**

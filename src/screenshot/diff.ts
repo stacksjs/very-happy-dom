@@ -4,7 +4,7 @@
  */
 
 import { Buffer } from 'node:buffer'
-import { adler32, crc32, deflate, inflate } from './deflate'
+import { crc32, deflate, inflate } from './deflate'
 
 /**
  * Diff options
