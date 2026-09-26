@@ -403,3 +403,140 @@ describe('DocumentFragment: getElementById', () => {
     expect(found).toBe(inner)
   })
 })
+
+// =============================================================================
+// Regression guard for #1595: `head` and `body` were plain fields assigned in
+// the constructor. Replacing the document element's children went through
+// `VirtualElement`'s `innerHTML` setter, which knew nothing about them, so they
+// kept pointing at the original — now detached — elements. Writes went into an
+// orphaned tree and reads came back empty, with no error. They now resolve from
+// `documentElement` on each access.
+// =============================================================================
+
+describe('document.head and document.body track documentElement (#1595)', () => {
+  const FULL_MARKUP = '<head><title>Page title</title></head><body><h1>Hi</h1></body>'
+
+  test('body stays live after documentElement.innerHTML is replaced', () => {
+    const document = new Window().document
+    document.documentElement!.innerHTML = FULL_MARKUP
+
+    expect(document.body!.isConnected).toBe(true)
+    expect(document.body).toBe(document.querySelector('body'))
+    expect(document.body!.innerHTML).toBe('<h1>Hi</h1>')
+  })
+
+  test('head stays live after documentElement.innerHTML is replaced', () => {
+    const document = new Window().document
+    document.documentElement!.innerHTML = FULL_MARKUP
+
+    expect(document.head!.isConnected).toBe(true)
+    expect(document.head).toBe(document.querySelector('head'))
+  })
+
+  test('appending to head puts the element in the live document', () => {
+    const document = new Window().document
+    document.documentElement!.innerHTML = FULL_MARKUP
+
+    const style = document.createElement('style')
+    style.textContent = 'p { color: red }'
+    document.head!.appendChild(style)
+
+    // This silently went nowhere while head was stale.
+    expect(document.querySelector('style')).toBe(style)
+    expect(style.isConnected).toBe(true)
+  })
+
+  test('appending to body puts the element in the live document', () => {
+    const document = new Window().document
+    document.documentElement!.innerHTML = FULL_MARKUP
+
+    const div = document.createElement('div')
+    div.id = 'appended'
+    document.body!.appendChild(div)
+
+    expect(document.querySelector('#appended')).toBe(div)
+    expect(div.isConnected).toBe(true)
+    expect(document.body!.innerHTML).toContain('<div id="appended">')
+  })
+
+  test('title agrees with the title element', () => {
+    const document = new Window().document
+    document.documentElement!.innerHTML = FULL_MARKUP
+
+    // `get title()` reads through `head`, so it returned '' while head was stale.
+    expect(document.title).toBe('Page title')
+    expect(document.title).toBe(document.querySelector('title')!.textContent)
+  })
+
+  test('setting title after a replacement reaches the live head', () => {
+    const document = new Window().document
+    document.documentElement!.innerHTML = FULL_MARKUP
+
+    document.title = 'Changed'
+
+    expect(document.title).toBe('Changed')
+    expect(document.querySelector('title')!.textContent).toBe('Changed')
+  })
+
+  test('markup with a body but no head yields a null head', () => {
+    const document = new Window().document
+    document.documentElement!.innerHTML = '<body><h1>Hi</h1></body>'
+
+    expect(document.head).toBeNull()
+    expect(document.body!.isConnected).toBe(true)
+  })
+
+  test('markup with neither yields nulls rather than detached elements', () => {
+    const document = new Window().document
+    document.documentElement!.innerHTML = '<h1>Hi</h1>'
+
+    // A browser reports null here. Previously these were stale detached
+    // elements, so writes to them were silently lost.
+    expect(document.head).toBeNull()
+    expect(document.body).toBeNull()
+  })
+
+  test('the ordinary body.innerHTML path is unaffected', () => {
+    const document = new Window().document
+    document.body!.innerHTML = '<h1>Hi</h1>'
+
+    expect(document.body!.isConnected).toBe(true)
+    expect(document.body).toBe(document.querySelector('body'))
+  })
+
+  test('a fresh document starts with a live head and body', () => {
+    const document = new Window().document
+
+    expect(document.head!.tagName).toBe('HEAD')
+    expect(document.body!.tagName).toBe('BODY')
+    expect(document.head!.isConnected).toBe(true)
+    expect(document.body!.isConnected).toBe(true)
+    expect(document.documentElement!.children[0]).toBe(document.head!)
+    expect(document.documentElement!.children[1]).toBe(document.body!)
+  })
+
+  describe('the body setter', () => {
+    test('replaces the existing body in place', () => {
+      const document = new Window().document
+      const replacement = document.createElement('body')
+      replacement.innerHTML = '<p>new</p>'
+
+      document.body = replacement
+
+      expect(document.body).toBe(replacement)
+      expect(document.querySelector('body')).toBe(replacement)
+      expect(replacement.isConnected).toBe(true)
+      expect(document.documentElement!.children.filter(c => (c as VirtualElement).tagName === 'BODY')).toHaveLength(1)
+    })
+
+    test('assigning the current body is a no-op', () => {
+      const document = new Window().document
+      const original = document.body
+
+      document.body = original
+
+      expect(document.body).toBe(original)
+      expect(document.documentElement!.children.filter(c => (c as VirtualElement).tagName === 'BODY')).toHaveLength(1)
+    })
+  })
+})

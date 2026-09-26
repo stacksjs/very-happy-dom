@@ -38,10 +38,68 @@ export class VirtualDocument extends VirtualNodeBase {
   }
 
   documentElement: VirtualElement | null = null
-  head: VirtualElement | null = null
-  body: VirtualElement | null = null
   location: Location
   history: History
+
+  /**
+   * `head` and `body` resolve from `documentElement` on each access rather than
+   * being cached. They were plain fields, which went stale the moment the
+   * document element's children were replaced — `documentElement.innerHTML = …`
+   * (and therefore `BrowserPage.content`) left them pointing at detached
+   * elements, so `document.body.appendChild()` wrote into an orphaned tree and
+   * `document.title` disagreed with `querySelector('title')`.
+   *
+   * `documentElement` normally has two element children, so the scan is
+   * cheaper than keeping every mutation path in sync correctly.
+   */
+  get head(): VirtualElement | null {
+    return this._documentElementChild('HEAD')
+  }
+
+  set head(element: VirtualElement | null) {
+    this._replaceDocumentElementChild('HEAD', element)
+  }
+
+  get body(): VirtualElement | null {
+    return this._documentElementChild('BODY')
+  }
+
+  set body(element: VirtualElement | null) {
+    this._replaceDocumentElementChild('BODY', element)
+  }
+
+  /** First element child of `documentElement` with the given tag name. */
+  private _documentElementChild(tagName: string): VirtualElement | null {
+    const children = this.documentElement?.childNodes
+    if (!children)
+      return null
+
+    for (const child of children) {
+      if (child.nodeType === ELEMENT_NODE && (child as VirtualElement).tagName === tagName)
+        return child as VirtualElement
+    }
+
+    return null
+  }
+
+  private _replaceDocumentElementChild(tagName: string, element: VirtualElement | null): void {
+    const current = this._documentElementChild(tagName)
+
+    // Assigning the element that is already in place is a no-op; the parse
+    // paths do this after swapping `documentElement` wholesale.
+    if (current === element)
+      return
+
+    if (!this.documentElement)
+      return
+
+    if (current && element)
+      this.documentElement.replaceChild(element, current)
+    else if (current)
+      this.documentElement.removeChild(current)
+    else if (element)
+      this.documentElement.appendChild(element)
+  }
 
   private _fallbackTitle = ''
 
@@ -209,11 +267,11 @@ export class VirtualDocument extends VirtualNodeBase {
     super()
     // Initialize with basic structure
     this.documentElement = new VirtualElement('html')
-    this.head = new VirtualElement('head')
-    this.body = new VirtualElement('body')
 
-    this.documentElement.appendChild(this.head)
-    this.documentElement.appendChild(this.body)
+    // `head` and `body` are derived from these children, so appending them is
+    // what defines them — there is nothing to assign.
+    this.documentElement.appendChild(new VirtualElement('head'))
+    this.documentElement.appendChild(new VirtualElement('body'))
     this.appendChild(this.documentElement)
 
     // Initialize location
@@ -715,23 +773,11 @@ export class VirtualDocument extends VirtualNodeBase {
       if (node.nodeType === ELEMENT_NODE) {
         const element = node as VirtualElement
         if (element.tagName === 'HTML') {
-          // Replace the entire document structure
+          // Replace the entire document structure. `head` and `body` follow
+          // from the new document element, so there is no separate sync step.
           this.childNodes = []
           this.documentElement = element
           this.appendChild(element)
-
-          // Update head and body references
-          for (const child of element.children) {
-            if (child.nodeType === ELEMENT_NODE) {
-              const childEl = child as VirtualElement
-              if (childEl.tagName === 'HEAD') {
-                this.head = childEl
-              }
-              else if (childEl.tagName === 'BODY') {
-                this.body = childEl
-              }
-            }
-          }
           return
         }
       }
