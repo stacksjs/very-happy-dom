@@ -314,10 +314,14 @@ console.log('\nTest 17: BrowserPage.type')
 
   await page.type('#input', 'Hello World')
 
-  const input = page.mainFrame.document.getElementById('input')
-  const value = input?.getAttribute('value')
+  const input = page.mainFrame.document.getElementById('input') as any
+  const value = input?.value
 
+  // Typing sets the `value` property, as it does in a browser. The `value`
+  // attribute is the field's default and is deliberately left alone — this
+  // assertion used to read the attribute, which is what typing wrongly wrote.
   assert(value === 'Hello World', `type() sets input value (got: "${value}")`)
+  assert(input?.getAttribute('value') === null, 'type() leaves the value attribute alone')
 
   await browser.close()
 }

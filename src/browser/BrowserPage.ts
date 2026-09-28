@@ -228,88 +228,135 @@ export class BrowserPage {
     await new Promise(resolve => setTimeout(resolve, ms))
   }
 
+  /** Resolve a selector against the main frame, or fail loudly. */
+  private _element(selector: string): any {
+    const element = this.mainFrame.document.querySelector(selector)
+    if (!element)
+      throw new Error(`Element not found: ${selector}`)
+    return element
+  }
+
+  /** Whether typing into this element should go to `value` rather than text. */
+  private _isValueField(element: any): boolean {
+    return element.tagName === 'INPUT' || element.tagName === 'TEXTAREA'
+  }
+
+  /** Read what the user would see in the field. */
+  private _readField(element: any): string {
+    // `value` is a property, distinct from the `value` attribute — which is
+    // only the field's default. Reading the attribute misses everything typed
+    // or assigned since, which is what made typing stop working after a
+    // programmatic assignment.
+    return this._isValueField(element) ? String(element.value ?? '') : String(element.textContent ?? '')
+  }
+
+  private _writeField(element: any, value: string): void {
+    if (this._isValueField(element))
+      element.value = value
+    else
+      element.textContent = value
+  }
+
+  private _dispatch(element: any, type: string, Ctor: string, init: Record<string, unknown> = {}): void {
+    const window = this.mainFrame.window as any
+    const Constructor = window[Ctor] ?? window.Event
+    element.dispatchEvent?.(new Constructor(type, { bubbles: true, ...init }))
+  }
+
   /**
-   * Clicks an element matching the selector
+   * Clicks an element matching the selector.
+   *
+   * Focuses first, as a real click does, so a handler reading
+   * `document.activeElement` sees the element it was invoked on.
    */
   async click(selector: string, options: { delay?: number, button?: 'left' | 'right' | 'middle' } = {}): Promise<void> {
-    const element = this.mainFrame.document.querySelector(selector)
-    if (!element) {
-      throw new Error(`Element not found: ${selector}`)
-    }
+    const element = this._element(selector)
 
-    if (options.delay) {
+    if (options.delay)
       await this.waitForTimeout(options.delay)
-    }
 
-    // Dispatch click event
-    // eslint-disable-next-line max-statements-per-line
-    ;(element as any).click?.()
+    element.focus?.()
+    element.click?.()
   }
 
   /**
-   * Types text into an element
+   * Types text into an element, one character at a time.
+   *
+   * This used to write the `value` *attribute* and dispatch nothing, so the
+   * field appeared to change while `element.value` did not and no listener
+   * ran — reactive forms never saw the input. It now focuses the target and
+   * emits the browser's sequence per character: keydown, beforeinput, the
+   * value change, input, keyup.
    */
   async type(selector: string, text: string, options: { delay?: number } = {}): Promise<void> {
-    const element = this.mainFrame.document.querySelector(selector)
-    if (!element) {
-      throw new Error(`Element not found: ${selector}`)
-    }
-
+    const element = this._element(selector)
     const delay = options.delay || 0
 
-    // Set value for input elements
-    if ((element as any).tagName === 'INPUT' || (element as any).tagName === 'TEXTAREA') {
-      let currentValue = (element as any).getAttribute?.('value') || ''
+    element.focus?.()
 
-      for (const char of text) {
-        currentValue += char
-        // eslint-disable-next-line max-statements-per-line
-        ;(element as any).setAttribute?.('value', currentValue)
+    for (const char of text) {
+      this._dispatch(element, 'keydown', 'KeyboardEvent', { key: char })
+      this._dispatch(element, 'beforeinput', 'InputEvent', { data: char, inputType: 'insertText' })
 
-        if (delay > 0) {
-          await this.waitForTimeout(delay)
-        }
-      }
-    }
-    else {
-      // For other elements, append to textContent
-      // eslint-disable-next-line max-statements-per-line
-      ;(element as any).textContent = ((element as any).textContent || '') + text
+      this._writeField(element, this._readField(element) + char)
+
+      this._dispatch(element, 'input', 'InputEvent', { data: char, inputType: 'insertText' })
+      this._dispatch(element, 'keyup', 'KeyboardEvent', { key: char })
+
+      if (delay > 0)
+        await this.waitForTimeout(delay)
     }
   }
 
   /**
-   * Focuses an element
+   * Replaces an element's value in one step, as Playwright's `fill` does.
+   *
+   * Cheaper than `type()` when the individual keystrokes do not matter: one
+   * `input` rather than a sequence per character. `change` follows, which is
+   * what a field committed by the user would also emit.
+   */
+  async fill(selector: string, value: string): Promise<void> {
+    const element = this._element(selector)
+
+    element.focus?.()
+    this._dispatch(element, 'beforeinput', 'InputEvent', { data: value, inputType: 'insertReplacementText' })
+    this._writeField(element, value)
+    this._dispatch(element, 'input', 'InputEvent', { data: value, inputType: 'insertReplacementText' })
+    this._dispatch(element, 'change', 'Event')
+  }
+
+  /**
+   * Focuses an element.
+   *
+   * Previously this only dispatched a `focus` event, leaving
+   * `document.activeElement` untouched, so anything reading it disagreed with
+   * the event that had just fired.
    */
   async focus(selector: string): Promise<void> {
-    const element = this.mainFrame.document.querySelector(selector)
-    if (!element) {
-      throw new Error(`Element not found: ${selector}`)
-    }
+    this._element(selector).focus?.()
+  }
 
-    // Dispatch focus event
-    const event = new (this.mainFrame.window as any).Event('focus', { bubbles: true })
-    // eslint-disable-next-line max-statements-per-line
-    ;(element as any).dispatchEvent?.(event)
+  /** Blurs an element. */
+  async blur(selector: string): Promise<void> {
+    this._element(selector).blur?.()
   }
 
   /**
    * Hovers over an element
    */
   async hover(selector: string): Promise<void> {
-    const element = this.mainFrame.document.querySelector(selector)
-    if (!element) {
-      throw new Error(`Element not found: ${selector}`)
-    }
-
-    // Dispatch mouseenter event
-    const event = new (this.mainFrame.window as any).Event('mouseenter', { bubbles: true })
-    // eslint-disable-next-line max-statements-per-line
-    ;(element as any).dispatchEvent?.(event)
+    const element = this._element(selector)
+    // `mouseover` bubbles and is what delegated handlers listen for;
+    // `mouseenter` does not bubble, matching the platform.
+    this._dispatch(element, 'mouseover', 'MouseEvent')
+    element.dispatchEvent?.(new ((this.mainFrame.window as any).MouseEvent ?? (this.mainFrame.window as any).Event)('mouseenter', { bubbles: false }))
   }
 
   /**
-   * Keyboard actions
+   * Keyboard actions, delivered to whatever currently has focus.
+   *
+   * These used to dispatch on the document regardless of focus, and inserted
+   * no text, so `keyboard.type()` moved no characters into any field.
    */
   get keyboard(): {
     press: (key: string, options?: { delay?: number }) => Promise<void>
@@ -318,32 +365,47 @@ export class BrowserPage {
     return {
       press: async (key: string, options: { delay?: number } = {}): Promise<void> => {
         const { delay = 0 } = options
+        const document = this.mainFrame.document as any
+        // Keyboard input goes to the focused element, and only falls back to
+        // the document when nothing has focus.
+        const target = document.activeElement ?? document
 
-        const keydownEvent = new (this.mainFrame.window as any).Event('keydown', { bubbles: true })
-        // eslint-disable-next-line max-statements-per-line
-        ;(keydownEvent as any).key = key
-        this.mainFrame.document.dispatchEvent?.(keydownEvent)
+        this._dispatch(target, 'keydown', 'KeyboardEvent', { key })
 
-        if (delay > 0) {
-          await this.waitForTimeout(delay)
+        const editable = target !== document && (this._isValueField(target) || target.isContentEditable)
+        if (editable && key.length === 1) {
+          this._dispatch(target, 'beforeinput', 'InputEvent', { data: key, inputType: 'insertText' })
+          this._writeField(target, this._readField(target) + key)
+          this._dispatch(target, 'input', 'InputEvent', { data: key, inputType: 'insertText' })
+        }
+        else if (editable && key === 'Backspace') {
+          const current = this._readField(target)
+          if (current.length > 0) {
+            this._dispatch(target, 'beforeinput', 'InputEvent', { inputType: 'deleteContentBackward' })
+            this._writeField(target, current.slice(0, -1))
+            this._dispatch(target, 'input', 'InputEvent', { inputType: 'deleteContentBackward' })
+          }
         }
 
-        const keyupEvent = new (this.mainFrame.window as any).Event('keyup', { bubbles: true })
-        // eslint-disable-next-line max-statements-per-line
-        ;(keyupEvent as any).key = key
-        this.mainFrame.document.dispatchEvent?.(keyupEvent)
+        if (delay > 0)
+          await this.waitForTimeout(delay)
+
+        this._dispatch(target, 'keyup', 'KeyboardEvent', { key })
       },
 
       type: async (text: string, options: { delay?: number } = {}): Promise<void> => {
-        for (const char of text) {
+        for (const char of text)
           await this.keyboard.press(char, options)
-        }
       },
     }
   }
 
   /**
-   * Mouse actions
+   * Mouse actions.
+   *
+   * There is no layout, so a coordinate cannot be resolved to an element:
+   * these dispatch on the document with the coordinates attached. Use
+   * `click(selector)` to act on a specific element.
    */
   get mouse(): {
     click: (x: number, y: number, options?: { button?: 'left' | 'right' | 'middle', delay?: number }) => Promise<void>
@@ -352,26 +414,18 @@ export class BrowserPage {
     return {
       click: async (x: number, y: number, options: { button?: 'left' | 'right' | 'middle', delay?: number } = {}): Promise<void> => {
         const { delay = 0 } = options
+        const document = this.mainFrame.document as any
 
-        const clickEvent = new (this.mainFrame.window as any).Event('click', { bubbles: true })
-        /* eslint-disable max-statements-per-line */
-        ;(clickEvent as any).clientX = x
-        ;(clickEvent as any).clientY = y
-        /* eslint-enable max-statements-per-line */
-        this.mainFrame.document.dispatchEvent?.(clickEvent)
+        this._dispatch(document, 'mousedown', 'MouseEvent', { clientX: x, clientY: y })
+        this._dispatch(document, 'mouseup', 'MouseEvent', { clientX: x, clientY: y })
+        this._dispatch(document, 'click', 'MouseEvent', { clientX: x, clientY: y })
 
-        if (delay > 0) {
+        if (delay > 0)
           await this.waitForTimeout(delay)
-        }
       },
 
       move: async (x: number, y: number): Promise<void> => {
-        const moveEvent = new (this.mainFrame.window as any).Event('mousemove', { bubbles: true })
-        /* eslint-disable max-statements-per-line */
-        ;(moveEvent as any).clientX = x
-        ;(moveEvent as any).clientY = y
-        /* eslint-enable max-statements-per-line */
-        this.mainFrame.document.dispatchEvent?.(moveEvent)
+        this._dispatch(this.mainFrame.document as any, 'mousemove', 'MouseEvent', { clientX: x, clientY: y })
       },
     }
   }
