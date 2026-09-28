@@ -117,9 +117,8 @@ export class BrowserPage {
   /**
    * Evaluates code in the page's context
    */
-  // eslint-disable-next-line pickier/no-unused-vars
-  evaluate(code: string | ((...args: any[]) => any)): any {
-    return this.mainFrame.evaluate(code)
+  evaluate(code: string | ((...args: any[]) => any), arg?: any): any {
+    return this.mainFrame.evaluate(code, arg)
   }
 
   /**

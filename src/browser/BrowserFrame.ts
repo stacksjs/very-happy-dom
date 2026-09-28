@@ -120,24 +120,37 @@ export class BrowserFrame {
   }
 
   /**
-   * Evaluates code in the frame's context
+   * Evaluates code in the frame's context.
+   *
+   * Both forms resolve `window`, `document` and the window's other globals from
+   * this frame through `with (window)`, the same mechanism the jsdom script
+   * runner uses. A string used to go through the host `eval()`, where those
+   * names were whatever the module scope happened to have — usually nothing —
+   * so `evaluate('document.title')` threw `document is not defined`.
+   *
+   * `arg` is forwarded to the page function. It was previously accepted by
+   * callers and dropped, so a function expecting a value silently received
+   * `undefined`.
+   *
+   * The value is returned directly rather than wrapped in a promise. That
+   * composes with `await` either way — `await evaluate(async () => 7)` still
+   * yields 7 — whereas returning a promise would break callers that read the
+   * result directly.
    */
-  // eslint-disable-next-line pickier/no-unused-vars
-  evaluate(code: string | ((...args: any[]) => any)): any {
+  evaluate(code: string | ((...args: any[]) => any), arg?: any): any {
     if (typeof code === 'function') {
-      // Create a wrapper that provides window as a variable in the function scope
-      const _window = this.window
-      const document = this.document
-      // Use Function constructor to create a function with window in scope
       // eslint-disable-next-line no-new-func
-      const wrappedFn = new Function('window', 'document', `return (${code.toString()})()`).bind(null, _window, document)
-      return wrappedFn()
+      const runner = new Function('window', 'document', 'arg', `with (window) { return (${code.toString()})(arg) }`)
+      return runner(this.window, this.document, arg)
     }
-    else {
-      // Simple eval in context - in a real implementation this would use VM
-      // eslint-disable-next-line no-eval
-      return eval(code)
-    }
+
+    // eslint-disable-next-line no-new-func
+    const runner = new Function('window', 'document', 'arg', `with (window) { return (${code}) }`)
+    const result = runner(this.window, this.document, arg)
+
+    // A string may itself be a function expression, which Playwright allows;
+    // an expression that merely evaluates to a value is returned as-is.
+    return typeof result === 'function' ? result(arg) : result
   }
 
   /**
