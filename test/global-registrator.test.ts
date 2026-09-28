@@ -57,3 +57,62 @@ describe('GlobalRegistrator', () => {
     expect(() => GlobalRegistrator.register()).toThrow()
   })
 })
+
+// =============================================================================
+// FormData (#1599). Window exposes a FormData that can read a virtual form,
+// but registration used to leave the host constructor in place, so
+// `new FormData(form)` silently returned nothing for virtual controls — a
+// component test asserting only that submit fired still passed.
+// =============================================================================
+
+describe('GlobalRegistrator FormData', () => {
+  afterEach(() => {
+    GlobalRegistrator.unregister()
+  })
+
+  test('the registered global FormData is the Window implementation', () => {
+    GlobalRegistrator.register()
+    expect((globalThis as any).FormData).toBe((globalThis as any).window.FormData)
+  })
+
+  test('new FormData(form) reads the virtual form controls', () => {
+    GlobalRegistrator.register()
+    const doc = (globalThis as any).document
+    doc.body.innerHTML = '<form><input name="email" value="test@example.com"></form>'
+
+    const data = new (globalThis as any).FormData(doc.querySelector('form'))
+
+    expect(data.get('email')).toBe('test@example.com')
+  })
+
+  test('new FormData() with no form still constructs, rather than recursing', () => {
+    // The Window FormData delegates empty construction to the host one. If it
+    // reads globalThis.FormData at call time it finds itself once registered,
+    // and this overflows the stack instead of returning.
+    GlobalRegistrator.register()
+    const data = new (globalThis as any).FormData()
+    data.append('a', 'b')
+    expect(data.get('a')).toBe('b')
+  })
+
+  test('unregister restores the host FormData rather than deleting it', () => {
+    const host = globalThis.FormData
+    GlobalRegistrator.register()
+    expect(globalThis.FormData).not.toBe(host)
+
+    GlobalRegistrator.unregister()
+
+    expect(globalThis.FormData).toBe(host)
+  })
+
+  test('unregister restores every host global it replaced, not just FormData', () => {
+    // navigator is in OVERRIDE_KEYS and Bun defines its own, so it is the
+    // general case: registration replaced something that was already there.
+    const host = globalThis.navigator
+    GlobalRegistrator.register()
+
+    GlobalRegistrator.unregister()
+
+    expect(globalThis.navigator).toBe(host)
+  })
+})

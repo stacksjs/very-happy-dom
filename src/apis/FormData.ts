@@ -5,11 +5,20 @@
  */
 
 /**
+ * The host constructor, taken once at module load.
+ *
+ * GlobalRegistrator points the global at the wrapper below, so reading the
+ * global at call time would find the wrapper and recurse until the stack ran
+ * out. Everything internal builds on this binding instead.
+ */
+const HostFormData = globalThis.FormData
+
+/**
  * Create a FormData instance, optionally pre-populated from a form element.
  * Falls back to the native FormData for empty / undefined construction.
  */
 export function createFormData(form?: unknown, submitter?: unknown): FormData {
-  const fd = new globalThis.FormData()
+  const fd = new HostFormData()
   if (!form || typeof form !== 'object')
     return fd
 
@@ -89,11 +98,11 @@ export function createFormData(form?: unknown, submitter?: unknown): FormData {
  * Returns a freshly-populated FormData instance — `instanceof FormData`
  * remains true.
  */
-export const VeryHappyFormData = new Proxy(globalThis.FormData, {
+export const VeryHappyFormData = new Proxy(HostFormData, {
   construct(_target, args): FormData {
     const [form, submitter] = args
     if (form === undefined)
-      return new globalThis.FormData()
+      return new HostFormData()
     return createFormData(form, submitter)
   },
 }) as typeof globalThis.FormData

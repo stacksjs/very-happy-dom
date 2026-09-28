@@ -43,15 +43,41 @@ const OVERRIDE_KEYS = new Set([
   'IDBFactory', 'IDBDatabase', 'IDBObjectStore',
   'IDBTransaction', 'IDBRequest', 'IDBOpenDBRequest',
   'Notification', 'DataTransfer',
+  // Bun's own FormData cannot read a virtual form's controls, so a component
+  // test would submit an empty body without ever failing (#1599).
+  'FormData',
 ])
 
 let registeredWindow: Window | null = null
-const registeredKeys: string[] = []
+
+// What globalThis held before each key was replaced. Keys the host had (Bun
+// defines FormData, navigator, fetch and more) are restored on unregister;
+// deleting them instead left the runtime without its own constructor.
+// `undefined` records a key the host did not define, which is deleted.
+const replaced = new Map<string, PropertyDescriptor | undefined>()
 
 // When a Window instance method (e.g. getComputedStyle) or accessor gets
 // copied to globalThis, calling it as a free function loses its `this`.
 // Re-bind method descriptors and wrap accessors so `this` is the Window.
+// Classes on the Window (Event, HTMLElement, FormData, ...) must be copied
+// as they are. Binding one returns a different function that has no
+// `prototype`, so `globalThis.X !== window.X` and `X.prototype` is gone.
+function isConstructor(value: (...args: any[]) => any): boolean {
+  try {
+    // Throws unless `value` is usable as new.target. String is just a cheap
+    // constructor to drive the check; it is what actually runs.
+    Reflect.construct(String, [], value)
+    return true
+  }
+  catch {
+    return false
+  }
+}
+
 function bindDescriptor(descriptor: PropertyDescriptor, thisArg: object): PropertyDescriptor {
+  if (typeof descriptor.value === 'function' && isConstructor(descriptor.value))
+    return descriptor
+
   if (typeof descriptor.value === 'function') {
     return {
       ...descriptor,
@@ -72,6 +98,13 @@ function bindDescriptor(descriptor: PropertyDescriptor, thisArg: object): Proper
   return descriptor
 }
 
+function install(key: string, descriptor: PropertyDescriptor): void {
+  if (!replaced.has(key))
+    replaced.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
+
+  Object.defineProperty(globalThis, key, { ...descriptor, configurable: true })
+}
+
 export class GlobalRegistrator {
   static register(options: WindowOptions = {}): void {
     if (registeredWindow) {
@@ -88,11 +121,7 @@ export class GlobalRegistrator {
       const descriptor = Object.getOwnPropertyDescriptor(win, key)
       if (!descriptor) continue
 
-      Object.defineProperty(globalThis, key, {
-        ...bindDescriptor(descriptor, win),
-        configurable: true,
-      })
-      registeredKeys.push(key)
+      install(key, bindDescriptor(descriptor, win))
     }
 
     const proto = Object.getPrototypeOf(win)
@@ -103,40 +132,29 @@ export class GlobalRegistrator {
       const descriptor = Object.getOwnPropertyDescriptor(proto, key)
       if (!descriptor) continue
 
-      Object.defineProperty(globalThis, key, {
-        ...bindDescriptor(descriptor, win),
-        configurable: true,
-      })
-      registeredKeys.push(key)
+      install(key, bindDescriptor(descriptor, win))
     }
 
-    Object.defineProperty(globalThis, 'window', {
-      value: win,
-      writable: true,
-      configurable: true,
-    })
-    registeredKeys.push('window')
+    install('window', { value: win, writable: true })
 
-    Object.defineProperty(globalThis, 'document', {
-      value: win.document,
-      writable: true,
-      configurable: true,
-    })
-    registeredKeys.push('document')
+    install('document', { value: win.document, writable: true })
   }
 
   static unregister(): void {
     if (!registeredWindow) return
 
-    for (const key of registeredKeys) {
+    for (const [key, original] of replaced) {
       try {
-        // eslint-disable-next-line ts/no-dynamic-delete
-        delete (globalThis as any)[key]
+        if (original)
+          Object.defineProperty(globalThis, key, original)
+        else
+          // eslint-disable-next-line ts/no-dynamic-delete
+          delete (globalThis as any)[key]
       }
       catch {}
     }
 
-    registeredKeys.length = 0
+    replaced.clear()
     registeredWindow = null
   }
 }
