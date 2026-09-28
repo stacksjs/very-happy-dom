@@ -336,9 +336,15 @@ export class CSSStyleSheet {
         const colon = decl.indexOf(':')
         if (colon === -1) continue
         const prop = decl.slice(0, colon).trim()
-        const value = decl.slice(colon + 1).trim()
-        if (prop && value)
-          styleRule.style.setProperty(prop, value)
+        const raw = decl.slice(colon + 1).trim()
+        if (!prop || !raw)
+          continue
+        // Keep `!important` out of the value and record it as the priority, so
+        // the cascade can rank it rather than comparing it as part of a string.
+        const important = /!\s*important$/i.test(raw)
+        const value = important ? raw.replace(/\s*!\s*important$/i, '').trim() : raw
+        if (value)
+          styleRule.style.setProperty(prop, value, important ? 'important' : '')
       }
       rules.push(styleRule)
     }

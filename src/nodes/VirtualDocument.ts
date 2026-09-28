@@ -1,5 +1,7 @@
 import type { XPathResult } from '../xpath/XPathResult'
 import type { CSSStyleSheet } from '../css/CSSOM'
+import { CSSStyleSheet as RuntimeCSSStyleSheet } from '../css/CSSOM'
+import { collectCascade, resolveProperty } from '../css/cascade'
 import type { ICookie } from '../browser/CookieContainer'
 import { CookieContainer, CookieSameSiteEnum } from '../browser/CookieContainer'
 import { CustomEvent } from '../events/CustomEvent'
@@ -212,9 +214,34 @@ export class VirtualDocument extends VirtualNodeBase {
   currentScript: VirtualElement | null = null
 
   private _adoptedStyleSheets: CSSStyleSheet[] = []
+  private _parsedStyleSheets = new WeakMap<object, { text: string, sheet: CSSStyleSheet }>()
 
+  /**
+   * One sheet per `<style>` element, in document order.
+   *
+   * Sheets are parsed on demand and cached against the element's current text,
+   * so repeated reads are cheap while an edited `<style>` still reparses.
+   * `<link rel="stylesheet">` is absent by design — nothing is fetched.
+   */
   get styleSheets(): CSSStyleSheet[] {
-    return []
+    const sheets: CSSStyleSheet[] = []
+
+    for (const element of this.querySelectorAll('style')) {
+      const text = element.textContent ?? ''
+      const cached = this._parsedStyleSheets.get(element)
+
+      if (cached && cached.text === text) {
+        sheets.push(cached.sheet)
+        continue
+      }
+
+      const sheet = new RuntimeCSSStyleSheet()
+      sheet.replaceSync(text)
+      this._parsedStyleSheets.set(element, { text, sheet })
+      sheets.push(sheet)
+    }
+
+    return sheets
   }
 
   get adoptedStyleSheets(): CSSStyleSheet[] {
@@ -912,15 +939,34 @@ export class VirtualDocument extends VirtualNodeBase {
     }
 
     const self = element
+
+    // The cascade is built once per getComputedStyle() call and shared by every
+    // property read off the returned object, rather than rescanning the rules
+    // for each one. It is deferred so a caller that never reads a property does
+    // not pay for matching at all.
+    let cascade: ReturnType<typeof collectCascade> | null = null
+    const cascadeFor = (): ReturnType<typeof collectCascade> => {
+      if (!cascade)
+        cascade = collectCascade(self as any, [...this.styleSheets, ...this._adoptedStyleSheets])
+      return cascade
+    }
+
+    const resolve = (property: string): string => {
+      const declared = resolveProperty(property, self.style as any, cascadeFor())
+      if (declared !== null)
+        return declared
+      return computedDefaults(property, self.tagName)
+    }
+
     return new Proxy(
       {
         getPropertyValue(property: string): string {
-          const value = self.style.getPropertyValue(property)
-          if (value) return value
-          return computedDefaults(property, self.tagName)
+          return resolve(property)
         },
         getPropertyPriority(property: string): string {
-          return self.style.getPropertyPriority(property)
+          if (self.style.getPropertyPriority(property) === 'important')
+            return 'important'
+          return cascadeFor().important.has(property) ? 'important' : ''
         },
       },
       {
@@ -929,9 +975,7 @@ export class VirtualDocument extends VirtualNodeBase {
           if (prop === 'getPropertyPriority') return target.getPropertyPriority
           if (typeof prop !== 'string') return undefined
           const kebab = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)
-          const value = self.style.getPropertyValue(kebab)
-          if (value) return value
-          return computedDefaults(kebab, self.tagName)
+          return resolve(kebab)
         },
       },
     )
