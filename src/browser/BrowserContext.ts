@@ -2,7 +2,9 @@ import type { Browser } from './Browser'
 import type { ICookie } from './CookieContainer'
 import { BrowserPage } from './BrowserPage'
 import { CookieContainer } from './CookieContainer'
+import type { RouteHandler, RoutePattern } from '../network/routing'
 import { createStorage, type Storage } from '../storage/Storage'
+import { RouteRegistry } from '../network/routing'
 
 /**
  * BrowserContext represents a context where data such as cache and cookies
@@ -22,12 +24,33 @@ export class BrowserContext {
    * on purpose: in a browser it belongs to the tab.
    */
   private _originStorage: Map<string, Storage> = new Map()
+  /** @internal Routes applying to every page in this context. */
+  _routeRegistry: RouteRegistry = new RouteRegistry()
 
   constructor(browser: Browser) {
     this._browser = browser
     this.cookieContainer = new CookieContainer()
   }
 
+
+  /**
+   * Handle matching requests for every page in this context, present and
+   * future.
+   *
+   * A page's own routes are tried first, then these, so a page can override the
+   * context for a URL without unregistering anything.
+   */
+  async route(url: RoutePattern, handler: RouteHandler): Promise<void> {
+    this._routeRegistry.add(url, handler)
+    // Pages created before this call have no interceptor installed yet.
+    for (const page of this._pages)
+      (page as any)._ensureRouting?.()
+  }
+
+  /** Remove context routes for `url`, or just the one using `handler`. */
+  async unroute(url?: RoutePattern, handler?: RouteHandler): Promise<void> {
+    this._routeRegistry.remove(url, handler)
+  }
 
   /**
    * Cookies visible in this context, optionally narrowed to given URLs.
@@ -176,6 +199,9 @@ export class BrowserContext {
   newPage(): BrowserPage {
     const page = new BrowserPage(this)
     this._pages.push(page)
+    // Inherit whatever routing the context already declared.
+    if (this._routeRegistry.size > 0)
+      (page as any)._ensureRouting?.()
     return page
   }
 

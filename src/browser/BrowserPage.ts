@@ -1,7 +1,9 @@
 import type { RequestInterceptionHandler } from '../network/RequestInterceptor'
 import type { BrowserContext } from './BrowserContext'
 import { Buffer } from 'node:buffer'
+import type { Route, RouteHandler, RoutePattern, RouteRequest } from '../network/routing'
 import { RequestInterceptor } from '../network/RequestInterceptor'
+import { RouteRegistry } from '../network/routing'
 import { BrowserFrame } from './BrowserFrame'
 
 export interface IBrowserPageViewport {
@@ -28,6 +30,8 @@ export class BrowserPage {
   private _frames: BrowserFrame[] = []
   private _eventListeners = new Map<PageEventType, Set<PageEventHandler>>()
   private _requestInterceptor = new RequestInterceptor()
+  private _routes = new RouteRegistry()
+  private _routingInstalled = false
 
   constructor(context: BrowserContext) {
     this._context = context
@@ -645,6 +649,120 @@ export class BrowserPage {
     const dragEndEvent = new (this.mainFrame.window as any).Event('dragend', { bubbles: true })
     // eslint-disable-next-line max-statements-per-line
     ;(sourceElement as any).dispatchEvent?.(dragEndEvent)
+  }
+
+  /**
+   * Handle requests matching `url` without touching the network.
+   *
+   * Registering a route enables interception on its own — there is no separate
+   * `setRequestInterception(true)` step — and requests matching no route pass
+   * through untouched, so a route cannot accidentally stall unrelated traffic
+   * the way a bare `page.on('request')` handler can.
+   *
+   * `url` is a glob, a RegExp, or a predicate over the URL. The most recently
+   * registered matching route runs first, and `route.fallback()` hands off to
+   * the next one.
+   */
+  async route(url: RoutePattern, handler: RouteHandler): Promise<void> {
+    this._routes.add(url, handler)
+    this._installRouting()
+  }
+
+  /** Remove routes for `url`, or just the one using `handler`. */
+  async unroute(url?: RoutePattern, handler?: RouteHandler): Promise<void> {
+    this._routes.remove(url, handler)
+  }
+
+  /**
+   * Install the single interceptor handler that drives routing.
+   *
+   * Done once and left in place: it is a no-op for a request no route matches,
+   * so keeping it costs nothing and avoids tearing interception down while
+   * another route is still registered.
+   */
+  private _installRouting(): void {
+    if (this._routingInstalled)
+      return
+    this._routingInstalled = true
+
+    this._requestInterceptor.enable()
+    this._requestInterceptor.addHandler(async (request) => {
+      await this._runRoutes(request)
+    })
+  }
+
+  /** @internal Let a context enable routing on a page created before its route. */
+  _ensureRouting(): void {
+    this._installRouting()
+  }
+
+  /** Page routes take precedence, then the context's. */
+  private _matchingRoutes(url: string): Array<{ handler: RouteHandler }> {
+    const contextRoutes = (this._context as any)?._routeRegistry?.matching?.(url) ?? []
+    return [...this._routes.matching(url), ...contextRoutes]
+  }
+
+  private async _runRoutes(request: any): Promise<void> {
+    const candidates = this._matchingRoutes(request.url)
+    if (candidates.length === 0)
+      return
+
+    const snapshot: RouteRequest = {
+      url: request.url,
+      method: request.method,
+      headers: { ...request.headers },
+      postData: request.postData ?? null,
+      resourceType: request.resourceType ?? 'fetch',
+    }
+
+    for (const candidate of candidates) {
+      let fellBack = false
+
+      const route: Route = {
+        request: () => snapshot,
+
+        fulfill: async (options = {}) => {
+          const isJson = options.json !== undefined
+          const body = isJson ? JSON.stringify(options.json) : (options.body ?? '')
+          const contentType = options.contentType ?? (isJson ? 'application/json' : undefined)
+
+          request.respond({
+            status: options.status ?? 200,
+            headers: { ...(contentType ? { 'content-type': contentType } : {}), ...options.headers },
+            body,
+          })
+        },
+
+        abort: async (errorCode = 'failed') => {
+          request.abort(errorCode)
+        },
+
+        continue: async (overrides = {}) => {
+          request.continue(overrides)
+        },
+
+        fetch: async () => {
+          // Perform the request as it stands, so a handler can rewrite the
+          // response rather than only the request.
+          return await fetch(snapshot.url, {
+            method: snapshot.method,
+            headers: snapshot.headers,
+            body: snapshot.postData ?? undefined,
+          })
+        },
+
+        fallback: async () => {
+          fellBack = true
+        },
+      }
+
+      await candidate.handler(route, snapshot)
+
+      if (!fellBack)
+        return
+    }
+
+    // Every matching route fell back, so the request goes through untouched.
   }
 
   /**
