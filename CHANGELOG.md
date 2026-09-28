@@ -1,3 +1,48 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.10...HEAD)
+
+## 🚀 Features
+
+- **browser**: add the context emulation knobs ([41f04a3](https://github.com/stacksjs/very-happy-dom/commit/41f04a3)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1593](https://github.com/stacksjs/very-happy-dom/issues/1593), [#1593](https://github.com/stacksjs/very-happy-dom/issues/1593))
+- **browser**: make goto perform a real navigation ([185dba7](https://github.com/stacksjs/very-happy-dom/commit/185dba7)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1586](https://github.com/stacksjs/very-happy-dom/issues/1586))
+- **browser**: add locators with role and accessible-name queries ([a0b0889](https://github.com/stacksjs/very-happy-dom/commit/a0b0889)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1591](https://github.com/stacksjs/very-happy-dom/issues/1591), [#1592](https://github.com/stacksjs/very-happy-dom/issues/1592), [#1588](https://github.com/stacksjs/very-happy-dom/issues/1588))
+- **network**: add page.route() and context.route() ([573adc6](https://github.com/stacksjs/very-happy-dom/commit/573adc6)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1594](https://github.com/stacksjs/very-happy-dom/issues/1594))
+- **browser**: let BrowserContext own cookies and origin storage ([e6e05e4](https://github.com/stacksjs/very-happy-dom/commit/e6e05e4)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1593](https://github.com/stacksjs/very-happy-dom/issues/1593), [#1593](https://github.com/stacksjs/very-happy-dom/issues/1593), [#1594](https://github.com/stacksjs/very-happy-dom/issues/1594))
+- **browser**: add state queries to BrowserPage ([49457fa](https://github.com/stacksjs/very-happy-dom/commit/49457fa)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1592](https://github.com/stacksjs/very-happy-dom/issues/1592))
+- **css**: resolve stylesheet rules in getComputedStyle ([3af7403](https://github.com/stacksjs/very-happy-dom/commit/3af7403)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1597](https://github.com/stacksjs/very-happy-dom/issues/1597))
+
+## 🐛 Bug Fixes
+
+- **global-registrator**: install the virtual FormData constructor ([b947a78](https://github.com/stacksjs/very-happy-dom/commit/b947a78)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1599](https://github.com/stacksjs/very-happy-dom/issues/1599))
+- **browser**: make page input interaction reach the DOM ([adea612](https://github.com/stacksjs/very-happy-dom/commit/adea612)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1588](https://github.com/stacksjs/very-happy-dom/issues/1588))
+- **indexeddb**: roll back writes when a transaction aborts ([70580e7](https://github.com/stacksjs/very-happy-dom/commit/70580e7)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1585](https://github.com/stacksjs/very-happy-dom/issues/1585))
+- **browser**: evaluate in the frame realm and forward its argument ([40162fb](https://github.com/stacksjs/very-happy-dom/commit/40162fb)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1587](https://github.com/stacksjs/very-happy-dom/issues/1587))
+- **document**: resolve head and body from documentElement ([99cf5b2](https://github.com/stacksjs/very-happy-dom/commit/99cf5b2)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1595](https://github.com/stacksjs/very-happy-dom/issues/1595))
+- **browser**: give BrowserFrame a real Window ([b570adc](https://github.com/stacksjs/very-happy-dom/commit/b570adc)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1590](https://github.com/stacksjs/very-happy-dom/issues/1590), [#1586](https://github.com/stacksjs/very-happy-dom/issues/1586), [#1587](https://github.com/stacksjs/very-happy-dom/issues/1587))
+- **parser**: break the html-parser element-class import cycle ([f35ef09](https://github.com/stacksjs/very-happy-dom/commit/f35ef09)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **canvas**: make HTMLCanvasElement a real element ([0757ce9](https://github.com/stacksjs/very-happy-dom/commit/0757ce9)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1556](https://github.com/stacksjs/very-happy-dom/issues/1556), [#1556](https://github.com/stacksjs/very-happy-dom/issues/1556))
+- **window**: apply the configured navigator userAgent ([aca5eb4](https://github.com/stacksjs/very-happy-dom/commit/aca5eb4)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dom**: honour the force argument in classList.toggle ([83287bc](https://github.com/stacksjs/very-happy-dom/commit/83287bc)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **build**: emit the register and jsdom entry points ([d398c4b](https://github.com/stacksjs/very-happy-dom/commit/d398c4b)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **lint**: drop unused imports blocking CI ([96da06f](https://github.com/stacksjs/very-happy-dom/commit/96da06f)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **docs**: use the config keys bunpress actually has ([95e2203](https://github.com/stacksjs/very-happy-dom/commit/95e2203)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 📚 Documentation
+
+- replace boilerplate with real very-happy-dom documentation ([5fae54d](https://github.com/stacksjs/very-happy-dom/commit/5fae54d)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- link the community as stacksjs.com/discord ([4a220de](https://github.com/stacksjs/very-happy-dom/commit/4a220de)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 🧹 Chores
+
+- **deps**: update all non-major dependencies ([d6d6d87](https://github.com/stacksjs/very-happy-dom/commit/d6d6d87)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deps**: drop renovate config in favour of buddy-bot ([cb7fbfc](https://github.com/stacksjs/very-happy-dom/commit/cb7fbfc)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1459](https://github.com/stacksjs/very-happy-dom/issues/1459), [#1570](https://github.com/stacksjs/very-happy-dom/issues/1570), [#1571](https://github.com/stacksjs/very-happy-dom/issues/1571), [#1561](https://github.com/stacksjs/very-happy-dom/issues/1561))
+- **deps**: dtsx 0.11.10 ([59d2e7c](https://github.com/stacksjs/very-happy-dom/commit/59d2e7c)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: dtsx 0.11.8, for declarations that parse ([5ecdd30](https://github.com/stacksjs/very-happy-dom/commit/5ecdd30)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.9...v0.1.10)
 
 ## 🚀 Features
