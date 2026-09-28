@@ -83,6 +83,45 @@ export class BrowserFrame {
   }
 
   /**
+   * Adopt the context's emulation: permissions, geolocation and online state.
+   *
+   * Applied on creation and whenever the context changes, so a page created
+   * later starts in the same environment as its siblings.
+   */
+  _applyEmulation(): void {
+    const context = this._page.context as any
+    const emulation = context?._emulation?.()
+    if (!emulation)
+      return
+
+    const navigator = (this.window as any).navigator
+
+    if (emulation.permissions !== null) {
+      navigator?.permissions?._clearGrants?.()
+      navigator?.permissions?._grant?.(emulation.permissions)
+    }
+
+    navigator?.geolocation?._setPosition?.(emulation.geolocation)
+
+    if (navigator)
+      navigator.onLine = !emulation.offline
+  }
+
+  /** Evaluate the context's init scripts in this frame. */
+  _runInitScripts(): void {
+    const context = this._page.context as any
+    for (const script of context?._initScriptSources?.() ?? []) {
+      try {
+        this.evaluate(script as any)
+      }
+      catch {
+        // An init script that throws must not take the navigation with it —
+        // the page still loads, as it would in a browser.
+      }
+    }
+  }
+
+  /**
    * Child frames
    */
   get childFrames(): BrowserFrame[] {
@@ -299,8 +338,18 @@ export class BrowserFrame {
       return null
     }
 
+    const context = this._page.context as any
+    if (context?._emulation?.().offline) {
+      // Offline is what application code branches on, so a navigation has to
+      // fail rather than quietly succeed.
+      throw new Error(`net::ERR_INTERNET_DISCONNECTED at ${url}`)
+    }
+
     const response = await fetch(url, {
-      headers: options.referer ? { referer: options.referer } : undefined,
+      headers: {
+        ...(context?._extraHTTPHeaders?.() ?? {}),
+        ...(options.referer ? { referer: options.referer } : {}),
+      },
     })
 
     const contentType = response.headers.get('content-type') ?? ''
@@ -363,6 +412,10 @@ export class BrowserFrame {
     // from documentElement, so they follow this rather than going stale.
     document.documentElement.innerHTML = this._asDocumentMarkup(html)
     this._content = html
+
+    // Init scripts run against the fresh document, before the page's own code
+    // would have, which is the point of registering one.
+    this._runInitScripts()
 
     document.readyState = 'interactive'
     this._page.emit('domcontentloaded', this._page)

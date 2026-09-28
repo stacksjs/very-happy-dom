@@ -27,11 +27,114 @@ export class BrowserContext {
   /** @internal Routes applying to every page in this context. */
   _routeRegistry: RouteRegistry = new RouteRegistry()
 
+  /**
+   * Emulation the context applies to every page in it, present and future.
+   *
+   * Held here rather than pushed once, so a page created later starts with the
+   * same environment as its siblings.
+   */
+  private _permissions: string[] | null = null
+  private _geolocation: { latitude: number, longitude: number, accuracy?: number } | null = null
+  private _offline = false
+  private _extraHeaders: Record<string, string> = {}
+  private _initScripts: Array<string | ((...args: any[]) => any)> = []
+  private _defaultTimeout: number | null = null
+
   constructor(browser: Browser) {
     this._browser = browser
     this.cookieContainer = new CookieContainer()
   }
 
+
+  /**
+   * Grant these permissions and no others.
+   *
+   * Until this is called a query answers `granted`, which is the permissive
+   * default for feature detection. Calling it switches to the explicit set, so
+   * anything ungranted becomes `prompt` — which is what lets a test assert the
+   * unhappy path.
+   */
+  async grantPermissions(permissions: string[], _options: { origin?: string } = {}): Promise<void> {
+    this._permissions = [...(this._permissions ?? []), ...permissions]
+    this._applyToPages()
+  }
+
+  /** Revoke every grant, leaving nothing granted. */
+  async clearPermissions(): Promise<void> {
+    this._permissions = []
+    this._applyToPages()
+  }
+
+  /** The position `navigator.geolocation` reports; null restores the default. */
+  async setGeolocation(geolocation: { latitude: number, longitude: number, accuracy?: number } | null): Promise<void> {
+    this._geolocation = geolocation
+    this._applyToPages()
+  }
+
+  /**
+   * Take the context offline.
+   *
+   * `navigator.onLine` flips and a navigation fails, which is what offline
+   * handling in an application actually branches on. An arbitrary `fetch` made
+   * by page code is *not* blocked — interception is what would be needed for
+   * that, and silently swapping it here would fight with `route()`.
+   */
+  async setOffline(offline: boolean): Promise<void> {
+    this._offline = offline
+    this._applyToPages()
+  }
+
+  /** Headers added to requests this context navigates with. */
+  async setExtraHTTPHeaders(headers: Record<string, string>): Promise<void> {
+    this._extraHeaders = { ...headers }
+  }
+
+  /**
+   * Evaluate `script` in every page of this context, on creation and after each
+   * navigation, before the page's own code would run.
+   *
+   * The usual reason is to plant a stub or a flag the page reads on startup.
+   */
+  async addInitScript(script: string | ((...args: any[]) => any)): Promise<void> {
+    this._initScripts.push(script)
+    for (const page of this._pages)
+      (page as any)._runInitScripts?.()
+  }
+
+  /** Default timeout for the `waitFor*` family in this context's pages. */
+  setDefaultTimeout(timeout: number): void {
+    this._defaultTimeout = timeout
+  }
+
+  /** @internal The emulation a frame should adopt. */
+  _emulation(): {
+    permissions: string[] | null
+    geolocation: { latitude: number, longitude: number, accuracy?: number } | null
+    offline: boolean
+  } {
+    return { permissions: this._permissions, geolocation: this._geolocation, offline: this._offline }
+  }
+
+  /** @internal Headers to merge into a navigation request. */
+  _extraHTTPHeaders(): Record<string, string> {
+    return this._extraHeaders
+  }
+
+  /** @internal Scripts to evaluate in a fresh document. */
+  _initScriptSources(): Array<string | ((...args: any[]) => any)> {
+    return this._initScripts
+  }
+
+  /** @internal The configured default timeout, if any. */
+  _timeout(): number | null {
+    return this._defaultTimeout
+  }
+
+  /** Push the current emulation onto every page's frames. */
+  private _applyToPages(): void {
+    for (const page of this._pages)
+      (page as any)._applyEmulation?.()
+  }
 
   /**
    * Handle matching requests for every page in this context, present and
@@ -199,9 +302,13 @@ export class BrowserContext {
   newPage(): BrowserPage {
     const page = new BrowserPage(this)
     this._pages.push(page)
-    // Inherit whatever routing the context already declared.
+    // Inherit whatever routing the context already declared, then its
+    // environment, so a page starts up matching its siblings.
+    const created = page as any
     if (this._routeRegistry.size > 0)
-      (page as any)._ensureRouting?.()
+      created._ensureRouting?.()
+    created._applyEmulation?.()
+    created._runInitScripts?.()
     return page
   }
 

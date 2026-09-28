@@ -34,6 +34,7 @@ export class BrowserPage {
   private _requestInterceptor = new RequestInterceptor()
   private _routes = new RouteRegistry()
   private _routingInstalled = false
+  private _defaultTimeout: number | null = null
 
   constructor(context: BrowserContext) {
     this._context = context
@@ -175,6 +176,31 @@ export class BrowserPage {
     return await this.mainFrame.reload()
   }
 
+  /** @internal Push the context's emulation onto every frame. */
+  _applyEmulation(): void {
+    for (const frame of this._frames)
+      (frame as any)._applyEmulation?.()
+  }
+
+  /** @internal Evaluate the context's init scripts in every frame. */
+  _runInitScripts(): void {
+    for (const frame of this._frames)
+      (frame as any)._runInitScripts?.()
+  }
+
+  /**
+   * Default timeout for the `waitFor*` family, falling back to the context's
+   * and then to 30 seconds.
+   */
+  setDefaultTimeout(timeout: number): void {
+    this._defaultTimeout = timeout
+  }
+
+  /** @internal The timeout a `waitFor*` call should use when given none. */
+  _defaultTimeoutMs(): number {
+    return this._defaultTimeout ?? (this._context as any)?._timeout?.() ?? 30000
+  }
+
   /**
    * Waits for a selector to appear in the DOM
    */
@@ -182,7 +208,7 @@ export class BrowserPage {
     selector: string,
     options: { timeout?: number, visible?: boolean } = {},
   ): Promise<any | null> {
-    const { timeout = 30000, visible = false } = options
+    const { timeout = this._defaultTimeoutMs(), visible = false } = options
     const startTime = Date.now()
 
     while (Date.now() - startTime < timeout) {
@@ -209,7 +235,7 @@ export class BrowserPage {
     fn: ((...args: any[]) => any) | string,
     options: { timeout?: number, polling?: number | 'raf' } = {},
   ): Promise<any> {
-    const { timeout = 30000, polling = 100 } = options
+    const { timeout = this._defaultTimeoutMs(), polling = 100 } = options
     const startTime = Date.now()
     const pollInterval = polling === 'raf' ? 16 : polling
 

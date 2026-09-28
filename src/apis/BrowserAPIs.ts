@@ -63,25 +63,37 @@ export class Performance {
 
 // Geolocation API
 export class Geolocation {
+  /** Where this geolocation reports, once something has set it. */
+  private _coords: { latitude: number, longitude: number, accuracy?: number } | null = null
+
+  /** @internal Report this position instead of the default. */
+  _setPosition(coords: { latitude: number, longitude: number, accuracy?: number } | null): void {
+    this._coords = coords
+  }
+
+  /** The position to report — the configured one, or the stand-in default. */
+  private _position(): GeolocationPosition {
+    return {
+      coords: {
+        latitude: this._coords?.latitude ?? 37.7749,
+        longitude: this._coords?.longitude ?? -122.4194,
+        accuracy: this._coords?.accuracy ?? 10,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null,
+      },
+      timestamp: Date.now(),
+    }
+  }
+
   getCurrentPosition(
     success: (position: GeolocationPosition) => void,
     _error?: (error: GeolocationPositionError) => void,
     _options?: GeolocationOptions,
   ): void {
-    // Mock position
     setTimeout(() => {
-      success({
-        coords: {
-          latitude: 37.7749,
-          longitude: -122.4194,
-          accuracy: 10,
-          altitude: null,
-          altitudeAccuracy: null,
-          heading: null,
-          speed: null,
-        },
-        timestamp: Date.now(),
-      })
+      success(this._position())
     }, 0)
   }
 
@@ -91,18 +103,7 @@ export class Geolocation {
     _options?: GeolocationOptions,
   ): number {
     const id = setInterval(() => {
-      success({
-        coords: {
-          latitude: 37.7749,
-          longitude: -122.4194,
-          accuracy: 10,
-          altitude: null,
-          altitudeAccuracy: null,
-          heading: null,
-          speed: null,
-        },
-        timestamp: Date.now(),
-      })
+      success(this._position())
     }, 1000)
     return id as unknown as number
   }

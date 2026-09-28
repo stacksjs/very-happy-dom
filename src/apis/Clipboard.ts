@@ -74,8 +74,34 @@ function detectPlatform(): string {
 }
 
 export class Permissions {
+  /**
+   * Explicit grants, once something has set them.
+   *
+   * Null means nothing has: every query then answers `granted`, which is the
+   * permissive default this has always had and what feature-detecting code
+   * expects. A `BrowserContext` calling `grantPermissions` switches to the
+   * explicit set, where anything ungranted is `prompt`.
+   */
+  private _granted: Set<string> | null = null
+
   query(descriptor: { name: string }): Promise<PermissionStatus> {
-    return Promise.resolve(new PermissionStatus(descriptor.name, 'granted'))
+    return Promise.resolve(new PermissionStatus(descriptor.name, this._stateFor(descriptor.name)))
+  }
+
+  private _stateFor(name: string): PermissionState {
+    if (this._granted === null)
+      return 'granted'
+    return this._granted.has(name) ? 'granted' : 'prompt'
+  }
+
+  /** @internal Grant exactly these, leaving everything else at `prompt`. */
+  _grant(names: string[]): void {
+    this._granted = new Set([...(this._granted ?? []), ...names])
+  }
+
+  /** @internal Revoke every grant, so nothing is granted. */
+  _clearGrants(): void {
+    this._granted = new Set()
   }
 }
 
