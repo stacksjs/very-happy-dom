@@ -143,8 +143,8 @@ export class BrowserPage {
   /**
    * Navigates the main frame to a URL
    */
-  async goto(url: string): Promise<Response | null> {
-    return await this.mainFrame.goto(url)
+  async goto(url: string, options: { referer?: string } = {}): Promise<Response | null> {
+    return await this.mainFrame.goto(url, options)
   }
 
   /**

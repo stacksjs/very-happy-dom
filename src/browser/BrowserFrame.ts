@@ -21,6 +21,14 @@ export class BrowserFrame {
   private _parentFrame: BrowserFrame | null = null
   private _childFrames: BrowserFrame[] = []
   private _content: string = ''
+  /**
+   * Session history for this frame, as URLs, with the index of the current
+   * entry. `goBack`/`goForward` move the index; a fresh navigation truncates
+   * anything ahead of it, the way a browser discards the forward stack.
+   */
+  private _history: string[] = [INITIAL_FRAME_URL]
+  private _historyIndex = 0
+  private _navigations: Array<() => void> = []
 
   constructor(page: BrowserPage, parentFrame: BrowserFrame | null = null) {
     this._page = page
@@ -136,23 +144,44 @@ export class BrowserFrame {
    * Waits for all ongoing operations to complete
    */
   async waitUntilComplete(): Promise<void> {
-    // For now, this is a no-op
-    // In a full implementation, this would wait for resources, scripts, etc.
+    // The window owns the timers, so draining them is what "settled" means
+    // here. There are no external resources in flight to wait on: a navigation
+    // resolves once its main response is parsed.
+    await this.window.happyDOM.waitUntilComplete()
   }
 
   /**
    * Waits for navigation to complete after a link click or redirect
    */
   async waitForNavigation(): Promise<void> {
-    // For now, this is a no-op
-    // In a full implementation, this would wait for the new page to load
+    // Resolves on the next navigation that completes, so a caller can start it
+    // and await the arrival separately — the shape Playwright uses for a click
+    // that triggers a load.
+    await new Promise<void>((resolve) => {
+      this._navigations.push(resolve)
+    })
+  }
+
+  /** Wake everything waiting on a navigation. */
+  private _announceNavigation(): void {
+    const waiting = this._navigations
+    this._navigations = []
+    for (const resolve of waiting)
+      resolve()
   }
 
   /**
    * Aborts all ongoing operations
    */
   async abort(): Promise<void> {
-    // For now, this is a no-op
+    // The window owns the pending work, so cancelling it is what aborting the
+    // frame means. Anything waiting on a navigation is released rather than
+    // left hanging: an aborted navigation is never going to arrive, and a
+    // caller that awaited it should not be stuck on a promise that cannot
+    // settle. It resolves rather than rejects, which is the contract callers
+    // here already rely on.
+    await this.window.happyDOM.abort()
+    this._announceNavigation()
   }
 
   /**
@@ -192,42 +221,157 @@ export class BrowserFrame {
   /**
    * Navigates the frame to a URL
    */
-  async goto(url: string): Promise<Response | null> {
-    this.url = url
-    // In a real implementation, this would fetch the URL and load content
-    // For now, just update the URL
-    return null
+  /**
+   * Navigates the frame to a URL.
+   *
+   * This used to assign `this.url` and return null, so the document was never
+   * replaced and every element lookup afterwards resolved against whatever was
+   * there before.
+   *
+   * It now requests the URL through `fetch`, which means page routes and
+   * request interception apply to a navigation as they do to any other request,
+   * parses an HTML response into a fresh document, and returns the
+   * main-resource `Response`. A non-network target such as `about:blank` gets a
+   * blank document and returns null, as there is no response to report.
+   *
+   * What it deliberately does not do is run the page's scripts. External
+   * `<script src>` is not fetched and inline module code is not evaluated, so a
+   * document arrives parsed but inert: no framework boots and nothing hydrates.
+   * Assertions that depend on client-side rendering belong in a real browser.
+   */
+  async goto(url: string, options: { referer?: string } = {}): Promise<Response | null> {
+    return await this._navigate(this._resolve(url), { push: true, referer: options.referer })
   }
 
-  /**
-   * Navigates back in history
-   */
-  async goBack(): Promise<Response | null> {
-    // For now, this is a no-op
-    return null
-  }
-
-  /**
-   * Navigates forward in history
-   */
-  async goForward(): Promise<Response | null> {
-    // For now, this is a no-op
-    return null
-  }
-
-  /**
-   * Navigates by a number of steps in history
-   */
-  async goSteps(_steps: number): Promise<Response | null> {
-    // For now, this is a no-op
-    return null
-  }
-
-  /**
-   * Reloads the frame
-   */
+  /** Re-request the current URL, replacing the document. */
   async reload(): Promise<Response | null> {
-    // For now, this is a no-op
-    return null
+    return await this._navigate(this.url, { push: false })
+  }
+
+  /** Step back through session history. */
+  async goBack(): Promise<Response | null> {
+    return await this.goSteps(-1)
+  }
+
+  /** Step forward through session history. */
+  async goForward(): Promise<Response | null> {
+    return await this.goSteps(1)
+  }
+
+  /**
+   * Move `steps` through session history.
+   *
+   * Returns null when there is nowhere to go, which is also what a browser does
+   * — the navigation simply does not happen.
+   */
+  async goSteps(steps: number): Promise<Response | null> {
+    const target = this._historyIndex + steps
+    if (steps === 0 || target < 0 || target >= this._history.length)
+      return null
+
+    this._historyIndex = target
+    return await this._navigate(this._history[target], { push: false })
+  }
+
+  /** Resolve a possibly relative URL against where the frame currently is. */
+  private _resolve(url: string): string {
+    try {
+      return new URL(url, this.url === INITIAL_FRAME_URL ? undefined : this.url).href
+    }
+    catch {
+      // Not resolvable — hand it on unchanged and let the fetch report it.
+      return url
+    }
+  }
+
+  /** Whether a URL is something we can actually request. */
+  private _isFetchable(url: string): boolean {
+    return /^https?:/i.test(url)
+  }
+
+  private async _navigate(
+    url: string,
+    options: { push: boolean, referer?: string },
+  ): Promise<Response | null> {
+    if (!this._isFetchable(url)) {
+      // about:blank and friends: a fresh empty document, and no response.
+      this._commit(url, '', options.push)
+      return null
+    }
+
+    const response = await fetch(url, {
+      headers: options.referer ? { referer: options.referer } : undefined,
+    })
+
+    const contentType = response.headers.get('content-type') ?? ''
+    // A redirect chain ends somewhere else; the document's URL is where it
+    // actually landed.
+    const landedAt = response.url || url
+
+    // Only markup is parsed into the document. Anything else still navigates
+    // and still returns its response, but leaves the document empty rather
+    // than rendering bytes as HTML.
+    const isMarkup = contentType === '' || /\b(?:html|xml)\b/i.test(contentType)
+    const body = isMarkup ? await response.clone().text() : ''
+
+    this._commit(landedAt, body, options.push)
+
+    return response
+  }
+
+  /**
+   * Give fragment markup the head/body structure a parsed document has.
+   *
+   * A browser parsing `<h1>Hi</h1>` yields
+   * `<html><head></head><body><h1>Hi</h1></body></html>`. Assigning the
+   * fragment directly would leave `documentElement` with only the `h1`, and
+   * since `head` and `body` are derived from its children both would be null —
+   * so `document.body.appendChild(...)` would fail after a perfectly ordinary
+   * navigation.
+   */
+  private _asDocumentMarkup(html: string): string {
+    if (/<(?:html|body|head)\b/i.test(html))
+      return html
+
+    return `<head></head><body>${html}</body>`
+  }
+
+  /**
+   * Install a document and settle the frame on `url`.
+   *
+   * `readyState` walks loading → interactive → complete with the page's
+   * `domcontentloaded` and `load` events in between, so a caller sees the same
+   * ordering it would in a browser.
+   */
+  private _commit(url: string, html: string, push: boolean): void {
+    const document = this.document as any
+
+    document.readyState = 'loading'
+
+    this.url = url
+
+    if (push) {
+      // A new navigation discards whatever was ahead in history.
+      this._history = [...this._history.slice(0, this._historyIndex + 1), url]
+      this._historyIndex = this._history.length - 1
+    }
+    else {
+      this._history[this._historyIndex] = url
+    }
+
+    // Replace the document's contents wholesale. `head` and `body` are derived
+    // from documentElement, so they follow this rather than going stale.
+    document.documentElement.innerHTML = this._asDocumentMarkup(html)
+    this._content = html
+
+    document.readyState = 'interactive'
+    this._page.emit('domcontentloaded', this._page)
+    document.dispatchEvent?.(new (this.window as any).Event('DOMContentLoaded', { bubbles: true }))
+
+    document.readyState = 'complete'
+    this._page.emit('load', this._page)
+    this.window.dispatchEvent?.(new (this.window as any).Event('load'))
+
+    this._announceNavigation()
   }
 }
