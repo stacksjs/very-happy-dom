@@ -39,6 +39,39 @@ export class BrowserFrame {
     // The window owns its document — don't build a second one alongside it, or
     // `frame.document` and `frame.window.document` would diverge.
     this.document = this.window.document
+
+    this._adoptContextState()
+  }
+
+  /**
+   * Share the browsing context's cookies and per-origin localStorage.
+   *
+   * A context is the isolation boundary: its pages behave like tabs in one
+   * profile, so a cookie or a localStorage entry written by one is visible to
+   * the others, while a different context sees neither. Without this the
+   * document built its own jar and the window its own storage, so sibling pages
+   * were isolated from each other — which no browser does.
+   *
+   * `sessionStorage` is deliberately left per-frame: in a browser it is scoped
+   * to the tab, not the profile.
+   */
+  private _adoptContextState(): void {
+    const context = this._page.context as any
+    if (!context)
+      return
+
+    if (context.cookieContainer)
+      (this.document as any)._setCookieContainer?.(context.cookieContainer)
+
+    this._syncOriginStorage()
+  }
+
+  /** Point `localStorage` at the context's store for this frame's origin. */
+  private _syncOriginStorage(): void {
+    const context = this._page.context as any
+    const store = context?._storageForOrigin?.(this.window.location.origin)
+    if (store)
+      (this.window as any).localStorage = store
   }
 
   /**
@@ -86,6 +119,9 @@ export class BrowserFrame {
     // (`pathname`, `search`, `origin`, …) updates together, where the previous
     // stub replaced `location` with a two-property object.
     this.window.happyDOM.setURL(url)
+    // localStorage is partitioned by origin, so moving origin means a
+    // different store — as it would in a browser.
+    this._syncOriginStorage()
   }
 
   /**

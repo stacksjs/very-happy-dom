@@ -267,6 +267,20 @@ export class VirtualDocument extends VirtualNodeBase {
   private _historyIndex = -1
   private _xpathEvaluator = new XPathEvaluator()
   private _cookieContainer = new CookieContainer()
+
+  /**
+   * @internal Adopt a jar owned by something else — a `BrowserContext`, so that
+   * every page in it shares cookies, as a browser profile does. Left alone, a
+   * document keeps its own jar and is isolated.
+   */
+  _setCookieContainer(container: CookieContainer): void {
+    this._cookieContainer = container
+  }
+
+  /** @internal The jar this document reads and writes. */
+  _getCookieContainer(): CookieContainer {
+    return this._cookieContainer
+  }
   private _selection: Selection | null = null
   private _locationState: {
     href: string

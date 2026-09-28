@@ -121,6 +121,16 @@ export class CookieContainer {
   }
 
   /**
+   * Every cookie in the jar, unfiltered.
+   *
+   * `getCookies` needs a URL to match against, which a caller wanting the whole
+   * jar — capturing a storage state, for instance — does not have.
+   */
+  getAllCookies(): ICookie[] {
+    return [...this._cookies]
+  }
+
+  /**
    * Clears all cookies
    */
   clearCookies(): void {
