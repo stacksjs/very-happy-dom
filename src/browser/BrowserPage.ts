@@ -3,7 +3,9 @@ import type { BrowserContext } from './BrowserContext'
 import { Buffer } from 'node:buffer'
 import type { Route, RouteHandler, RoutePattern, RouteRequest } from '../network/routing'
 import { RequestInterceptor } from '../network/RequestInterceptor'
+import type { GetByRoleOptions, GetByTextOptions } from './Locator'
 import { RouteRegistry } from '../network/routing'
+import { byAttribute, byLabel, byRole, byText, Locator } from './Locator'
 import { BrowserFrame } from './BrowserFrame'
 
 export interface IBrowserPageViewport {
@@ -293,7 +295,11 @@ export class BrowserPage {
    * value change, input, keyup.
    */
   async type(selector: string, text: string, options: { delay?: number } = {}): Promise<void> {
-    const element = this._element(selector)
+    await this._typeIntoElement(this._element(selector), text, options)
+  }
+
+  /** @internal Shared by `type()` and `Locator.type()`. */
+  async _typeIntoElement(element: any, text: string, options: { delay?: number } = {}): Promise<void> {
     const delay = options.delay || 0
 
     element.focus?.()
@@ -320,8 +326,11 @@ export class BrowserPage {
    * what a field committed by the user would also emit.
    */
   async fill(selector: string, value: string): Promise<void> {
-    const element = this._element(selector)
+    await this._fillElement(this._element(selector), value)
+  }
 
+  /** @internal Shared by `fill()` and `Locator.fill()`. */
+  async _fillElement(element: any, value: string): Promise<void> {
     element.focus?.()
     this._dispatch(element, 'beforeinput', 'InputEvent', { data: value, inputType: 'insertReplacementText' })
     this._writeField(element, value)
@@ -349,7 +358,11 @@ export class BrowserPage {
    * Hovers over an element
    */
   async hover(selector: string): Promise<void> {
-    const element = this._element(selector)
+    await this._hoverElement(this._element(selector))
+  }
+
+  /** @internal Shared by `hover()` and `Locator.hover()`. */
+  async _hoverElement(element: any): Promise<void> {
     // `mouseover` bubbles and is what delegated handlers listen for;
     // `mouseenter` does not bubble, matching the platform.
     this._dispatch(element, 'mouseover', 'MouseEvent')
@@ -432,6 +445,104 @@ export class BrowserPage {
         this._dispatch(this.mainFrame.document as any, 'mousemove', 'MouseEvent', { clientX: x, clientY: y })
       },
     }
+  }
+
+  /**
+   * The attribute `getByTestId` looks at. Configurable, as Playwright allows.
+   */
+  private _testId = 'data-testid'
+
+  /** Change the attribute `getByTestId` matches on. */
+  setTestIdAttribute(name: string): void {
+    this._testId = name
+  }
+
+  /** @internal */
+  _testIdAttribute(): string {
+    return this._testId
+  }
+
+  /** The document a locator resolves against. */
+  private _locatorRoot(): any {
+    return this.mainFrame.document
+  }
+
+  /**
+   * A locator for a CSS selector.
+   *
+   * Resolved on each use rather than at creation, so it survives the DOM
+   * changing underneath it — which is the point of holding a query instead of
+   * an element.
+   */
+  locator(selector: string): Locator {
+    return new Locator(
+      this,
+      () => Array.from(this._locatorRoot().querySelectorAll?.(selector) ?? []),
+      `locator(${JSON.stringify(selector)})`,
+    )
+  }
+
+  /** Elements by ARIA role, optionally narrowed by accessible name and state. */
+  getByRole(role: string, options: GetByRoleOptions = {}): Locator {
+    return new Locator(
+      this,
+      () => byRole(this._locatorRoot(), role, options),
+      `getByRole(${JSON.stringify(role)})`,
+    )
+  }
+
+  /** Elements by their own text. */
+  getByText(text: string | RegExp, options: GetByTextOptions = {}): Locator {
+    return new Locator(
+      this,
+      () => byText(this._locatorRoot(), text, options),
+      `getByText(${String(text)})`,
+    )
+  }
+
+  /** Form controls by their label, including `aria-label` and `aria-labelledby`. */
+  getByLabel(text: string | RegExp, options: GetByTextOptions = {}): Locator {
+    return new Locator(
+      this,
+      () => byLabel(this._locatorRoot(), text, options),
+      `getByLabel(${String(text)})`,
+    )
+  }
+
+  /** Fields by placeholder. */
+  getByPlaceholder(text: string | RegExp, options: GetByTextOptions = {}): Locator {
+    return new Locator(
+      this,
+      () => byAttribute(this._locatorRoot(), 'placeholder', text, options),
+      `getByPlaceholder(${String(text)})`,
+    )
+  }
+
+  /** Images by alt text. */
+  getByAltText(text: string | RegExp, options: GetByTextOptions = {}): Locator {
+    return new Locator(
+      this,
+      () => byAttribute(this._locatorRoot(), 'alt', text, options),
+      `getByAltText(${String(text)})`,
+    )
+  }
+
+  /** Elements by title attribute. */
+  getByTitle(text: string | RegExp, options: GetByTextOptions = {}): Locator {
+    return new Locator(
+      this,
+      () => byAttribute(this._locatorRoot(), 'title', text, options),
+      `getByTitle(${String(text)})`,
+    )
+  }
+
+  /** Elements by test id, matched exactly. */
+  getByTestId(testId: string | RegExp): Locator {
+    return new Locator(
+      this,
+      () => byAttribute(this._locatorRoot(), this._testId, testId, { exact: true }),
+      `getByTestId(${String(testId)})`,
+    )
   }
 
   /**

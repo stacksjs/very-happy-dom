@@ -54,6 +54,10 @@ export type {
   ImageData,
   TextMetrics,
 } from './apis/Canvas'
+export { accessibleName, computeRole, headingLevel } from './aria/roles'
+export { Locator } from './browser/Locator'
+export type { FilterOptions, GetByRoleOptions, GetByTextOptions } from './browser/Locator'
+export type { FulfillOptions, Route, RouteHandler, RoutePattern, RouteRequest } from './network/routing'
 export { CanvasRenderingContext2D } from './apis/Canvas'
 export { Clipboard, Navigator } from './apis/Clipboard'
 export { VeryHappyFile as File, VeryHappyFileList as FileList, VeryHappyFileReader as FileReader } from './apis/FileAPI'
