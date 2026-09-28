@@ -431,6 +431,127 @@ export class BrowserPage {
   }
 
   /**
+   * Read the page's title.
+   */
+  async title(): Promise<string> {
+    return this.mainFrame.document.title ?? ''
+  }
+
+  /** The element's `textContent`. */
+  async textContent(selector: string): Promise<string | null> {
+    return this._element(selector).textContent ?? null
+  }
+
+  /** The element's rendered text. */
+  async innerText(selector: string): Promise<string> {
+    return String(this._element(selector).innerText ?? '')
+  }
+
+  /** The element's markup. */
+  async innerHTML(selector: string): Promise<string> {
+    return String(this._element(selector).innerHTML ?? '')
+  }
+
+  /**
+   * The current value of a form field.
+   *
+   * Reads the `value` property, so it reflects what was typed or assigned
+   * rather than the `value` attribute's default.
+   */
+  async inputValue(selector: string): Promise<string> {
+    const element = this._element(selector)
+    const tag = element.tagName
+
+    if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT')
+      throw new Error(`Not a form field: ${selector} is <${String(tag).toLowerCase()}>`)
+
+    return String(element.value ?? '')
+  }
+
+  /** An attribute, or null when it is absent. */
+  async getAttribute(selector: string, name: string): Promise<string | null> {
+    return this._element(selector).getAttribute?.(name) ?? null
+  }
+
+  /**
+   * Whether the element would be visible.
+   *
+   * Resolved from the cascade, so a class that sets `display: none` counts —
+   * not only an inline style. There is still no layout, so this cannot account
+   * for zero-size, clipped or off-screen elements the way a browser does; it
+   * answers "is this element and its ancestry displayed", which is what a test
+   * asking "did the panel open" actually means.
+   *
+   * Returns false for a selector that matches nothing, as Playwright does,
+   * rather than throwing — `isVisible` is usually asked of something that may
+   * legitimately be absent.
+   */
+  async isVisible(selector: string): Promise<boolean> {
+    const element = this.mainFrame.document.querySelector(selector) as any
+    if (!element)
+      return false
+
+    return this._isRendered(element)
+  }
+
+  /** The inverse of {@link isVisible}. */
+  async isHidden(selector: string): Promise<boolean> {
+    return !(await this.isVisible(selector))
+  }
+
+  /** Whether a checkbox or radio is checked. */
+  async isChecked(selector: string): Promise<boolean> {
+    return this._element(selector).checked === true
+  }
+
+  /** Whether the control accepts interaction. */
+  async isEnabled(selector: string): Promise<boolean> {
+    return this._element(selector).disabled !== true
+  }
+
+  /** The inverse of {@link isEnabled}. */
+  async isDisabled(selector: string): Promise<boolean> {
+    return this._element(selector).disabled === true
+  }
+
+  /**
+   * Whether the element's content can be edited: an enabled, writable form
+   * field, or anything marked `contenteditable`.
+   */
+  async isEditable(selector: string): Promise<boolean> {
+    const element = this._element(selector)
+
+    if (element.isContentEditable === true)
+      return true
+
+    const tag = element.tagName
+    if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT')
+      return false
+
+    return element.disabled !== true && element.readOnly !== true
+  }
+
+  /** Walk the ancestry for anything that would stop the element rendering. */
+  private _isRendered(element: any): boolean {
+    // A detached subtree renders nothing, whatever its styles say.
+    if (element.isConnected === false)
+      return false
+
+    const window = this.mainFrame.window as any
+
+    for (let node = element; node && node.nodeType === 1; node = node.parentNode) {
+      if (node.hasAttribute?.('hidden'))
+        return false
+
+      const style = window.getComputedStyle(node)
+      if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse')
+        return false
+    }
+
+    return true
+  }
+
+  /**
    * Event emitter methods
    */
   on(event: PageEventType, handler: PageEventHandler): void {
