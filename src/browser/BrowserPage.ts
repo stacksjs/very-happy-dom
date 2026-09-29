@@ -1,3 +1,4 @@
+import { isRendered } from '../aria/visibility'
 import type { RequestInterceptionHandler } from '../network/RequestInterceptor'
 import type { BrowserContext } from './BrowserContext'
 import { Buffer } from 'node:buffer'
@@ -678,18 +679,10 @@ export class BrowserPage {
     if (element.isConnected === false)
       return false
 
-    const window = this.mainFrame.window as any
-
-    for (let node = element; node && node.nodeType === 1; node = node.parentNode) {
-      if (node.hasAttribute?.('hidden'))
-        return false
-
-      const style = window.getComputedStyle(node)
-      if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse')
-        return false
-    }
-
-    return true
+    // Shared with the locator queries, so "hidden" has one definition here.
+    // Deliberately not the aria variant: an aria-hidden element is painted,
+    // so it is visible even though a role query skips it (#1601).
+    return isRendered(element)
   }
 
   /**

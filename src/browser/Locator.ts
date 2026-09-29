@@ -13,6 +13,7 @@
  */
 
 import { accessibleName, computeRole, headingLevel } from '../aria/roles'
+import { isExposedToAria } from '../aria/visibility'
 
 /** Returns the current matches, re-evaluated on each call. */
 type Resolver = () => any[]
@@ -20,6 +21,8 @@ type Resolver = () => any[]
 export interface GetByRoleOptions {
   name?: string | RegExp
   exact?: boolean
+  /** Match elements the accessibility tree excludes. Off, as in Playwright. */
+  includeHidden?: boolean
   checked?: boolean
   disabled?: boolean
   selected?: boolean
@@ -29,6 +32,8 @@ export interface GetByRoleOptions {
 
 export interface GetByTextOptions {
   exact?: boolean
+  /** Match elements the accessibility tree excludes. Off, as in Playwright. */
+  includeHidden?: boolean
 }
 
 export interface FilterOptions {
@@ -347,6 +352,11 @@ function descendants(root: any): any[] {
 /** Elements under `root` carrying `role`, narrowed by the options given. */
 export function byRole(root: any, role: string, options: GetByRoleOptions = {}): any[] {
   return descendants(root).filter((element) => {
+    // A closed modal or an inactive tab panel leaves its markup behind. Role
+    // queries read the accessibility tree, which does not include it (#1601).
+    if (!options.includeHidden && !isExposedToAria(element))
+      return false
+
     if (computeRole(element) !== role)
       return false
 
@@ -380,13 +390,18 @@ export function byRole(root: any, role: string, options: GetByRoleOptions = {}):
  * almost any markup.
  */
 export function byText(root: any, text: string | RegExp, options: GetByTextOptions = {}): any[] {
-  const matches = descendants(root).filter(element => matchesText(normalize(element.textContent), text, options.exact))
+  const matches = descendants(root)
+    .filter(element => options.includeHidden || isExposedToAria(element))
+    .filter(element => matchesText(normalize(element.textContent), text, options.exact))
   return matches.filter(element => !matches.some(other => other !== element && element.contains?.(other)))
 }
 
 /** Form controls labelled by matching text. */
 export function byLabel(root: any, text: string | RegExp, options: GetByTextOptions = {}): any[] {
   return descendants(root).filter((element) => {
+    if (!options.includeHidden && !isExposedToAria(element))
+      return false
+
     const tag = element.tagName
     if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT' && element.getAttribute?.('role') === null)
       return false
@@ -399,6 +414,9 @@ export function byLabel(root: any, text: string | RegExp, options: GetByTextOpti
 /** Elements whose attribute matches. */
 export function byAttribute(root: any, attribute: string, text: string | RegExp, options: GetByTextOptions = {}): any[] {
   return descendants(root).filter((element) => {
+    if (!options.includeHidden && !isExposedToAria(element))
+      return false
+
     const value = element.getAttribute?.(attribute)
     return value !== null && value !== undefined && matchesText(normalize(value), text, options.exact)
   })
