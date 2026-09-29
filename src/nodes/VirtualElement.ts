@@ -1,5 +1,6 @@
 import type { ShadowRootInit } from '../webcomponents/ShadowRoot'
 import { DOMRect } from '../dom/DOMClasses'
+import { collectCascade, resolveProperty } from '../css/cascade'
 import { VirtualEvent } from '../events/VirtualEvent'
 import { parseHTML } from '../parsers/html-parser'
 import { escapeHtmlAttribute, escapeHtmlText } from '../parsers/html-utils'
@@ -2440,10 +2441,10 @@ export class VirtualElement extends VirtualNodeBase {
    *    -> percentage of the parent
    *  - `width="800"` attribute (used by <svg>, <canvas>, <img>) -> 800
    */
-  private _resolveInlineSize(dimension: 'width' | 'height'): number {
-    const inline = this._internalStyles?.get(dimension)
-    if (inline) {
-      const parsed = this._parseCssSize(inline, dimension)
+  private _resolveInlineSize(dimension: 'width' | 'height', cascade?: ReturnType<typeof collectCascade> | null): number {
+    const styled = this._cascadedStyleValue(dimension, cascade)
+    if (styled) {
+      const parsed = this._parseCssSize(styled, dimension)
       if (parsed !== null)
         return parsed
     }
@@ -2457,6 +2458,46 @@ export class VirtualElement extends VirtualNodeBase {
     }
 
     return 0
+  }
+
+  /**
+   * The winning value for a property, decided the way `getComputedStyle()`
+   * decides it — specificity, `!important`, and inline over a sheet.
+   *
+   * The box metrics used to read the inline style directly, so once
+   * `getComputedStyle()` learned the cascade the two disagreed about the same
+   * element: a class-based `width: 120px` computed as `120px` while the rect
+   * reported 0 (#1600). They resolve through the same rules now.
+   *
+   * A document with no stylesheets skips the cascade entirely and reads the
+   * inline style, which is the common case in a unit test and costs nothing.
+   */
+  private _cascadedStyleValue(property: string, prebuilt?: ReturnType<typeof collectCascade> | null): string {
+    const inline = this._internalStyles?.get(property) ?? ''
+    const cascade = prebuilt === undefined ? this._buildCascade() : prebuilt
+    if (!cascade)
+      return inline
+
+    return resolveProperty(property, this.style as any, cascade) ?? inline
+  }
+
+  /**
+   * Match this element against the document's rules, or null when there are
+   * none to match. Matching is the expensive half — `getComputedStyle()` pays
+   * the same price — so a caller reading more than one property builds it once
+   * and passes it in.
+   */
+  private _buildCascade(): ReturnType<typeof collectCascade> | null {
+    const document = this.ownerDocument as any
+    if (!document)
+      return null
+
+    const adopted = document._adoptedStyleSheets ?? []
+    const sheets = document.styleSheets ?? []
+    if (sheets.length === 0 && adopted.length === 0)
+      return null
+
+    return collectCascade(this as any, [...sheets, ...adopted])
   }
 
   /**
@@ -2527,8 +2568,10 @@ export class VirtualElement extends VirtualNodeBase {
   getBoundingClientRect(): DOMRect {
     // Align the rect's width/height with the inline layout. Position stays
     // at (0, 0) since we don't run an actual layout pass.
-    const width = this._resolveInlineSize('width')
-    const height = this._resolveInlineSize('height')
+    // One match pass for both dimensions rather than one each.
+    const cascade = this._buildCascade()
+    const width = this._resolveInlineSize('width', cascade)
+    const height = this._resolveInlineSize('height', cascade)
     return new DOMRect(0, 0, width, height)
   }
 
