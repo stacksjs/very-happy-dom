@@ -65,8 +65,8 @@
     "format:fix": "bunx --bun pickier . --format --write",
     "changelog": "bunx --bun logsmith --verbose",
     "changelog:generate": "bunx --bun logsmith --output CHANGELOG.md",
-    "release": "bun run changelog:generate && bunx --bun bumpx prompt --recursive",
-    "release:patch": "bun x --bun bumpx patch --recursive --commit --tag --push --yes",
+    "release": "bun run changelog:generate && bunx --bun @stacksjs/bumpx prompt --recursive",
+    "release:patch": "bun x --bun @stacksjs/bumpx patch --recursive --commit --tag --push --yes",
     "postinstall": "bunx --bun git-hooks",
     "typecheck": "bun --bun tsc --noEmit"
   },
