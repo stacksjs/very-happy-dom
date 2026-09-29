@@ -167,3 +167,58 @@ describe('dist/register.js', () => {
     })
   })
 })
+
+// =============================================================================
+// Regression guard: those files must also survive packing. `files` in
+// package.json decides what the tarball carries, so dist can be complete on
+// disk while the published archive is missing an entry point — the checks
+// above would all still pass. 0.1.10 shipped `./register` with a `.d.ts` and
+// no JS, and `src/register.ts` was present the whole time, so nothing that
+// reads the working tree could have caught it.
+//
+// This asks `bun pm pack` what it would actually include.
+// =============================================================================
+
+function packedPaths(): string[] {
+  const proc = Bun.spawnSync({
+    cmd: [process.execPath, 'pm', 'pack', '--dry-run', '--ignore-scripts'],
+    cwd: ROOT,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+
+  if (proc.exitCode !== 0)
+    throw new Error(`bun pm pack --dry-run failed:\n${proc.stderr.toString()}`)
+
+  // Each included file is reported as `packed <size> <path>`.
+  return proc.stdout.toString()
+    .split('\n')
+    .map(line => /^packed\s+\S+\s+(.+)$/.exec(line.trim())?.[1])
+    .filter((path): path is string => Boolean(path))
+}
+
+describe('the packed tarball carries every declared export', () => {
+  const packed = new Set(packedPaths())
+
+  test('the pack listing was read at all', () => {
+    // Without this, a change to bun's output format would empty the set and
+    // every assertion below would pass by matching nothing. package.json is
+    // always packed whatever `files` says, so this fails only on a parse
+    // break — never on a genuine packaging change, which the tests below own.
+    expect(packed.has('package.json')).toBe(true)
+  })
+
+  test('every declared export file is inside the tarball', () => {
+    const missing = declaredExportFiles()
+      .filter(({ file }) => !packed.has(file.replace(/^\.\//, '')))
+      .map(({ subpath, condition, file }) => `${subpath} (${condition}) -> ${file}`)
+
+    expect(missing).toEqual([])
+  })
+
+  test('the documented drop-in entry points ship their JS, not only types', () => {
+    // The exact shape of the 0.1.10 defect: types present, runtime absent.
+    expect(packed.has('dist/register.js')).toBe(true)
+    expect(packed.has('dist/jsdom/index.js')).toBe(true)
+  })
+})
