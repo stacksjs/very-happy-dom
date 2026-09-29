@@ -63,11 +63,11 @@
     "lint:fix": "bunx --bun pickier . --fix",
     "format": "bunx --bun pickier . --format",
     "format:fix": "bunx --bun pickier . --format --write",
-    "changelog": "bunx --bun logsmith --verbose",
-    "changelog:generate": "bunx --bun logsmith --output CHANGELOG.md",
+    "changelog": "bunx --bun @stacksjs/logsmith --verbose",
+    "changelog:generate": "bunx --bun @stacksjs/logsmith --output CHANGELOG.md",
     "release": "bun run changelog:generate && bunx --bun @stacksjs/bumpx prompt --recursive",
     "release:patch": "bun x --bun @stacksjs/bumpx patch --recursive --commit --tag --push --yes",
-    "postinstall": "bunx --bun git-hooks",
+    "postinstall": "bunx --bun bun-git-hooks",
     "typecheck": "bun --bun tsc --noEmit"
   },
   "devDependencies": {
