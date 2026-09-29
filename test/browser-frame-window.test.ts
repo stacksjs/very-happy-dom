@@ -169,7 +169,10 @@ describe('BrowserFrame viewport and settings', () => {
     frame.window.console.log('from the frame')
 
     expect(page.console).toBe(browser.console)
-    expect(frame.window.console).toBe(browser.console)
+    // The frame's console forwards to the browser's rather than being it, so
+    // a log can also reach page.on('console') (#1602). Page events are per
+    // page; the browser's console is shared between them.
+    expect(Object.getPrototypeOf(frame.window.console)).toBe(browser.console)
     expect(lines).toEqual(['from the frame'])
   })
 })

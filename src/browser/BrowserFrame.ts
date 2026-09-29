@@ -44,6 +44,8 @@ export class BrowserFrame {
       settings: page.context?.browser?.settings,
     })
 
+    this._forwardConsole()
+
     // The window owns its document — don't build a second one alongside it, or
     // `frame.document` and `frame.window.document` would diverge.
     this.document = this.window.document
@@ -328,6 +330,32 @@ export class BrowserFrame {
     return /^https?:/i.test(url)
   }
 
+  /**
+   * Send this frame's console output to the page as `console` events, while
+   * still letting it through to the console underneath.
+   *
+   * The window's console is the host's by default, so page output went
+   * straight to stdout and `page.on('console')` never ran (#1602).
+   */
+  private _forwardConsole(): void {
+    const window = this.window as any
+    const underlying = window.console
+    if (!underlying)
+      return
+
+    const page = this._page
+    const forwarding: any = Object.create(underlying)
+
+    for (const method of ['log', 'info', 'warn', 'error', 'debug', 'trace'] as const) {
+      forwarding[method] = (...args: any[]): void => {
+        page._emitConsole(method, ...args)
+        underlying[method]?.(...args)
+      }
+    }
+
+    window.console = forwarding
+  }
+
   private async _navigate(
     url: string,
     options: { push: boolean, referer?: string },
@@ -342,20 +370,40 @@ export class BrowserFrame {
     if (context?._emulation?.().offline) {
       // Offline is what application code branches on, so a navigation has to
       // fail rather than quietly succeed.
-      throw new Error(`net::ERR_INTERNET_DISCONNECTED at ${url}`)
+      const offline = new Error(`net::ERR_INTERNET_DISCONNECTED at ${url}`)
+      this._page._emitError(offline)
+      throw offline
     }
 
-    const response = await fetch(url, {
-      headers: {
-        ...(context?._extraHTTPHeaders?.() ?? {}),
-        ...(options.referer ? { referer: options.referer } : {}),
-      },
-    })
+    let response: Response
+    try {
+      response = await fetch(url, {
+        headers: {
+          ...(context?._extraHTTPHeaders?.() ?? {}),
+          ...(options.referer ? { referer: options.referer } : {}),
+        },
+      })
+    }
+    catch (error) {
+      // A navigation that never arrives is a page error. Reported before the
+      // throw so a listener sees it even though the caller also gets it.
+      this._page._emitError(error instanceof Error ? error : new Error(String(error)))
+      throw error
+    }
 
     const contentType = response.headers.get('content-type') ?? ''
     // A redirect chain ends somewhere else; the document's URL is where it
     // actually landed.
     const landedAt = response.url || url
+
+    // A response built by route.fulfill() carries no url, so a listener could
+    // not tell which request it answered. Filled in rather than left blank;
+    // a real fetch already reports its own and is left alone.
+    if (!response.url) {
+      Object.defineProperty(response, 'url', { value: landedAt, configurable: true })
+    }
+
+    this._page._emitResponse(response)
 
     // Only markup is parsed into the document. Anything else still navigates
     // and still returns its response, but leaves the document empty rather
