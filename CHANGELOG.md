@@ -1,3 +1,25 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.11...HEAD)
+
+## 🐛 Bug Fixes
+
+- **browser**: make the console, response and error page events fire ([029bb19](https://github.com/stacksjs/very-happy-dom/commit/029bb19)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1602](https://github.com/stacksjs/very-happy-dom/issues/1602))
+- **locator**: skip hidden elements in getBy* queries ([56dab61](https://github.com/stacksjs/very-happy-dom/commit/56dab61)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1601](https://github.com/stacksjs/very-happy-dom/issues/1601), [#1600](https://github.com/stacksjs/very-happy-dom/issues/1600))
+- **dom**: resolve box metrics through the cascade ([4060bad](https://github.com/stacksjs/very-happy-dom/commit/4060bad)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1600](https://github.com/stacksjs/very-happy-dom/issues/1600))
+
+## 🧪 Tests
+
+- **package**: assert the packed tarball carries every export ([9cbcf24](https://github.com/stacksjs/very-happy-dom/commit/9cbcf24)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1598](https://github.com/stacksjs/very-happy-dom/issues/1598))
+
+## 🧹 Chores
+
+- run bun-git-hooks and @stacksjs/logsmith, not the unrelated npm 'git-hooks' and 'logsmith' ([4402f91](https://github.com/stacksjs/very-happy-dom/commit/4402f91)) _(by Chris <chrisbreuer93@gmail.com>)_
+- release through @stacksjs/bumpx, not the unrelated npm 'bumpx' ([9a43a7d](https://github.com/stacksjs/very-happy-dom/commit/9a43a7d)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.10...HEAD)
 
 ## 🚀 Features
