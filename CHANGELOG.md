@@ -1,3 +1,30 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.2.0...HEAD)
+
+## 🚀 Features
+
+- **matchers**: add the aria, CSS and property matchers ([7e203bd](https://github.com/stacksjs/very-happy-dom/commit/7e203bd)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1618](https://github.com/stacksjs/very-happy-dom/issues/1618), [#1608](https://github.com/stacksjs/very-happy-dom/issues/1608), [#1602](https://github.com/stacksjs/very-happy-dom/issues/1602))
+- **page**: add dialog events for alert, confirm and prompt ([5de9417](https://github.com/stacksjs/very-happy-dom/commit/5de9417)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1612](https://github.com/stacksjs/very-happy-dom/issues/1612), [#1602](https://github.com/stacksjs/very-happy-dom/issues/1602))
+- **locator**: add filter({has}), or() and and() ([c10931d](https://github.com/stacksjs/very-happy-dom/commit/c10931d)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1619](https://github.com/stacksjs/very-happy-dom/issues/1619))
+- **locator**: add boundingBox and scrollIntoViewIfNeeded ([9f9055b](https://github.com/stacksjs/very-happy-dom/commit/9f9055b)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1609](https://github.com/stacksjs/very-happy-dom/issues/1609), [#1600](https://github.com/stacksjs/very-happy-dom/issues/1600), [#1617](https://github.com/stacksjs/very-happy-dom/issues/1617))
+- **page**: add setContent, and fix the document parse it exposed ([a5e2bd4](https://github.com/stacksjs/very-happy-dom/commit/a5e2bd4)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1610](https://github.com/stacksjs/very-happy-dom/issues/1610), [#1595](https://github.com/stacksjs/very-happy-dom/issues/1595))
+- **locator**: add the form-control actions ([d1068b0](https://github.com/stacksjs/very-happy-dom/commit/d1068b0)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1608](https://github.com/stacksjs/very-happy-dom/issues/1608), [#1615](https://github.com/stacksjs/very-happy-dom/issues/1615), [#1616](https://github.com/stacksjs/very-happy-dom/issues/1616))
+- **locator**: add evaluate, evaluateAll and the all*Text helpers ([3549710](https://github.com/stacksjs/very-happy-dom/commit/3549710)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1607](https://github.com/stacksjs/very-happy-dom/issues/1607))
+- **page**: add the waitFor* family for page events ([4039cb7](https://github.com/stacksjs/very-happy-dom/commit/4039cb7)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1606](https://github.com/stacksjs/very-happy-dom/issues/1606))
+
+## 🐛 Bug Fixes
+
+- **dom**: collapse whitespace in innerText, and resolve its visibility ([6589fe0](https://github.com/stacksjs/very-happy-dom/commit/6589fe0)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1614](https://github.com/stacksjs/very-happy-dom/issues/1614), [#1600](https://github.com/stacksjs/very-happy-dom/issues/1600), [#1607](https://github.com/stacksjs/very-happy-dom/issues/1607))
+- **css**: apply @media rules, and add emulateMedia ([f67bf7a](https://github.com/stacksjs/very-happy-dom/commit/f67bf7a)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1611](https://github.com/stacksjs/very-happy-dom/issues/1611), [#1600](https://github.com/stacksjs/very-happy-dom/issues/1600))
+- **page**: make waitForSelector throw on timeout ([32c5f0e](https://github.com/stacksjs/very-happy-dom/commit/32c5f0e)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1605](https://github.com/stacksjs/very-happy-dom/issues/1605))
+- **keyboard**: parse modifier combinations and populate code ([ada3489](https://github.com/stacksjs/very-happy-dom/commit/ada3489)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1615](https://github.com/stacksjs/very-happy-dom/issues/1615))
+- **aria**: treat a declared zero size as hidden ([480899c](https://github.com/stacksjs/very-happy-dom/commit/480899c)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1617](https://github.com/stacksjs/very-happy-dom/issues/1617), [#1604](https://github.com/stacksjs/very-happy-dom/issues/1604), [#1601](https://github.com/stacksjs/very-happy-dom/issues/1601))
+- **aria**: read checked state through aria-checked ([524698f](https://github.com/stacksjs/very-happy-dom/commit/524698f)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1616](https://github.com/stacksjs/very-happy-dom/issues/1616))
+- **routing**: stop setRequestInterception(false) from killing routes ([7537569](https://github.com/stacksjs/very-happy-dom/commit/7537569)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1613](https://github.com/stacksjs/very-happy-dom/issues/1613))
+
+## Contributors
+
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.12...HEAD)
 
 ## 🚀 Features
