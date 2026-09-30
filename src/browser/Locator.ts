@@ -7,13 +7,25 @@
  * `const save = page.getByRole('button', { name: 'Save' })` usable across a
  * change to the DOM.
  *
- * Playwright's locator actions auto-wait for actionability. There is no
- * rendering loop to wait on here, so resolution happens at call time and a
- * miss is an immediate, named error rather than a timeout.
+ * Playwright's locator actions auto-wait for actionability, and so do these
+ * (#1604). "No real browser, so nothing is async" was never true: timers fire,
+ * `fetch` settles, microtasks drain, `MutationObserver` runs, custom elements
+ * upgrade. Anything rendered in response to one of those is invisible to a
+ * query that looks exactly once, which is what these used to do.
+ *
+ * Reads stay one-shot. `count()` and `textContent()` answer about now, as they
+ * do in Playwright, because a retrying `count()` would make the assertions
+ * built on top of it wait twice over.
+ *
+ * What a wait here cannot check is Playwright's other two conditions: stable
+ * (not mid-animation) and receives-events (not covered by another element).
+ * Both need a layout pass, and pretending to check them would be worse than
+ * saying plainly that they are skipped.
  */
 
 import { accessibleName, computeRole, headingLevel } from '../aria/roles'
 import { isExposedToAria } from '../aria/visibility'
+import { waitUntil } from './waiting'
 
 /** Returns the current matches, re-evaluated on each call. */
 type Resolver = () => any[]
@@ -39,6 +51,26 @@ export interface GetByTextOptions {
 export interface FilterOptions {
   hasText?: string | RegExp
   hasNotText?: string | RegExp
+}
+
+/**
+ * What a wait is waiting for.
+ *
+ * `attached` and `visible` are about one element arriving; `detached` and
+ * `hidden` are about it going away, which is the state a closing modal or a
+ * finished spinner passes through.
+ */
+export type WaitForState = 'attached' | 'detached' | 'visible' | 'hidden'
+
+export interface WaitForOptions {
+  /** Defaults to `visible`, as in Playwright. */
+  state?: WaitForState
+  timeout?: number
+}
+
+/** Every action takes a timeout, falling back to the page's default. */
+export interface ActionOptions {
+  timeout?: number
 }
 
 function normalize(value: string | null | undefined): string {
@@ -95,17 +127,126 @@ export class Locator {
       throw new Error(`No element matches ${this._description}`)
 
     if (matches.length > 1)
-      throw new Error(`${matches.length} elements match ${this._description}; use first(), last() or nth() to choose one`)
+      throw new Error(this._ambiguous(matches.length))
 
     return matches[0]
   }
 
-  /** The resolved element, as an escape hatch into the DOM. */
-  async elementHandle(): Promise<any> {
-    return this._one()
+  /** The strictness error, worded the same wherever it is raised. */
+  private _ambiguous(count: number): string {
+    return `${count} elements match ${this._description}; use first(), last() or nth() to choose one`
   }
 
-  /** Every resolved element. */
+  /** The caller's timeout, or the page's default. */
+  private _timeoutMs(timeout?: number): number {
+    return timeout ?? this._page._defaultTimeoutMs()
+  }
+
+  /**
+   * Resolve a single element, waiting for it to arrive and, when asked, to be
+   * rendered.
+   *
+   * Ambiguity is not waited out. Two matches is a fact about the query rather
+   * than a state the DOM will grow out of, so it throws at once — waiting would
+   * spend the whole timeout to report a problem that was already certain.
+   */
+  private async _waitForOne(
+    state: 'attached' | 'visible',
+    options: { timeout?: number, enabled?: boolean, action?: string } = {},
+  ): Promise<any> {
+    const goal = options.action ? `be actionable for ${options.action}()` : `be ${state}`
+
+    return waitUntil(
+      () => {
+        const matches = this._all()
+
+        if (matches.length > 1)
+          throw new Error(this._ambiguous(matches.length))
+
+        if (matches.length === 0)
+          return { done: false, reason: 'no element matched' }
+
+        const element = matches[0]
+
+        if (state === 'visible' && !this._page._isRendered(element))
+          return { done: false, reason: 'an element matched, but it was hidden' }
+
+        if (options.enabled && element.disabled === true)
+          return { done: false, reason: 'an element matched, but it was disabled' }
+
+        return { done: true, value: element }
+      },
+      {
+        timeout: this._timeoutMs(options.timeout),
+        describe: reason => `Timed out waiting for ${this._description} to ${goal}: ${reason}`,
+      },
+    )
+  }
+
+  /**
+   * The element an action should act on: present, rendered and not disabled.
+   *
+   * Editability is deliberately not part of the wait. Playwright checks it for
+   * `fill`, but a readonly input here is a fact about the markup rather than a
+   * state that resolves itself, so waiting on it would only delay the error.
+   */
+  private async _actionTarget(action: string, timeout?: number): Promise<any> {
+    return this._waitForOne('visible', { timeout, enabled: true, action })
+  }
+
+  /**
+   * Wait for the matches to reach `state`, or throw.
+   *
+   * The negative states are not strict. An absence has no single element to be
+   * strict about — two hidden copies are as gone as one — and a strictness
+   * error while waiting for something to disappear would be perverse.
+   */
+  async waitFor(options: WaitForOptions = {}): Promise<void> {
+    const state = options.state ?? 'visible'
+
+    if (state === 'attached' || state === 'visible') {
+      await this._waitForOne(state, { timeout: options.timeout })
+      return
+    }
+
+    await waitUntil<undefined>(
+      () => {
+        const matches = this._all()
+
+        if (state === 'detached') {
+          return matches.length === 0
+            ? { done: true, value: undefined }
+            : { done: false, reason: `${matches.length} element(s) were still attached` }
+        }
+
+        const shown = matches.filter(element => this._page._isRendered(element))
+        return shown.length === 0
+          ? { done: true, value: undefined }
+          : { done: false, reason: `${shown.length} element(s) were still visible` }
+      },
+      {
+        timeout: this._timeoutMs(options.timeout),
+        describe: reason => `Timed out waiting for ${this._description} to be ${state}: ${reason}`,
+      },
+    )
+  }
+
+  /**
+   * The resolved element, as an escape hatch into the DOM.
+   *
+   * Waits for it to be attached, but not for it to be visible: this is the hook
+   * people reach for to inspect markup that is deliberately hidden.
+   */
+  async elementHandle(options: ActionOptions = {}): Promise<any> {
+    return this._waitForOne('attached', { timeout: options.timeout })
+  }
+
+  /**
+   * Every resolved element, right now.
+   *
+   * One-shot, like `count()`: this is a question about the current DOM, and
+   * Playwright's `all()` does not wait either.
+   */
   async elementHandles(): Promise<any[]> {
     return this._all()
   }
@@ -302,44 +443,55 @@ export class Locator {
 
   // ------------------------------------------------------------------- actions
 
-  async click(): Promise<void> {
-    const element = this._one()
+  async click(options: ActionOptions = {}): Promise<void> {
+    this._press(await this._actionTarget('click', options.timeout))
+  }
+
+  /**
+   * Focus, then click.
+   *
+   * Shared with `check`/`uncheck` so they act on the element they already
+   * resolved, rather than re-resolving through `click()` and giving the DOM a
+   * chance to change between the decision and the act.
+   */
+  private _press(element: any): void {
     element.focus?.()
     element.click?.()
   }
 
-  async focus(): Promise<void> {
-    this._one().focus?.()
+  /** Waits for the element to be attached, not for it to be visible. */
+  async focus(options: ActionOptions = {}): Promise<void> {
+    (await this._waitForOne('attached', { timeout: options.timeout })).focus?.()
   }
 
-  async blur(): Promise<void> {
-    this._one().blur?.()
+  async blur(options: ActionOptions = {}): Promise<void> {
+    (await this._waitForOne('attached', { timeout: options.timeout })).blur?.()
   }
 
-  async hover(): Promise<void> {
-    await this._page._hoverElement(this._one())
+  async hover(options: ActionOptions = {}): Promise<void> {
+    await this._page._hoverElement(await this._actionTarget('hover', options.timeout))
   }
 
-  async fill(value: string): Promise<void> {
-    await this._page._fillElement(this._one(), value)
+  async fill(value: string, options: ActionOptions = {}): Promise<void> {
+    await this._page._fillElement(await this._actionTarget('fill', options.timeout), value)
   }
 
-  async type(text: string, options: { delay?: number } = {}): Promise<void> {
-    await this._page._typeIntoElement(this._one(), text, options)
+  async type(text: string, options: { delay?: number, timeout?: number } = {}): Promise<void> {
+    await this._page._typeIntoElement(await this._actionTarget('type', options.timeout), text, options)
   }
 
   /** Tick a checkbox or radio, doing nothing when it is already ticked. */
-  async check(): Promise<void> {
-    const element = this._one()
+  async check(options: ActionOptions = {}): Promise<void> {
+    const element = await this._actionTarget('check', options.timeout)
     if (element.checked !== true)
-      await this.click()
+      this._press(element)
   }
 
   /** Untick a checkbox, doing nothing when it is already clear. */
-  async uncheck(): Promise<void> {
-    const element = this._one()
+  async uncheck(options: ActionOptions = {}): Promise<void> {
+    const element = await this._actionTarget('uncheck', options.timeout)
     if (element.checked === true)
-      await this.click()
+      this._press(element)
   }
 }
 

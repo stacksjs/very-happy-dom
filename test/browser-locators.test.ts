@@ -168,9 +168,13 @@ describe('strictness', () => {
   })
 
   test('an action names what it could not find', async () => {
-    await expect(page().getByRole('button', { name: 'Nope' }).click())
+    // An action auto-waits now (#1604), so this reports a timeout rather than
+    // an immediate miss. The timeout is passed explicitly because the default
+    // is 30s: asserting an absence through an action costs the full wait, which
+    // is why `toHaveCount(0)` is the better way to ask.
+    await expect(page().getByRole('button', { name: 'Nope' }).click({ timeout: 50 }))
       .rejects
-      .toThrow('No element matches')
+      .toThrow(/Timed out waiting for getByRole\("button"\).*no element matched/)
   })
 })
 
