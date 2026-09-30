@@ -1,3 +1,14 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.12...HEAD)
+
+## 🚀 Features
+
+- **matchers**: add web-first assertions through expect.extend ([1f34e25](https://github.com/stacksjs/very-happy-dom/commit/1f34e25)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1603](https://github.com/stacksjs/very-happy-dom/issues/1603))
+- **locator**: auto-wait for actionability, and add locator.waitFor() ([ac1eba9](https://github.com/stacksjs/very-happy-dom/commit/ac1eba9)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1604](https://github.com/stacksjs/very-happy-dom/issues/1604), [#1605](https://github.com/stacksjs/very-happy-dom/issues/1605))
+
+## Contributors
+
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.1.11...HEAD)
 
 ## 🐛 Bug Fixes
