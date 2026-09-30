@@ -24,8 +24,19 @@
 
 import type { Locator } from './browser/Locator'
 import { expect } from 'bun:test'
+import { checkedState } from './aria/state'
 import { matchesText, normalize } from './browser/Locator'
 import { POLL_INTERVAL_MS } from './browser/waiting'
+
+/**
+ * Raised by a judge when the element is the wrong kind of thing for the matcher.
+ *
+ * Not a state the DOM will grow out of, so it is thrown rather than polled — the
+ * same reasoning that makes a strictness violation immediate. Without it, asking
+ * a `<div>` whether it is checked would spend the whole timeout and then report
+ * that it was not, which is true and useless.
+ */
+class NotApplicable extends Error {}
 
 /** What one look at the subject found. */
 interface Judgement {
@@ -221,7 +232,10 @@ function onElement(locator: any, judge: (element: any) => Judgement | Promise<Ju
     try {
       return await judge(elements[0])
     }
-    catch {
+    catch (error) {
+      if (error instanceof NotApplicable)
+        throw error
+
       // The DOM moved between resolving and reading. That is not an answer, so
       // keep polling rather than reporting a read failure as a wrong value.
       return { pass: false, actual: 'the element changed while it was being read' }
@@ -404,12 +418,39 @@ export const matchers = {
     ))
   },
 
-  async toBeChecked(this: MatcherContext, received: unknown, options: AssertionOptions & { checked?: boolean } = {}): Promise<MatcherResult> {
+  async toBeChecked(
+    this: MatcherContext,
+    received: unknown,
+    options: AssertionOptions & { checked?: boolean, indeterminate?: boolean } = {},
+  ): Promise<MatcherResult> {
     const locator = asLocator(received, 'toBeChecked')
+    const wantsMixed = options.indeterminate === true
     const wanted = options.checked ?? true
-    return assertThat(this, locator, wanted ? 'checked' : 'unchecked', timeoutOf(locator, options.timeout), onElement(
+    const expectation = wantsMixed ? 'indeterminate' : (wanted ? 'checked' : 'unchecked')
+
+    return assertThat(this, locator, expectation, timeoutOf(locator, options.timeout), onElement(
       locator,
-      element => state((element.checked === true) === wanted, wanted ? 'checked' : 'unchecked', wanted ? 'unchecked' : 'checked'),
+      (element) => {
+        // Reads `aria-checked` as well as the native property, so a design
+        // system's role="checkbox" is answered truthfully (#1616).
+        const actual = checkedState(element)
+
+        if (actual === undefined) {
+          // Refused rather than answered `false`. A `.not.toBeChecked()` that
+          // passes against a plain <div> is the unconditional pass this matcher
+          // exists to stop, only moved somewhere harder to notice.
+          throw new NotApplicable(
+            `toBeChecked() expects a checkbox, radio or switch. ${locator} resolved to an element with no checked state — `
+            + 'a custom control needs role="checkbox" (or radio/switch) for aria-checked to mean anything.',
+          )
+        }
+
+        const label = actual === 'mixed' ? 'indeterminate' : (actual ? 'checked' : 'unchecked')
+
+        return wantsMixed
+          ? { pass: actual === 'mixed', actual: label }
+          : { pass: (actual === true) === wanted, actual: label }
+      },
     ))
   },
 
@@ -492,7 +533,7 @@ declare module 'bun:test' {
     ) => Promise<void>
     toBeEnabled: (options?: AssertionOptions) => Promise<void>
     toBeDisabled: (options?: AssertionOptions) => Promise<void>
-    toBeChecked: (options?: AssertionOptions & { checked?: boolean }) => Promise<void>
+    toBeChecked: (options?: AssertionOptions & { checked?: boolean, indeterminate?: boolean }) => Promise<void>
     toBeEditable: (options?: AssertionOptions) => Promise<void>
     toBeFocused: (options?: AssertionOptions) => Promise<void>
     /** No text and no child elements. */

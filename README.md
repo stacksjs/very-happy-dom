@@ -146,6 +146,14 @@ The one-shot rewrite — `expect(await page.getByRole('alert').textContent()).to
 drains is a race. `.not` waits for the opposite to become true rather than
 inverting a single sample.
 
+Checked state is read through ARIA, so a design system's
+`<div role="checkbox" aria-checked>` answers truthfully — `isChecked()`,
+`getByRole({ checked })`, `check()`/`uncheck()` and `toBeChecked()` all go through
+one predicate. `locator.checkedState()` returns `'mixed'` for a tri-state control,
+and `toBeChecked({ indeterminate: true })` asserts it. `toBeChecked()` refuses an
+element with no checked state rather than answering `false`, so
+`.not.toBeChecked()` cannot pass against a plain `<div>`.
+
 Locators: `toBeAttached`, `toBeVisible`, `toBeHidden`, `toHaveCount`,
 `toHaveText`, `toContainText`, `toHaveValue`, `toHaveAttribute`, `toHaveClass`,
 `toBeEnabled`, `toBeDisabled`, `toBeChecked`, `toBeEditable`, `toBeFocused`,

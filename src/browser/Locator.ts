@@ -24,6 +24,7 @@
  */
 
 import { accessibleName, computeRole, headingLevel } from '../aria/roles'
+import { checkedState, isChecked, isSelected } from '../aria/state'
 import { isExposedToAria } from '../aria/visibility'
 import { waitUntil } from './waiting'
 
@@ -450,8 +451,21 @@ export class Locator {
     return !(await this.isVisible())
   }
 
+  /**
+   * Whether the control is checked.
+   *
+   * Reads `aria-checked` as well as the native property, so a design system's
+   * `role="checkbox"` answers truthfully rather than always `false` (#1616).
+   * A tri-state `aria-checked="mixed"` is not checked; `checkedState()` is what
+   * distinguishes it.
+   */
   async isChecked(): Promise<boolean> {
-    return this._one().checked === true
+    return isChecked(this._one())
+  }
+
+  /** The full state, including `'mixed'` for a tri-state control. */
+  async checkedState(): Promise<boolean | 'mixed' | undefined> {
+    return checkedState(this._one())
   }
 
   async isEnabled(): Promise<boolean> {
@@ -511,17 +525,24 @@ export class Locator {
     await this._page._typeIntoElement(await this._actionTarget('type', options.timeout), text, options)
   }
 
-  /** Tick a checkbox or radio, doing nothing when it is already ticked. */
+  /**
+   * Tick a checkbox or radio, doing nothing when it is already ticked.
+   *
+   * The decision goes through the shared predicate. Reading `element.checked`
+   * directly meant a custom `role="checkbox"` always looked unchecked, so
+   * `check()` clicked it every time — turning an already-ticked control off,
+   * which is the opposite of what it promises (#1616).
+   */
   async check(options: ActionOptions = {}): Promise<void> {
     const element = await this._actionTarget('check', options.timeout)
-    if (element.checked !== true)
+    if (!isChecked(element))
       this._press(element)
   }
 
   /** Untick a checkbox, doing nothing when it is already clear. */
   async uncheck(options: ActionOptions = {}): Promise<void> {
     const element = await this._actionTarget('uncheck', options.timeout)
-    if (element.checked === true)
+    if (isChecked(element))
       this._press(element)
   }
 
@@ -585,13 +606,13 @@ export function byRole(root: any, role: string, options: GetByRoleOptions = {}):
     if (options.name !== undefined && !matchesText(accessibleName(element), options.name, options.exact))
       return false
 
-    if (options.checked !== undefined && (element.checked === true) !== options.checked)
+    if (options.checked !== undefined && isChecked(element) !== options.checked)
       return false
 
     if (options.disabled !== undefined && (element.disabled === true) !== options.disabled)
       return false
 
-    if (options.selected !== undefined && (element.selected === true) !== options.selected)
+    if (options.selected !== undefined && isSelected(element) !== options.selected)
       return false
 
     if (options.expanded !== undefined && (element.getAttribute?.('aria-expanded') === 'true') !== options.expanded)

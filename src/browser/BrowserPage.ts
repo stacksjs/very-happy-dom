@@ -1,3 +1,4 @@
+import { isChecked } from '../aria/state'
 import { isRendered } from '../aria/visibility'
 import type { RequestInterceptionHandler } from '../network/RequestInterceptor'
 import type { BrowserContext } from './BrowserContext'
@@ -901,7 +902,7 @@ export class BrowserPage {
 
   /** Whether a checkbox or radio is checked. */
   async isChecked(selector: string): Promise<boolean> {
-    return this._element(selector).checked === true
+    return isChecked(this._element(selector))
   }
 
   /** Whether the control accepts interaction. */
