@@ -75,6 +75,8 @@ export type { EventTarget, InputFile, IBrowserPageViewport, LoadState, PageEvent
 export { BrowserPage } from './browser/BrowserPage'
 
 export type { ICookie } from './browser/CookieContainer'
+export type { DialogOutcome, DialogType } from './browser/Dialog'
+export { Dialog } from './browser/Dialog'
 export { CookieContainer, CookieSameSiteEnum } from './browser/CookieContainer'
 export type { CustomEventInit } from './events/CustomEvent'
 // Export Event APIs

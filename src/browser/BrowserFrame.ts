@@ -53,6 +53,7 @@ export class BrowserFrame {
     this._deviceBaseline = { ...((this.window as any)._settings?.device ?? {}) }
 
     this._forwardConsole()
+    this._installDialogs()
 
     // The window owns its document — don't build a second one alongside it, or
     // `frame.document` and `frame.window.document` would diverge.
@@ -396,6 +397,34 @@ export class BrowserFrame {
    * The window's console is the host's by default, so page output went
    * straight to stdout and `page.on('console')` never ran (#1602).
    */
+  /**
+   * Route the window's dialog functions through the page.
+   *
+   * Installed on the frame's window rather than built into `Window`, the same way
+   * the console is forwarded: a standalone `new Window()` keeps its stubs, which
+   * are the right answer when there is no page to ask (#1612).
+   */
+  private _installDialogs(): void {
+    const window = this.window as any
+    const page = this._page
+
+    window.alert = (message?: string): void => {
+      // Nothing to return, but it is reported, so a test can assert an alert
+      // happened — which was impossible when this was a bare no-op.
+      page._requestDialog('alert', String(message ?? ''))
+    }
+
+    window.confirm = (message?: string): boolean => {
+      return page._requestDialog('confirm', String(message ?? '')).accepted
+    }
+
+    window.prompt = (message?: string, defaultValue?: string): string | null => {
+      const fallback = defaultValue === undefined ? '' : String(defaultValue)
+      const outcome = page._requestDialog('prompt', String(message ?? ''), fallback)
+      return outcome.accepted ? (outcome.text ?? fallback) : null
+    }
+  }
+
   private _forwardConsole(): void {
     const window = this.window as any
     const underlying = window.console

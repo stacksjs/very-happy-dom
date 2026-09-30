@@ -174,6 +174,25 @@ disabled — and `locator.waitFor({ state })` covers `attached`, `detached`,
 stable (not mid-animation) and receives-events (not covered by another element).
 Both need a layout pass.
 
+### Dialogs
+
+```typescript
+page.on('dialog', dialog => dialog.accept())          // confirm() returns true
+page.on('dialog', dialog => dialog.accept('Ridge'))   // prompt() returns 'Ridge'
+page.on('dialog', dialog => dialog.dismiss())         // false / null
+```
+
+Without a handler every dialog is dismissed, which is Playwright's default and
+what the old hardcoded `false`/`null` did — so nothing changes unless you opt in.
+`dialog` carries `type`, `message` and `defaultValue`, so a test can assert *which*
+dialog appeared, including an `alert()`.
+
+The decision must be made **synchronously**: `confirm()` is a synchronous DOM API,
+so a handler that awaits before deciding answers after the page has already acted
+on the default. That throws rather than letting the wrong answer through.
+`dialog.accept()` records the decision immediately, so `async dialog =>
+await dialog.accept()` is fine — it is awaiting *before* deciding that is not.
+
 ### Combining Locators
 
 ```typescript

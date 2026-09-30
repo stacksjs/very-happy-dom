@@ -9,6 +9,8 @@ import type { GetByRoleOptions, GetByTextOptions, WaitForState } from './Locator
 import { matchesPattern, RouteRegistry } from '../network/routing'
 import { byAttribute, byLabel, byRole, byText, Locator } from './Locator'
 import { BrowserFrame } from './BrowserFrame'
+import type { DialogOutcome, DialogType } from './Dialog'
+import { Dialog } from './Dialog'
 import { canonicalModifier, codeFor, modifierFlagFor, parseCombination, shiftKeyValue } from './keys'
 import { TimeoutError, waitUntil } from './waiting'
 
@@ -17,7 +19,7 @@ export interface IBrowserPageViewport {
   height: number
 }
 
-export type PageEventType = 'console' | 'request' | 'response' | 'error' | 'load' | 'domcontentloaded'
+export type PageEventType = 'console' | 'request' | 'response' | 'error' | 'load' | 'domcontentloaded' | 'dialog'
 // eslint-disable-next-line pickier/no-unused-vars
 export type PageEventHandler = (event: any) => void
 
@@ -1311,6 +1313,49 @@ export class BrowserPage {
     if (event === 'console' && this.virtualConsolePrinter) {
       this.virtualConsolePrinter(data.type, ...data.args)
     }
+  }
+
+  /**
+   * Ask a `dialog` handler what to do, and answer synchronously.
+   *
+   * @internal
+   *
+   * With no handler, every dialog is dismissed, which is Playwright's default and
+   * happens to be exactly what the old hardcoded `false`/`null` did — so nothing
+   * changes for code that does not opt in.
+   *
+   * `emit()` is not used because this needs the handlers' effect on the dialog,
+   * not just to notify them.
+   */
+  _requestDialog(type: DialogType, message: string, defaultValue = ''): DialogOutcome {
+    const handlers = this._eventListeners.get('dialog')
+    if (!handlers || handlers.size === 0)
+      return { accepted: false, text: null }
+
+    const dialog = new Dialog(type, message, defaultValue)
+
+    let asynchronous = false
+    for (const handler of handlers) {
+      const result = handler(dialog) as unknown
+      if (typeof (result as any)?.then === 'function')
+        asynchronous = true
+    }
+
+    if (!dialog._wasSettled && asynchronous) {
+      // The decision is coming, but it will arrive after `confirm()` has already
+      // returned the default and the page has acted on it. Reported at the point
+      // of the mistake rather than letting the wrong answer through, which is the
+      // failure this whole feature exists to remove.
+      throw new Error(
+        `A page.on('dialog') handler for ${type}() did not decide before returning. `
+        + 'Dialogs are synchronous, so call dialog.accept() or dialog.dismiss() before the handler awaits anything.',
+      )
+    }
+
+    // A handler that only inspected the message leaves it dismissed, the same as
+    // no handler at all. That is a legitimate thing to want, and it fails loudly
+    // in the test rather than quietly in the page.
+    return dialog._outcome()
   }
 
   /**
