@@ -111,18 +111,30 @@ describe('visibility', () => {
     expect(await subject.isHidden('#a')).toBe(false)
   })
 
-  test('size and position are not consulted, which is a known limit', async () => {
+  test('a declared zero size is invisible; an undeclared one is unknown', async () => {
     const subject = page()
     const document = subject.mainFrame.document
-    const zero = document.createElement('div')
-    zero.id = 'zero'
-    zero.style.width = '0'
-    zero.style.height = '0'
-    document.body.appendChild(zero)
 
-    // A browser would call this invisible. There is no layout here, so it is
-    // reported visible; asserting it keeps the boundary honest.
-    expect(await subject.isVisible('#zero')).toBe(true)
+    const collapsed = document.createElement('div')
+    collapsed.id = 'zero'
+    collapsed.style.width = '0'
+    collapsed.style.height = '0'
+    document.body.appendChild(collapsed)
+
+    const unsized = document.createElement('div')
+    unsized.id = 'unsized'
+    unsized.textContent = 'text'
+    document.body.appendChild(unsized)
+
+    // This used to report visible, documented as a known limit. It is now
+    // hidden (#1617): an author who writes `height: 0` has collapsed it.
+    expect(await subject.isVisible('#zero')).toBe(false)
+
+    // The boundary that remains, and the reason the rule is narrower than
+    // Playwright's. With no layout pass this element also measures 0 x 0, so
+    // consulting the box rather than the declaration would hide everything
+    // nobody styled.
+    expect(await subject.isVisible('#unsized')).toBe(true)
   })
 })
 

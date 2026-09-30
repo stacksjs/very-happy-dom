@@ -160,6 +160,14 @@ Locators: `toBeAttached`, `toBeVisible`, `toBeHidden`, `toHaveCount`,
 `toBeEmpty`. Pages: `toHaveURL`, `toHaveTitle`. Each takes an optional
 `{ timeout }`, defaulting to `page.setDefaultTimeout()`.
 
+An element is hidden by `display: none`, `visibility: hidden`, the `hidden`
+attribute, or a **declared** zero size — `height: 0`, `max-height: 0` and the
+like, which is how a closed accordion or drawer is built when the author wants a
+transition. Declared is the operative word: with no layout pass an element nobody
+sized also measures `0 x 0`, so a zero box means *unknown* rather than
+*collapsed*, and only a declaration is trusted. That is narrower than
+Playwright's non-empty-bounding-box rule, deliberately.
+
 Locator actions auto-wait on the same terms — present, rendered and not
 disabled — and `locator.waitFor({ state })` covers `attached`, `detached`,
 `visible` and `hidden`. Two conditions Playwright checks are not checked here:
