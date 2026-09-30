@@ -30,7 +30,60 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      # Every release from v0.1.11 to v0.3.0 shipped with an empty GitHub Release
+      # body, because nothing passed the notes on — so everything written for them
+      # lived only in the git tag object, where nobody reads it.
+      - name: Collect the release notes
+        id: notes
+        run: |
+          set -euo pipefail
+
+          # The annotated tag's message is where the notes are authored. The
+          # trailing "chore: release vX.Y.Z" line is git plumbing, not notes.
+          notes="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/^chore: release v/d')"
+          notes_source='the tag message'
+
+          # A lightweight tag has no message of its own: `%(contents)` falls back
+          # to the commit's, which the line above then strips. That is the mistake
+          # that shipped v0.1.11, so this degrades to the changelog rather than to
+          # nothing, and says so.
+          if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
+            echo "::warning title=No annotated tag message::$GITHUB_REF_NAME carries no message, so the release notes fall back to CHANGELOG.md. Use 'git tag -a' to author them."
+            notes="$(awk '/^\[Compare changes\]/{n++} n==1' CHANGELOG.md)"
+            notes_source='CHANGELOG.md'
+          fi
+
+          {
+            echo 'body<<VERY_HAPPY_DOM_NOTES_EOF'
+            printf '%s\n' "$notes"
+            echo 'VERY_HAPPY_DOM_NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+          # Reported so the next release's log says whether notes were found,
+          # rather than leaving an empty body to be noticed months later.
+          printf 'Release notes: %s characters from %s.\n' "${#notes}" "$notes_source" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Create GitHub Release
         uses: stacksjs/action-releaser@v1.2.11
+        with:
+          note: ${{ steps.notes.outputs.body }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # The notes reaching the release is the one part of this that cannot be
+      # tested without cutting a release, so it is checked here instead. An empty
+      # body went unnoticed for four releases; this makes the next one fail loudly
+      # rather than quietly.
+      - name: Verify the release carries its notes
+        run: |
+          set -euo pipefail
+
+          length="$(gh release view "$GITHUB_REF_NAME" --json body --jq '.body | length')"
+          printf 'Release body: %s characters.\n' "$length" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$length" -lt 50 ]; then
+            echo "::error title=Release notes missing::The release for $GITHUB_REF_NAME has a body of $length characters. The notes were collected but did not reach it."
+            exit 1
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
