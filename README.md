@@ -174,6 +174,29 @@ disabled — and `locator.waitFor({ state })` covers `attached`, `detached`,
 stable (not mid-animation) and receives-events (not covered by another element).
 Both need a layout pass.
 
+### Combining Locators
+
+```typescript
+// Pick a row by what is inside it, then act within that row
+const row = page.getByRole('row').filter({ has: page.getByText('Ridge Loop') })
+await row.getByRole('button', { name: 'Delete' }).click()
+
+// Two possible outcomes, without racing them
+await expect(page.getByRole('alert').or(page.getByText('Saved'))).toBeVisible()
+
+// Only the elements both match
+await page.getByRole('button').and(page.locator('.primary')).click()
+```
+
+`filter({ has })` and `{ hasNot }` query the inner locator **from each candidate**,
+not from the page — so a match elsewhere does not qualify a row. `hasText` is not
+a substitute: it compares the candidate's whole text, so a neighbouring column
+containing the string matches too, and it cannot ask about a role.
+
+`filter()` throws on an unrecognised key. Ignoring one is how `filter({ has })`
+used to look like it worked while matching every candidate. `or()` returns
+document order with duplicates removed.
+
 ### Media Queries
 
 ```typescript

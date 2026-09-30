@@ -29,8 +29,16 @@ import { checkedState, isChecked, isSelected } from '../aria/state'
 import { isExposedToAria } from '../aria/visibility'
 import { waitUntil } from './waiting'
 
-/** Returns the current matches, re-evaluated on each call. */
-type Resolver = () => any[]
+/**
+ * Returns the current matches, re-evaluated on each call.
+ *
+ * The optional root is what makes `filter({ has })` work. Playwright queries an
+ * inner locator *starting from the outer match*, not from the document, so a
+ * locator has to be answerable against an arbitrary element rather than only
+ * against the page. Every derived locator threads it through to its parent.
+ */
+// eslint-disable-next-line pickier/no-unused-vars
+type Resolver = (root?: any) => any[]
 
 export interface GetByRoleOptions {
   name?: string | RegExp
@@ -53,7 +61,22 @@ export interface GetByTextOptions {
 export interface FilterOptions {
   hasText?: string | RegExp
   hasNotText?: string | RegExp
+  /** Keep only candidates containing a match for this locator. */
+  has?: Locator
+  /** Keep only candidates containing no match for this locator. */
+  hasNot?: Locator
 }
+
+/**
+ * The keys `filter()` understands.
+ *
+ * Checked at runtime, not only in the type. `filter({ has })` used to be dropped
+ * without complaint — the option was read by name and an unknown one simply was
+ * not — so the call looked like it worked and returned a locator matching every
+ * candidate. A later `.first()` then bound to the wrong one and nothing reported
+ * a problem (#1619).
+ */
+const FILTER_KEYS: readonly string[] = ['hasText', 'hasNotText', 'has', 'hasNot']
 
 /**
  * What a wait is waiting for.
@@ -73,6 +96,24 @@ export interface WaitForOptions {
 /** Every action takes a timeout, falling back to the page's default. */
 export interface ActionOptions {
   timeout?: number
+}
+
+/**
+ * De-duplicate and sort into document order.
+ *
+ * `or()` can match the same element on both sides, and returning it twice would
+ * make `count()` wrong and strict mode fire on a single element.
+ */
+function inDocumentOrder(elements: any[]): any[] {
+  const unique = [...new Set(elements)]
+
+  return unique.sort((a, b) => {
+    const position = a.compareDocumentPosition?.(b)
+    if (typeof position !== 'number' || position === 0)
+      return 0
+    // DOCUMENT_POSITION_FOLLOWING = 4: b comes after a.
+    return (position & 4) !== 0 ? -1 : 1
+  })
 }
 
 /** @internal Collapse whitespace, the way Playwright compares rendered text. */
@@ -114,8 +155,8 @@ export class Locator {
   // ---------------------------------------------------------------- resolution
 
   /** Every current match. */
-  private _all(): any[] {
-    return this._resolver()
+  private _all(root?: any): any[] {
+    return this._resolver(root)
   }
 
   /**
@@ -263,33 +304,102 @@ export class Locator {
   locator(selector: string): Locator {
     return new Locator(
       this._page,
-      () => this._all().flatMap(element => Array.from(element.querySelectorAll?.(selector) ?? [])),
+      (root?: any) => this._all(root).flatMap(element => Array.from(element.querySelectorAll?.(selector) ?? [])),
       `${this._description} >> ${selector}`,
     )
   }
 
-  /** Keep only matches that satisfy the given text conditions. */
+  /**
+   * Keep only matches satisfying the given conditions.
+   *
+   * `has` and `hasNot` take a locator and are queried *from each candidate*, not
+   * from the page — so a row qualifies only when the inner locator matches
+   * something inside it, and a match elsewhere on the page does not count.
+   *
+   * `hasText` is not a substitute: it compares the candidate's whole text, so a
+   * row whose neighbouring column happens to contain the string matches too, and
+   * it cannot ask about a role at all.
+   */
   filter(options: FilterOptions): Locator {
+    const unknown = Object.keys(options).filter(key => !FILTER_KEYS.includes(key))
+    if (unknown.length > 0) {
+      // Ignoring one silently is how `filter({ has })` came to look like it
+      // worked while matching everything.
+      throw new Error(
+        `filter() does not understand ${unknown.map(key => JSON.stringify(key)).join(', ')}. `
+        + `Supported: ${FILTER_KEYS.join(', ')}.`,
+      )
+    }
+
+    const describe = [
+      options.hasText !== undefined ? `hasText=${String(options.hasText)}` : null,
+      options.hasNotText !== undefined ? `hasNotText=${String(options.hasNotText)}` : null,
+      options.has !== undefined ? `has=${String(options.has)}` : null,
+      options.hasNot !== undefined ? `hasNot=${String(options.hasNot)}` : null,
+    ].filter(Boolean).join(', ')
+
     return new Locator(
       this._page,
-      () => this._all().filter((element) => {
+      (root?: any) => this._all(root).filter((element) => {
         const text = normalize(element.textContent)
         if (options.hasText !== undefined && !matchesText(text, options.hasText))
           return false
         if (options.hasNotText !== undefined && matchesText(text, options.hasNotText))
           return false
+        // Re-rooted at the candidate, which is the whole point.
+        if (options.has !== undefined && options.has._all(element).length === 0)
+          return false
+        if (options.hasNot !== undefined && options.hasNot._all(element).length > 0)
+          return false
         return true
       }),
-      `${this._description} (filtered)`,
+      `${this._description} (${describe || 'filtered'})`,
     )
+  }
+
+  /**
+   * Either this locator's matches or the other's, in document order.
+   *
+   * What handles a page with two possible outcomes — a success banner or an error
+   * one — without racing them:
+   *
+   *     await expect(page.getByRole('alert').or(page.getByText('Saved'))).toBeVisible()
+   *
+   * Not strict in itself; strictness still applies when the result is used for an
+   * action, which falls out of the single-element resolution.
+   */
+  or(other: Locator): Locator {
+    return new Locator(
+      this._page,
+      (root?: any) => inDocumentOrder([...this._all(root), ...other._all(root)]),
+      `${this._description} | ${other}`,
+    )
+  }
+
+  /** Only the elements both locators match. */
+  and(other: Locator): Locator {
+    return new Locator(
+      this._page,
+      (root?: any) => {
+        const mine = this._all(root)
+        const theirs = new Set(other._all(root))
+        return mine.filter(element => theirs.has(element))
+      },
+      `${this._description} & ${other}`,
+    )
+  }
+
+  /** The page this locator queries. */
+  get page(): any {
+    return this._page
   }
 
   /** The nth match, counting from zero; a negative index counts from the end. */
   nth(index: number): Locator {
     return new Locator(
       this._page,
-      () => {
-        const matches = this._all()
+      (root?: any) => {
+        const matches = this._all(root)
         const resolved = index < 0 ? matches.length + index : index
         const match = matches[resolved]
         return match ? [match] : []
@@ -321,7 +431,7 @@ export class Locator {
   getByRole(role: string, options: GetByRoleOptions = {}): Locator {
     return new Locator(
       this._page,
-      () => this._all().flatMap(root => byRole(root, role, options)),
+      (root?: any) => this._all(root).flatMap(scope => byRole(scope, role, options)),
       `${this._description} >> role=${role}`,
     )
   }
@@ -329,7 +439,7 @@ export class Locator {
   getByText(text: string | RegExp, options: GetByTextOptions = {}): Locator {
     return new Locator(
       this._page,
-      () => this._all().flatMap(root => byText(root, text, options)),
+      (root?: any) => this._all(root).flatMap(scope => byText(scope, text, options)),
       `${this._description} >> text=${String(text)}`,
     )
   }
@@ -337,7 +447,7 @@ export class Locator {
   getByLabel(text: string | RegExp, options: GetByTextOptions = {}): Locator {
     return new Locator(
       this._page,
-      () => this._all().flatMap(root => byLabel(root, text, options)),
+      (root?: any) => this._all(root).flatMap(scope => byLabel(scope, text, options)),
       `${this._description} >> label=${String(text)}`,
     )
   }
@@ -345,7 +455,7 @@ export class Locator {
   getByPlaceholder(text: string | RegExp, options: GetByTextOptions = {}): Locator {
     return new Locator(
       this._page,
-      () => this._all().flatMap(root => byAttribute(root, 'placeholder', text, options)),
+      (root?: any) => this._all(root).flatMap(scope => byAttribute(scope, 'placeholder', text, options)),
       `${this._description} >> placeholder=${String(text)}`,
     )
   }
@@ -353,7 +463,7 @@ export class Locator {
   getByAltText(text: string | RegExp, options: GetByTextOptions = {}): Locator {
     return new Locator(
       this._page,
-      () => this._all().flatMap(root => byAttribute(root, 'alt', text, options)),
+      (root?: any) => this._all(root).flatMap(scope => byAttribute(scope, 'alt', text, options)),
       `${this._description} >> alt=${String(text)}`,
     )
   }
@@ -361,7 +471,7 @@ export class Locator {
   getByTitle(text: string | RegExp, options: GetByTextOptions = {}): Locator {
     return new Locator(
       this._page,
-      () => this._all().flatMap(root => byAttribute(root, 'title', text, options)),
+      (root?: any) => this._all(root).flatMap(scope => byAttribute(scope, 'title', text, options)),
       `${this._description} >> title=${String(text)}`,
     )
   }
@@ -369,7 +479,7 @@ export class Locator {
   getByTestId(testId: string | RegExp): Locator {
     return new Locator(
       this._page,
-      () => this._all().flatMap(root => byAttribute(root, this._page._testIdAttribute(), testId, { exact: true })),
+      (root?: any) => this._all(root).flatMap(scope => byAttribute(scope, this._page._testIdAttribute(), testId, { exact: true })),
       `${this._description} >> testId=${String(testId)}`,
     )
   }

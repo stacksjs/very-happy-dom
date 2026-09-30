@@ -1085,7 +1085,7 @@ export class BrowserPage {
   locator(selector: string): Locator {
     return new Locator(
       this,
-      () => Array.from(this._locatorRoot().querySelectorAll?.(selector) ?? []),
+      (root?: any) => Array.from((root ?? this._locatorRoot()).querySelectorAll?.(selector) ?? []),
       `locator(${JSON.stringify(selector)})`,
     )
   }
@@ -1094,7 +1094,7 @@ export class BrowserPage {
   getByRole(role: string, options: GetByRoleOptions = {}): Locator {
     return new Locator(
       this,
-      () => byRole(this._locatorRoot(), role, options),
+      (root?: any) => byRole(root ?? this._locatorRoot(), role, options),
       `getByRole(${JSON.stringify(role)})`,
     )
   }
@@ -1103,7 +1103,7 @@ export class BrowserPage {
   getByText(text: string | RegExp, options: GetByTextOptions = {}): Locator {
     return new Locator(
       this,
-      () => byText(this._locatorRoot(), text, options),
+      (root?: any) => byText(root ?? this._locatorRoot(), text, options),
       `getByText(${String(text)})`,
     )
   }
@@ -1112,7 +1112,7 @@ export class BrowserPage {
   getByLabel(text: string | RegExp, options: GetByTextOptions = {}): Locator {
     return new Locator(
       this,
-      () => byLabel(this._locatorRoot(), text, options),
+      (root?: any) => byLabel(root ?? this._locatorRoot(), text, options),
       `getByLabel(${String(text)})`,
     )
   }
@@ -1121,7 +1121,7 @@ export class BrowserPage {
   getByPlaceholder(text: string | RegExp, options: GetByTextOptions = {}): Locator {
     return new Locator(
       this,
-      () => byAttribute(this._locatorRoot(), 'placeholder', text, options),
+      (root?: any) => byAttribute(root ?? this._locatorRoot(), 'placeholder', text, options),
       `getByPlaceholder(${String(text)})`,
     )
   }
@@ -1130,7 +1130,7 @@ export class BrowserPage {
   getByAltText(text: string | RegExp, options: GetByTextOptions = {}): Locator {
     return new Locator(
       this,
-      () => byAttribute(this._locatorRoot(), 'alt', text, options),
+      (root?: any) => byAttribute(root ?? this._locatorRoot(), 'alt', text, options),
       `getByAltText(${String(text)})`,
     )
   }
@@ -1139,7 +1139,7 @@ export class BrowserPage {
   getByTitle(text: string | RegExp, options: GetByTextOptions = {}): Locator {
     return new Locator(
       this,
-      () => byAttribute(this._locatorRoot(), 'title', text, options),
+      (root?: any) => byAttribute(root ?? this._locatorRoot(), 'title', text, options),
       `getByTitle(${String(text)})`,
     )
   }
@@ -1148,7 +1148,7 @@ export class BrowserPage {
   getByTestId(testId: string | RegExp): Locator {
     return new Locator(
       this,
-      () => byAttribute(this._locatorRoot(), this._testId, testId, { exact: true }),
+      (root?: any) => byAttribute(root ?? this._locatorRoot(), this._testId, testId, { exact: true }),
       `getByTestId(${String(testId)})`,
     )
   }
