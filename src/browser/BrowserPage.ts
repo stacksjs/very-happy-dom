@@ -186,6 +186,11 @@ export class BrowserPage {
   /**
    * Evaluates code in the page's context
    */
+  /** @internal Evaluate against the main frame with an explicit argument list. */
+  _evaluateWith(code: string | ((...args: any[]) => any), args: any[]): any {
+    return (this.mainFrame as any)._evaluateWith(code, args)
+  }
+
   evaluate(code: string | ((...args: any[]) => any), arg?: any): any {
     return this.mainFrame.evaluate(code, arg)
   }
@@ -812,6 +817,22 @@ export class BrowserPage {
   /**
    * Read the page's title.
    */
+  /**
+   * Run `fn` against the first element matching `selector`.
+   *
+   * The discouraged form, kept for ports: it takes the first match rather than
+   * refusing an ambiguous selector, which is exactly the silence
+   * `locator().evaluate()` exists to avoid. Prefer that.
+   */
+  async $eval(selector: string, fn: string | ((element: any, arg?: any) => any), arg?: any): Promise<any> {
+    return this.locator(selector).first().evaluate(fn, arg)
+  }
+
+  /** Run `fn` against every element matching `selector`, as an array. */
+  async $$eval(selector: string, fn: string | ((elements: any[], arg?: any) => any), arg?: any): Promise<any> {
+    return this.locator(selector).evaluateAll(fn, arg)
+  }
+
   async title(): Promise<string> {
     return this.mainFrame.document.title ?? ''
   }

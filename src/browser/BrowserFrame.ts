@@ -244,19 +244,38 @@ export class BrowserFrame {
    * result directly.
    */
   evaluate(code: string | ((...args: any[]) => any), arg?: any): any {
+    return this._evaluateWith(code, [arg])
+  }
+
+  /**
+   * @internal Evaluate against this frame with an explicit argument list.
+   *
+   * `evaluate()` passes exactly one argument, which is Playwright's shape for a
+   * page. A locator's callback takes two — the element, then the caller's arg —
+   * so the list has to be open-ended rather than special-cased per call site.
+   *
+   * The function is recompiled through `new Function` with `with (window)`, so a
+   * bare `document` resolves against this frame rather than the outer scope.
+   * That also means the callback loses its closure, as it does in Playwright,
+   * where the function crosses a process boundary. Deliberately kept: a callback
+   * that could see its closure here and not there would let a test pass locally
+   * and fail once ported, which is the wrong way round for a library whose point
+   * is that specs move between the two.
+   */
+  _evaluateWith(code: string | ((...args: any[]) => any), args: any[]): any {
     if (typeof code === 'function') {
       // eslint-disable-next-line no-new-func
-      const runner = new Function('window', 'document', 'arg', `with (window) { return (${code.toString()})(arg) }`)
-      return runner(this.window, this.document, arg)
+      const runner = new Function('window', 'document', 'args', `with (window) { return (${code.toString()})(...args) }`)
+      return runner(this.window, this.document, args)
     }
 
     // eslint-disable-next-line no-new-func
-    const runner = new Function('window', 'document', 'arg', `with (window) { return (${code}) }`)
-    const result = runner(this.window, this.document, arg)
+    const runner = new Function('window', 'document', 'args', `with (window) { return (${code}) }`)
+    const result = runner(this.window, this.document, args)
 
     // A string may itself be a function expression, which Playwright allows;
     // an expression that merely evaluates to a value is returned as-is.
-    return typeof result === 'function' ? result(arg) : result
+    return typeof result === 'function' ? result(...args) : result
   }
 
   /**

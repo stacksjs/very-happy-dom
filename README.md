@@ -158,6 +158,25 @@ disabled — and `locator.waitFor({ state })` covers `attached`, `detached`,
 stable (not mid-animation) and receives-events (not covered by another element).
 Both need a layout pass.
 
+### Running Code Against a Locator
+
+```typescript
+const ids = await page.locator('tbody tr').evaluateAll(els => els.map(el => el.dataset.id))
+const label = await page.getByRole('button').evaluate(el => el.dataset.state)
+
+await page.locator('li').allTextContents()   // raw textContent, per match
+await page.locator('li').allInnerTexts()     // rendered text: hidden subtrees left out
+```
+
+`evaluate()` is strict and waits for the element to be attached; `evaluateAll()`
+is neither, because many matches is its expected case and none is a legitimate
+`[]`. The element is the real node, so writing through it changes the document.
+
+Callbacks are recompiled against the frame's window and **cannot see their
+closure**, the same as in Playwright — pass anything they need as the second
+argument. `page.$eval` / `page.$$eval` exist for ports, but take the first match
+rather than refusing an ambiguous selector.
+
 ### Waiting on Page Events
 
 ```typescript

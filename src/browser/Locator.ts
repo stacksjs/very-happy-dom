@@ -394,6 +394,33 @@ export class Locator {
     return this._one().getAttribute?.(name) ?? null
   }
 
+  /**
+   * Every match's raw `textContent`, in document order.
+   *
+   * Raw: no trimming and no whitespace collapsing, which is what `textContent`
+   * means. `allInnerTexts()` is the rendered-text counterpart.
+   */
+  async allTextContents(): Promise<string[]> {
+    return this._all().map(element => String(element.textContent ?? ''))
+  }
+
+  /**
+   * Every match's `innerText`, in document order.
+   *
+   * Rendered text, so a `display: none` or `visibility: hidden` subtree is left
+   * out and the ends are trimmed — which is the difference from
+   * `allTextContents()`.
+   *
+   * Returned exactly as `innerText` gives it, including the fact that this
+   * implementation does not collapse interior runs of whitespace the way a
+   * browser does. Normalising here would make `allInnerTexts()` disagree with
+   * `innerText()` about the same element, and two APIs answering the same
+   * question differently is a worse bug than one that is imprecise.
+   */
+  async allInnerTexts(): Promise<string[]> {
+    return this._all().map(element => String(element.innerText ?? ''))
+  }
+
   /** The role this element carries, explicit or implicit. */
   async ariaRole(): Promise<string | null> {
     return computeRole(this._one())
@@ -496,6 +523,45 @@ export class Locator {
     const element = await this._actionTarget('uncheck', options.timeout)
     if (element.checked === true)
       this._press(element)
+  }
+
+  // ---------------------------------------------------------------- evaluating
+
+  /**
+   * Run `fn` against the single match, which arrives as its first argument.
+   *
+   * Strict, and waits for the element to be attached — the same terms as
+   * `elementHandle()`, since this is the same question with the round trip
+   * folded in. Not waited for visibility: reading an attribute off deliberately
+   * hidden markup is a fair thing to want.
+   *
+   * The element is the real node, not a copy, so mutating it through here
+   * changes the document.
+   *
+   * `fn` is recompiled against the frame's window and therefore cannot see its
+   * closure, as in Playwright. Anything it needs goes through `arg`.
+   */
+  async evaluate(
+    fn: string | ((element: any, arg?: any) => any),
+    arg?: any,
+    options: ActionOptions = {},
+  ): Promise<any> {
+    const element = await this._waitForOne('attached', { timeout: options.timeout })
+    return this._page._evaluateWith(fn, [element, arg])
+  }
+
+  /**
+   * Run `fn` against every current match, which arrives as an array.
+   *
+   * Deliberately neither strict nor waiting: many matches is the expected case,
+   * and none is a legitimate answer of `[]` rather than something to wait for.
+   * That is Playwright's split between `evaluate` and `evaluateAll`.
+   */
+  async evaluateAll(
+    fn: string | ((elements: any[], arg?: any) => any),
+    arg?: any,
+  ): Promise<any> {
+    return this._page._evaluateWith(fn, [this._all(), arg])
   }
 }
 
