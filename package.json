@@ -36,6 +36,10 @@
       "types": "./dist/register.d.ts",
       "import": "./dist/register.js"
     },
+    "./matchers": {
+      "types": "./dist/matchers.d.ts",
+      "import": "./dist/matchers.js"
+    },
     "./jsdom": {
       "types": "./dist/jsdom/index.d.ts",
       "import": "./dist/jsdom/index.js"

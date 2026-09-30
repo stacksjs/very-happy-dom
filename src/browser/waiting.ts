@@ -26,8 +26,11 @@ export class TimeoutError extends Error {
  * draining, a custom element upgrading. 20ms is short enough that a passing
  * test does not feel it, and long enough that a failing one does not re-walk
  * the DOM thousands of times on its way to the timeout.
+ *
+ * Exported so the web-first matchers re-check on the same cadence. Two waits
+ * polling at different rates would be a needless second thing to reason about.
  */
-const POLL_INTERVAL_MS = 20
+export const POLL_INTERVAL_MS = 20
 
 /** Satisfied, carrying the value the caller wanted. */
 interface Settled<T> {

@@ -168,6 +168,54 @@ describe('dist/register.js', () => {
   })
 })
 
+describe('dist/matchers.js', () => {
+  // Worth a functional check rather than an existence check. The matchers reach
+  // into `locator._page` — the same package-internal access `Locator` already
+  // makes on `BrowserPage._isRendered` — so if minification ever renamed those
+  // properties, every matcher would break in the published build while passing
+  // against `src/`. A subprocess, because `expect.extend` is global.
+  test('registers working matchers when imported from dist', async () => {
+    const MATCHERS_DIST = resolve(ROOT, 'dist/matchers.js')
+    expect(existsSync(MATCHERS_DIST)).toBe(true)
+
+    const spec = `
+      import { expect, test } from 'bun:test'
+      import { Browser } from ${JSON.stringify(resolve(ROOT, 'dist/index.js'))}
+      import ${JSON.stringify(MATCHERS_DIST)}
+
+      test('the published matchers retry against the published DOM', async () => {
+        const page = new Browser().newPage()
+        page.setDefaultTimeout(500)
+        const document = page.mainFrame.window.document
+        setTimeout(() => { document.body.innerHTML = '<button>Save</button>' }, 20)
+
+        await expect(page.getByRole('button', { name: 'Save' })).toBeVisible()
+        await expect(page.getByRole('button')).toHaveCount(1)
+        await expect(page.locator('#never')).not.toBeVisible()
+      })
+    `
+    const specPath = resolve(ROOT, 'dist/.matchers-smoke.test.ts')
+    await Bun.write(specPath, spec)
+
+    try {
+      const proc = Bun.spawn({
+        cmd: [process.execPath, 'test', specPath],
+        stdout: 'pipe',
+        stderr: 'pipe',
+      })
+      const [stderr, exitCode] = await Promise.all([
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ])
+
+      expect({ exitCode, failed: /\b0 fail\b/.test(stderr) }).toEqual({ exitCode: 0, failed: true })
+    }
+    finally {
+      await Bun.file(specPath).unlink()
+    }
+  })
+})
+
 // =============================================================================
 // Regression guard: those files must also survive packing. `files` in
 // package.json decides what the tarball carries, so dist can be complete on

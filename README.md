@@ -123,6 +123,41 @@ GlobalRegistrator.register()
 
 ## Advanced Usage
 
+### Web-First Assertions
+
+Importing `very-happy-dom/matchers` registers Playwright-style matchers into
+`bun:test`. They retry until the expectation holds or the timeout expires, which
+is the difference that matters:
+
+```typescript
+import { expect, test } from 'bun:test'
+import { Browser } from 'very-happy-dom'
+import 'very-happy-dom/matchers'
+
+test('the alert reports the save', async () => {
+  const page = new Browser().newPage()
+
+  await expect(page.getByRole('alert')).toContainText('Saved')
+})
+```
+
+The one-shot rewrite — `expect(await page.getByRole('alert').textContent()).toContain('Saved')`
+— samples once, so anything that appears after a `fetch` settles or a microtask
+drains is a race. `.not` waits for the opposite to become true rather than
+inverting a single sample.
+
+Locators: `toBeAttached`, `toBeVisible`, `toBeHidden`, `toHaveCount`,
+`toHaveText`, `toContainText`, `toHaveValue`, `toHaveAttribute`, `toHaveClass`,
+`toBeEnabled`, `toBeDisabled`, `toBeChecked`, `toBeEditable`, `toBeFocused`,
+`toBeEmpty`. Pages: `toHaveURL`, `toHaveTitle`. Each takes an optional
+`{ timeout }`, defaulting to `page.setDefaultTimeout()`.
+
+Locator actions auto-wait on the same terms — present, rendered and not
+disabled — and `locator.waitFor({ state })` covers `attached`, `detached`,
+`visible` and `hidden`. Two conditions Playwright checks are not checked here:
+stable (not mid-animation) and receives-events (not covered by another element).
+Both need a layout pass.
+
 ### Browser Context
 
 ```typescript

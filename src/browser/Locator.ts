@@ -73,7 +73,8 @@ export interface ActionOptions {
   timeout?: number
 }
 
-function normalize(value: string | null | undefined): string {
+/** @internal Collapse whitespace, the way Playwright compares rendered text. */
+export function normalize(value: string | null | undefined): string {
   return String(value ?? '').replace(/\s+/g, ' ').trim()
 }
 
@@ -83,8 +84,11 @@ function normalize(value: string | null | undefined): string {
  * A string is a substring match after whitespace normalisation unless `exact`,
  * which is Playwright's behaviour and what makes `getByText('Save')` find
  * "Save changes". A RegExp is always used as written.
+ *
+ * @internal Shared with the web-first matchers, so `toContainText` and
+ * `getByText` cannot disagree about what "contains" means.
  */
-function matchesText(candidate: string, expected: string | RegExp, exact = false): boolean {
+export function matchesText(candidate: string, expected: string | RegExp, exact = false): boolean {
   if (expected instanceof RegExp)
     return expected.test(candidate)
 
