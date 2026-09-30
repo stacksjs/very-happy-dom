@@ -1,4 +1,5 @@
 import { isRendered } from '../aria/visibility'
+import type { RequestInterceptionHandler } from '../network/RequestInterceptor'
 import type { BrowserContext } from './BrowserContext'
 import { Buffer } from 'node:buffer'
 import type { Route, RouteHandler, RoutePattern, RouteRequest } from '../network/routing'
@@ -75,6 +76,12 @@ export class BrowserPage {
   private _frames: BrowserFrame[] = []
   private _eventListeners = new Map<PageEventType, Set<PageEventHandler>>()
   private _requestInterceptor = new RequestInterceptor()
+  /** Whether `setRequestInterception(true)` asked for interception in its own right. */
+  private _explicitInterception = false
+  /** The one handler that drives routing, held so it can be taken off again. */
+  private _routingHandler: RequestInterceptionHandler = async (request) => {
+    await this._runRoutes(request)
+  }
   private _routes = new RouteRegistry()
   private _routingInstalled = false
   private _defaultTimeout: number | null = null
@@ -1045,35 +1052,64 @@ export class BrowserPage {
    */
   async route(url: RoutePattern, handler: RouteHandler): Promise<void> {
     this._routes.add(url, handler)
-    this._installRouting()
+    this._syncInterception()
   }
 
   /** Remove routes for `url`, or just the one using `handler`. */
   async unroute(url?: RoutePattern, handler?: RouteHandler): Promise<void> {
     this._routes.remove(url, handler)
+    // With nothing left to match, the fetch override has no reason to stay
+    // installed — and a test's teardown depends on it actually coming off.
+    this._syncInterception()
   }
 
   /**
-   * Install the single interceptor handler that drives routing.
+   * @internal Reconcile after a context's routes changed.
    *
-   * Done once and left in place: it is a no-op for a request no route matches,
-   * so keeping it costs nothing and avoids tearing interception down while
-   * another route is still registered.
+   * A context route is served by its pages' interceptors, so a page created
+   * before the route — or left holding the last one after an `unroute` — has to
+   * be told to look again.
    */
-  private _installRouting(): void {
-    if (this._routingInstalled)
-      return
-    this._routingInstalled = true
-
-    this._requestInterceptor.enable()
-    this._requestInterceptor.addHandler(async (request) => {
-      await this._runRoutes(request)
-    })
+  _syncRouting(): void {
+    this._syncInterception()
   }
 
-  /** @internal Let a context enable routing on a page created before its route. */
-  _ensureRouting(): void {
-    this._installRouting()
+  /** Whether any route, this page's or its context's, could match. */
+  private _hasRoutes(): boolean {
+    const contextRoutes = (this._context as any)?._routeRegistry?.size ?? 0
+    return this._routes.size > 0 || contextRoutes > 0
+  }
+
+  /**
+   * Bring the fetch override in line with what is actually needed.
+   *
+   * Routes and explicit interception are separate features sharing one
+   * mechanism, and either alone is reason enough to intercept — so neither may
+   * switch it off on its own. That was the bug (#1613):
+   * `setRequestInterception(false)` cleared every handler, taking routing's with
+   * it, while `_routingInstalled` stayed set and guarded it from ever being
+   * reinstalled. `route()` went on accepting handlers that nothing consulted,
+   * and the request escaped to the real network.
+   *
+   * Derived from the registries rather than tracked in a second flag, because a
+   * flag beside the thing it describes is what drifted in the first place.
+   */
+  private _syncInterception(): void {
+    if (!this._explicitInterception && !this._hasRoutes()) {
+      this._requestInterceptor.disable()
+      // Only what was added here. `clear()` would take anything else with it,
+      // which is how this went wrong.
+      this._requestInterceptor.removeHandler(this._routingHandler)
+      this._routingInstalled = false
+      return
+    }
+
+    if (!this._routingInstalled) {
+      this._routingInstalled = true
+      this._requestInterceptor.addHandler(this._routingHandler)
+    }
+
+    this._requestInterceptor.enable()
   }
 
   /** Page routes take precedence, then the context's. */
@@ -1149,18 +1185,16 @@ export class BrowserPage {
    * Enable or disable request interception
    */
   async setRequestInterception(enabled: boolean): Promise<void> {
-    if (enabled) {
-      // Reporting is wired to the interceptor's observers in the constructor,
-      // so this only has to turn interception on. It used to add a handler that
-      // emitted `request`, which meant `route()` alone enabled interception
-      // without ever reporting a request — and, once both were used, reporting
-      // it twice.
-      this._requestInterceptor.enable()
-    }
-    else {
-      this._requestInterceptor.disable()
-      this._requestInterceptor.clear()
-    }
+    // Records the intent and lets the reconciler decide. Turning this off no
+    // longer dismantles routing: a registered route keeps the override
+    // installed on its own account (#1613).
+    //
+    // Reporting is wired to the interceptor's observers in the constructor, so
+    // this no longer adds a handler of its own either. It used to, which meant
+    // `route()` alone enabled interception without ever reporting a request,
+    // and using both reported every request twice.
+    this._explicitInterception = enabled
+    this._syncInterception()
   }
 
   /**

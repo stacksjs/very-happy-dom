@@ -147,12 +147,16 @@ export class BrowserContext {
     this._routeRegistry.add(url, handler)
     // Pages created before this call have no interceptor installed yet.
     for (const page of this._pages)
-      (page as any)._ensureRouting?.()
+      (page as any)._syncRouting?.()
   }
 
   /** Remove context routes for `url`, or just the one using `handler`. */
   async unroute(url?: RoutePattern, handler?: RouteHandler): Promise<void> {
     this._routeRegistry.remove(url, handler)
+    // Removing the last context route leaves its pages intercepting for nothing,
+    // so they reconcile here too — the mirror of `route()` above.
+    for (const page of this._pages)
+      (page as any)._syncRouting?.()
   }
 
   /**
@@ -306,7 +310,7 @@ export class BrowserContext {
     // environment, so a page starts up matching its siblings.
     const created = page as any
     if (this._routeRegistry.size > 0)
-      created._ensureRouting?.()
+      created._syncRouting?.()
     created._applyEmulation?.()
     created._runInitScripts?.()
     return page
