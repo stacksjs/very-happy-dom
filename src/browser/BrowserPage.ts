@@ -5,7 +5,7 @@ import type { BrowserContext } from './BrowserContext'
 import { Buffer } from 'node:buffer'
 import type { Route, RouteHandler, RoutePattern, RouteRequest } from '../network/routing'
 import { RequestInterceptor } from '../network/RequestInterceptor'
-import type { GetByRoleOptions, GetByTextOptions } from './Locator'
+import type { GetByRoleOptions, GetByTextOptions, WaitForState } from './Locator'
 import { matchesPattern, RouteRegistry } from '../network/routing'
 import { byAttribute, byLabel, byRole, byText, Locator } from './Locator'
 import { BrowserFrame } from './BrowserFrame'
@@ -304,55 +304,88 @@ export class BrowserPage {
   }
 
   /**
-   * Waits for a selector to appear in the DOM
+   * Wait for a selector to reach a state, and answer with the element.
+   *
+   * This used to answer a timeout with `null`, while `waitForFunction` twenty
+   * lines below threw — two functions side by side disagreeing about what a
+   * timeout is, so whichever one a reader learned first was wrong about the
+   * other (#1605).
+   *
+   * The `null` was the worse half. `const row = await page.waitForSelector('.row')`
+   * followed by `row.click()` reported `null is not an object`, pointing at the
+   * click, with the selector, the timeout and the wait nowhere in the message.
+   *
+   * `null` now means only one thing: the element is legitimately not there, for
+   * the `detached` and `hidden` states that were waiting for exactly that.
    */
   async waitForSelector(
     selector: string,
-    options: { timeout?: number, visible?: boolean } = {},
+    options: { timeout?: number, state?: WaitForState, visible?: boolean } = {},
   ): Promise<any | null> {
-    const { timeout = this._defaultTimeoutMs(), visible = false } = options
-    const startTime = Date.now()
+    // `visible: true` predates the `state` option and still means what it said.
+    const state: WaitForState = options.state ?? (options.visible ? 'visible' : 'attached')
+    const timeout = options.timeout ?? this._defaultTimeoutMs()
 
-    while (Date.now() - startTime < timeout) {
-      const element = this.mainFrame.document.querySelector(selector)
+    return waitUntil<any | null>(
+      () => {
+        const element = this.mainFrame.document.querySelector(selector) as any
 
-      if (element) {
-        if (!visible || (element as any).isVisible?.()) {
+        if (state === 'detached') {
           return element
+            ? { done: false, reason: 'the element was still attached' }
+            : { done: true, value: null }
         }
-      }
 
-      // Wait a bit before checking again
-      await new Promise(resolve => setTimeout(resolve, 50))
-    }
+        if (state === 'hidden') {
+          if (!element)
+            return { done: true, value: null }
 
-    return null
+          return this._isRendered(element)
+            ? { done: false, reason: 'the element was still visible' }
+            : { done: true, value: element }
+        }
+
+        if (!element)
+          return { done: false, reason: 'no element matched' }
+
+        if (state === 'visible' && !this._isRendered(element))
+          return { done: false, reason: 'an element matched, but it was hidden' }
+
+        return { done: true, value: element }
+      },
+      {
+        timeout,
+        describe: reason => `Timed out ${timeout}ms waiting for selector ${JSON.stringify(selector)} to be ${state}: ${reason}`,
+      },
+    )
   }
 
   /**
-   * Waits for a function to return a truthy value
+   * Wait for a function to return something truthy, and answer with it.
+   *
+   * Throws a `TimeoutError` now rather than a bare `Error`, so a caller can catch
+   * a timeout without matching on the message — and so this and
+   * `waitForSelector` raise the same type.
    */
   async waitForFunction(
     // eslint-disable-next-line pickier/no-unused-vars
     fn: ((...args: any[]) => any) | string,
     options: { timeout?: number, polling?: number | 'raf' } = {},
   ): Promise<any> {
-    const { timeout = this._defaultTimeoutMs(), polling = 100 } = options
-    const startTime = Date.now()
-    const pollInterval = polling === 'raf' ? 16 : polling
+    const timeout = options.timeout ?? this._defaultTimeoutMs()
 
-    while (Date.now() - startTime < timeout) {
-      const result = this.evaluate(fn)
-
-      if (result) {
+    return waitUntil<any>(
+      () => {
+        const result = this.evaluate(fn)
         return result
-      }
-
-      // Wait before checking again
-      await new Promise(resolve => setTimeout(resolve, pollInterval))
-    }
-
-    throw new Error(`waitForFunction timed out after ${timeout}ms`)
+          ? { done: true, value: result }
+          : { done: false, reason: `it last returned ${JSON.stringify(result) ?? String(result)}` }
+      },
+      {
+        timeout,
+        describe: reason => `Timed out ${timeout}ms waiting for the function to return a truthy value: ${reason}`,
+      },
+    )
   }
 
   /**

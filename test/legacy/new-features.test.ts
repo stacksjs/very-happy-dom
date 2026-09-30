@@ -469,9 +469,17 @@ console.log('\nTest 25: waitForSelector timeout')
 
   page.content = '<body><div>No match</div></body>'
 
-  const element = await page.waitForSelector('.nonexistent', { timeout: 100 })
+  // Used to return null; it throws now (#1605), because a null turned
+  // "the selector never appeared" into "null is not an object" at the call site.
+  let threw = false
+  try {
+    await page.waitForSelector('.nonexistent', { timeout: 100 })
+  }
+  catch (error) {
+    threw = (error as Error).name === 'TimeoutError'
+  }
 
-  assert(element === null, 'waitForSelector returns null on timeout')
+  assert(threw, 'waitForSelector throws TimeoutError on timeout')
 
   await browser.close()
 }

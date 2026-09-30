@@ -9,6 +9,7 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Browser } from '../src'
+import { TimeoutError } from '../src/browser/waiting'
 
 const realFetch = globalThis.fetch
 
@@ -202,7 +203,8 @@ describe('default timeout', () => {
     const page = subject.newPage()
 
     const started = performance.now()
-    await page.waitForSelector('#never')
+    // Throws on timeout now (#1605); the timing is what this test is about.
+    await expect(page.waitForSelector('#never')).rejects.toThrow(TimeoutError)
 
     // Without the default this would sit for the built-in 30 seconds.
     expect(performance.now() - started).toBeLessThan(1000)
@@ -215,7 +217,7 @@ describe('default timeout', () => {
     page.setDefaultTimeout(40)
 
     const started = performance.now()
-    await page.waitForSelector('#never')
+    await expect(page.waitForSelector('#never')).rejects.toThrow(TimeoutError)
 
     expect(performance.now() - started).toBeLessThan(1000)
   })
