@@ -608,6 +608,49 @@ export class Locator {
       this._press(element)
   }
 
+  // ------------------------------------------------------------------ geometry
+
+  /**
+   * The element's box, or `null` when it is not rendered.
+   *
+   * Not worth having before #1600: `getBoundingClientRect()` read only the inline
+   * style then, so anything sized by a stylesheet reported `0 x 0`. It resolves
+   * through the cascade now, so the numbers are real — and nothing exposed them
+   * at the locator level (#1609).
+   *
+   * `x` and `y` are always `0`. There is no layout pass, so position is not
+   * computed, and the origin is the only honest answer. That is the half people
+   * reach for `boundingBox()` to get — overlap, ordering, is-this-above-the-fold —
+   * and it is not available here. The width and height are.
+   */
+  async boundingBox(options: ActionOptions = {}): Promise<{ x: number, y: number, width: number, height: number } | null> {
+    const element = await this._waitForOne('attached', { timeout: options.timeout })
+
+    // Playwright answers `null` for an element that is not visible, and since
+    // #1617 that includes one collapsed to a declared zero.
+    if (!this._page._isRendered(element))
+      return null
+
+    const rect = element.getBoundingClientRect?.()
+    if (!rect)
+      return null
+
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+  }
+
+  /**
+   * Scroll the element into view, as far as that means anything here.
+   *
+   * `VirtualElement.scrollIntoView` resets the scroll offsets and fires a
+   * `scroll` event, which is all that is meaningful without layout. Exposed as a
+   * resolving no-op rather than left missing, because in Playwright this is a
+   * step before an action rather than an assertion — a missing method throws
+   * where a no-op would have let the spec through.
+   */
+  async scrollIntoViewIfNeeded(options: ActionOptions = {}): Promise<void> {
+    (await this._waitForOne('attached', { timeout: options.timeout })).scrollIntoView?.()
+  }
+
   // ---------------------------------------------------------------- evaluating
 
   /**

@@ -174,6 +174,19 @@ disabled — and `locator.waitFor({ state })` covers `attached`, `detached`,
 stable (not mid-animation) and receives-events (not covered by another element).
 Both need a layout pass.
 
+### Geometry
+
+```typescript
+const box = await page.locator('.card').boundingBox()   // { x, y, width, height } | null
+```
+
+Width and height are real — the rect resolves through the cascade, so a size from
+a stylesheet is reported. **`x` and `y` are always `0`**: there is no layout pass,
+so position is not computed, and overlap, ordering and is-this-above-the-fold
+cannot be asked here. `null` is returned for an element that is not rendered.
+`scrollIntoViewIfNeeded()` resolves and fires a `scroll` event, which is as much
+as is meaningful without layout.
+
 ### Setting Page Content
 
 ```typescript
