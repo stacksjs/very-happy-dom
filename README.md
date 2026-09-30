@@ -184,6 +184,23 @@ disabled — and `locator.waitFor({ state })` covers `attached`, `detached`,
 stable (not mid-animation) and receives-events (not covered by another element).
 Both need a layout pass.
 
+### Rendered Text
+
+`innerText` returns text as rendered: hidden subtrees left out, whitespace
+collapsed, block elements separated by newlines, `<br>` honoured. Visibility is
+resolved through the cascade, so a `display: none` from a stylesheet is excluded —
+not only an inline one. `white-space: pre`, `pre-wrap` and `break-spaces` keep
+their text verbatim, `pre-line` keeps newlines, and a `<pre>` element counts as
+`pre` with no rule needed.
+
+`textContent` is unchanged: raw, untrimmed, uncollapsed.
+
+```typescript
+document.body.innerHTML = '<p>  Save   changes  </p>'
+document.querySelector('p').textContent   // '  Save   changes  '
+document.querySelector('p').innerText     // 'Save changes'
+```
+
 ### Dialogs
 
 ```typescript

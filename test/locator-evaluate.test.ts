@@ -137,12 +137,12 @@ describe('allTextContents and allInnerTexts', () => {
       .toEqual(['  one   spaced  ', 'twoHIDDEN'])
   })
 
-  test('allInnerTexts is rendered text: trimmed, hidden subtrees left out', async () => {
-    // The meaningful difference. Interior runs are NOT collapsed here, which a
-    // browser would do — asserted as it is rather than papered over, because
-    // normalising in this one method would make it disagree with innerText().
+  test('allInnerTexts is rendered text: collapsed, hidden subtrees left out', async () => {
+    // This asserted 'one   spaced' when it was written, recording that interior
+    // runs were not collapsed. #1614 fixed that in `innerText` itself rather than
+    // here, which is why this method never had to normalise on its own.
     expect(await page.locator('li').allInnerTexts())
-      .toEqual(['one   spaced', 'two'])
+      .toEqual(['one spaced', 'two'])
   })
 
   test('allInnerTexts agrees with innerText() on the same element', async () => {

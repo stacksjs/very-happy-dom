@@ -85,27 +85,51 @@ function computedStyle(element: ElementLike): any {
  */
 export function isRendered(element: ElementLike): boolean {
   for (let node: any = element; node && node.nodeType === ELEMENT_NODE; node = node.parentNode) {
-    if (node.hasAttribute?.('hidden'))
-      return false
-
-    const style = computedStyle(node)
-    if (!style)
-      continue
-
-    if (style.display === 'none')
-      return false
-
-    const visibility = style.visibility
-    if (visibility === 'hidden' || visibility === 'collapse')
-      return false
-
-    // Checked on every ancestor, because a collapse is normally declared on the
-    // container rather than on the control inside it.
-    if (isCollapsed(style))
+    if (hidesItself(node))
       return false
   }
 
   return true
+}
+
+/**
+ * Whether the element's own style hides it, ignoring its ancestors.
+ *
+ * @internal Shared with `innerText`, which walks the tree itself and so has
+ * already dealt with ancestors by not descending into a hidden one. Calling the
+ * ancestor-walking form per node would make that walk quadratic, and having two
+ * definitions of "hidden" is the thing #1601 set out to avoid.
+ */
+export function hidesItself(element: ElementLike, style?: any): boolean {
+  if (element.hasAttribute?.('hidden'))
+    return true
+
+  // A caller walking a whole tree can resolve the style itself and hand it over,
+  // which is what lets `innerText` avoid resolving twice per element — and, when
+  // the document has no stylesheets, avoid the cascade entirely by passing the
+  // inline style, which is then the whole answer anyway.
+  const resolved = style ?? computedStyle(element) ?? (element as any).style
+  if (!resolved?.getPropertyValue)
+    return false
+
+  // An inline declaration block with nothing in it cannot hide anything, and most
+  // elements have one. Worth the check because the alternative is six property
+  // lookups per element on a tree walk — `innerText` visits every node.
+  // A computed style reports no length, so this only short-circuits the inline
+  // case, which is the one that needs it.
+  if (resolved.length === 0)
+    return false
+
+  if (resolved.getPropertyValue('display') === 'none')
+    return true
+
+  const visibility = resolved.getPropertyValue('visibility')
+  if (visibility === 'hidden' || visibility === 'collapse')
+    return true
+
+  // A collapse is normally declared on the container rather than on the control
+  // inside it, which is why the caller checks every ancestor.
+  return isCollapsed(resolved)
 }
 
 /**
