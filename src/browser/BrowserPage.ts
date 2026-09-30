@@ -1,13 +1,13 @@
 import { isRendered } from '../aria/visibility'
-import type { RequestInterceptionHandler } from '../network/RequestInterceptor'
 import type { BrowserContext } from './BrowserContext'
 import { Buffer } from 'node:buffer'
 import type { Route, RouteHandler, RoutePattern, RouteRequest } from '../network/routing'
 import { RequestInterceptor } from '../network/RequestInterceptor'
 import type { GetByRoleOptions, GetByTextOptions } from './Locator'
-import { RouteRegistry } from '../network/routing'
+import { matchesPattern, RouteRegistry } from '../network/routing'
 import { byAttribute, byLabel, byRole, byText, Locator } from './Locator'
 import { BrowserFrame } from './BrowserFrame'
+import { TimeoutError, waitUntil } from './waiting'
 
 export interface IBrowserPageViewport {
   width: number
@@ -17,6 +17,48 @@ export interface IBrowserPageViewport {
 export type PageEventType = 'console' | 'request' | 'response' | 'error' | 'load' | 'domcontentloaded'
 // eslint-disable-next-line pickier/no-unused-vars
 export type PageEventHandler = (event: any) => void
+
+/**
+ * Which event to settle on.
+ *
+ * A string is a Playwright glob and a RegExp is used as written, both against
+ * the URL. A function receives the event itself — the `Response` or the request
+ * — rather than its URL, so it can look at the status too. That is Playwright's
+ * split, and it is why this cannot simply be a `RoutePattern`, whose function
+ * form takes a URL.
+ */
+// eslint-disable-next-line pickier/no-unused-vars
+export type EventTarget<T = any> = string | RegExp | ((event: T) => boolean)
+
+export interface WaitForEventOptions {
+  /** Which occurrence to settle on. Without one, the first event wins. */
+  // eslint-disable-next-line pickier/no-unused-vars
+  predicate?: (event: any) => boolean
+  timeout?: number
+}
+
+/** The load states this page can actually report. */
+export type LoadState = 'load' | 'domcontentloaded'
+
+/**
+ * Marks a response that has already been reported, so the interceptor and a
+ * navigation can both announce without the page seeing it twice.
+ */
+const ANNOUNCED = Symbol('very-happy-dom.responseAnnounced')
+
+/**
+ * Whether an event satisfies a target.
+ *
+ * A function sees the event; a string or RegExp is matched against its URL
+ * through the same `matchesPattern` the routes use, so a glob cannot mean one
+ * thing to `route()` and another to `waitForResponse()`.
+ */
+function matchesTarget(target: EventTarget, event: any): boolean {
+  if (typeof target === 'function')
+    return target(event) === true
+
+  return matchesPattern(target, String(event?.url ?? ''))
+}
 
 /**
  * BrowserPage represents a browser page (tab or popup window)
@@ -47,6 +89,18 @@ export class BrowserPage {
     // Create main frame
     this.mainFrame = new BrowserFrame(this)
     this._frames.push(this.mainFrame)
+
+    // Registered once here rather than in the two places that enable
+    // interception, so `route()` and `setRequestInterception(true)` both report
+    // their traffic and neither can register it twice. Observers rather than
+    // handlers, because `setRequestInterception(false)` clears handlers — a
+    // reporting handler would be dropped and never come back.
+    this._requestInterceptor.addRequestObserver((request) => {
+      this._emitRequest(request)
+    })
+    this._requestInterceptor.addResponseObserver((response) => {
+      this._emitResponse(response)
+    })
   }
 
   /**
@@ -259,6 +313,182 @@ export class BrowserPage {
    */
   async waitForTimeout(ms: number): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  /**
+   * Settle on the next matching page event (#1606).
+   *
+   * The events already fired; what was missing was a promise to await on one.
+   * Registering a handler and hoping means guessing how long to wait, and
+   * guessing wrong fails in both directions — too short and it flakes, too long
+   * and every test pays for it.
+   *
+   * Subscribe *before* the action that triggers the event, which is what the
+   * documented shape does:
+   *
+   *     const [response] = await Promise.all([
+   *       page.waitForResponse('** /api/trails'),
+   *       page.getByRole('button', { name: 'Search' }).click(),
+   *     ])
+   *
+   * There is no replay of events that already fired, as in Playwright. It
+   * matters more here, because `goto()` emits synchronously and returns, so the
+   * window between the action and the subscription is zero rather than a
+   * process boundary. Waiting after the fact therefore times out — and the
+   * message says so rather than leaving a bare "timed out" to be puzzled over.
+   */
+  async waitForEvent(
+    event: PageEventType,
+    optionsOrPredicate: WaitForEventOptions | ((event: any) => boolean) = {},
+  ): Promise<any> {
+    const options = typeof optionsOrPredicate === 'function'
+      ? { predicate: optionsOrPredicate }
+      : optionsOrPredicate
+    const timeout = options.timeout ?? this._defaultTimeoutMs()
+
+    let settle: (value: any) => void
+    let fail: (error: Error) => void
+    const landed = new Promise<any>((resolve, reject) => {
+      settle = resolve
+      fail = reject
+    })
+
+    let seen = 0
+    const handler = (data: any): void => {
+      seen++
+      try {
+        if (options.predicate && !options.predicate(data))
+          return
+      }
+      catch (error) {
+        // A throwing predicate is the caller's bug, and hiding it behind a
+        // timeout would send them looking in the wrong place.
+        fail(error instanceof Error ? error : new Error(String(error)))
+        return
+      }
+
+      settle(data)
+    }
+
+    this.on(event, handler)
+    const expiry = setTimeout(() => {
+      // How many went past matters: none at all is a different problem from
+      // several that the predicate turned down.
+      const saw = seen === 0
+        ? `no ${event} event fired`
+        : `${seen} ${event} event(s) fired, none matched`
+      fail(new TimeoutError(
+        `Timed out ${timeout}ms waiting for a ${event} event: ${saw}. `
+        + 'Subscribe before the action that triggers it — '
+        + 'await Promise.all([page.waitForEvent(...), action()]) — as an event that has already fired is not replayed.',
+      ))
+    }, timeout)
+
+    try {
+      return await landed
+    }
+    finally {
+      // Both paths, always. A handler left behind answers later tests' events
+      // and breaks them a long way from here.
+      clearTimeout(expiry)
+      this.off(event, handler)
+    }
+  }
+
+  /**
+   * Settle on the next matching response.
+   *
+   * The event carries the `Response` itself, so a predicate reads `url` and
+   * `status` as properties rather than as Playwright's accessor calls.
+   */
+  async waitForResponse(
+    urlOrPredicate: EventTarget,
+    options: { timeout?: number } = {},
+  ): Promise<any> {
+    return this.waitForEvent('response', {
+      timeout: options.timeout,
+      predicate: response => matchesTarget(urlOrPredicate, response),
+    })
+  }
+
+  /**
+   * Settle on the next matching request.
+   *
+   * Requests are only reported while interception is on, which `page.route()`
+   * turns on as a side effect and `setRequestInterception(true)` turns on
+   * directly. Without either, nothing is emitted and this can only time out —
+   * so it says as much rather than leaving a bare timeout to be puzzled over.
+   */
+  async waitForRequest(
+    urlOrPredicate: EventTarget,
+    options: { timeout?: number } = {},
+  ): Promise<any> {
+    if (!this._requestInterceptor.enabled) {
+      throw new Error(
+        'waitForRequest() needs request interception, which nothing has turned on. '
+        + 'Call page.route(...) or page.setRequestInterception(true) first — without it no request event is ever emitted.',
+      )
+    }
+
+    return this.waitForEvent('request', {
+      timeout: options.timeout,
+      predicate: request => matchesTarget(urlOrPredicate, request),
+    })
+  }
+
+  /**
+   * Wait for the document to reach a load state, or return at once if it has.
+   *
+   * Returning at once is the point: this is usually called after a navigation
+   * that has already finished, and waiting for an event that fired a moment ago
+   * would hang for the whole timeout.
+   *
+   * `networkidle` is deliberately not accepted. Nothing here tracks in-flight
+   * requests, so it could only ever be a lie, and a name that throws is better
+   * than one that resolves immediately and means nothing.
+   */
+  async waitForLoadState(state: LoadState = 'load', options: { timeout?: number } = {}): Promise<void> {
+    if (state !== 'load' && state !== 'domcontentloaded') {
+      throw new Error(
+        `waitForLoadState('${String(state)}') is not supported: only 'load' and 'domcontentloaded' can be reported. `
+        + 'Nothing tracks in-flight requests, so there is no honest answer for networkidle.',
+      )
+    }
+
+    const reached = state === 'load'
+      ? ['complete']
+      : ['interactive', 'complete']
+
+    if (reached.includes(String((this.mainFrame.document as any).readyState)))
+      return
+
+    await this.waitForEvent(state, { timeout: options.timeout })
+  }
+
+  /**
+   * Wait for the page's URL to match, or return at once if it already does.
+   *
+   * Polled rather than driven off an event, because `pushState` and
+   * `replaceState` move the URL without a navigation, and a test asserting on a
+   * client-side route change has no event to hang off.
+   */
+  async waitForURL(urlOrPredicate: EventTarget<string>, options: { timeout?: number } = {}): Promise<void> {
+    await waitUntil<undefined>(
+      () => {
+        const url = this.url
+        const matched = typeof urlOrPredicate === 'function'
+          ? urlOrPredicate(url) === true
+          : matchesPattern(urlOrPredicate, url)
+
+        return matched
+          ? { done: true, value: undefined }
+          : { done: false, reason: `the URL was ${JSON.stringify(url)}` }
+      },
+      {
+        timeout: options.timeout ?? this._defaultTimeoutMs(),
+        describe: reason => `Timed out waiting for the URL to match ${String(urlOrPredicate)}: ${reason}`,
+      },
+    )
   }
 
   /** Resolve a selector against the main frame, or fail loudly. */
@@ -733,10 +963,30 @@ export class BrowserPage {
   }
 
   /**
-   * Internal method to emit response events
+   * Report a response — once per response.
+   *
    * @internal
+   *
+   * A navigation whose request went through interception has two announcers
+   * with equal claim: the interceptor that produced the response, and the
+   * navigation that then used it. Keyed on the response object itself, so
+   * neither has to know the other exists and a third caller cannot double up
+   * either.
    */
   _emitResponse(response: any): void {
+    if (response !== null && typeof response === 'object') {
+      if ((response as any)[ANNOUNCED] === true)
+        return
+
+      try {
+        Object.defineProperty(response, ANNOUNCED, { value: true, configurable: true })
+      }
+      catch {
+        // A sealed response cannot be marked. Reporting it twice is a smaller
+        // problem than not reporting it at all.
+      }
+    }
+
     this.emit('response', response)
   }
 
@@ -900,13 +1150,12 @@ export class BrowserPage {
    */
   async setRequestInterception(enabled: boolean): Promise<void> {
     if (enabled) {
+      // Reporting is wired to the interceptor's observers in the constructor,
+      // so this only has to turn interception on. It used to add a handler that
+      // emitted `request`, which meant `route()` alone enabled interception
+      // without ever reporting a request — and, once both were used, reporting
+      // it twice.
       this._requestInterceptor.enable()
-
-      // Add default handler to emit events
-      const handler: RequestInterceptionHandler = (request) => {
-        this._emitRequest(request)
-      }
-      this._requestInterceptor.addHandler(handler)
     }
     else {
       this._requestInterceptor.disable()

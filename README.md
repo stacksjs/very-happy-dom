@@ -158,6 +158,33 @@ disabled — and `locator.waitFor({ state })` covers `attached`, `detached`,
 stable (not mid-animation) and receives-events (not covered by another element).
 Both need a layout pass.
 
+### Waiting on Page Events
+
+```typescript
+const [response] = await Promise.all([
+  page.waitForResponse('**/api/trails'),
+  page.getByRole('button', { name: 'Search' }).click(),
+])
+
+expect((await response.json()).trails).toHaveLength(3)
+```
+
+Subscribe *before* the action, as above. An event that has already fired is not
+replayed — the same as Playwright, and it matters more here because `goto()`
+emits synchronously and returns, so there is no window at all.
+
+- `page.waitForEvent(event, predicateOrOptions)` — the primitive, for any of the
+  six page events.
+- `page.waitForResponse(urlOrPredicate)` / `waitForRequest(...)` — a glob or
+  RegExp matches the URL through the same matcher `route()` uses; a function
+  receives the event itself, so it can read `status` too. Responses are reported
+  for navigations *and* for `fetch` calls made by page code. Requests need
+  interception on, which `page.route()` does as a side effect.
+- `page.waitForLoadState('load' | 'domcontentloaded')` — returns at once if the
+  state has already been reached. `networkidle` throws rather than pretending:
+  nothing here tracks in-flight requests.
+- `page.waitForURL(urlOrPredicate)` — polled, so a `pushState` counts.
+
 ### Browser Context
 
 ```typescript

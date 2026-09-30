@@ -20,15 +20,48 @@ export interface RequestInterceptionHandler {
 }
 
 /**
+ * Notified with every intercepted request, before any handler runs.
+ *
+ * Deliberately separate from a handler. A handler can rewrite, abort or fulfil
+ * the request and is awaited; an observer only watches, which is what reporting
+ * an event is — and, because `clear()` drops handlers, an observer is the only
+ * place a permanent listener can safely live.
+ */
+export interface RequestObserver {
+  // eslint-disable-next-line pickier/no-unused-vars
+  (request: InterceptedRequest): void
+}
+
+/**
+ * Notified with the response every intercepted request settled on, whether it
+ * came from a route's `fulfill()` or from the network.
+ *
+ * Handlers see requests; nothing saw responses, so `page.on('response')` could
+ * only ever report a navigation — not the `fetch` a page's own code makes,
+ * which is what `waitForResponse` is almost always waiting for (#1606).
+ */
+export interface ResponseObserver {
+  // eslint-disable-next-line pickier/no-unused-vars
+  (response: Response, request: InterceptedRequest): void
+}
+
+/**
  * Request Interceptor manages network request interception
  */
 export class RequestInterceptor {
   private _enabled = false
   private _handlers = new Set<RequestInterceptionHandler>()
+  private _requestObservers = new Set<RequestObserver>()
+  private _observers = new Set<ResponseObserver>()
   private _originalFetch: typeof fetch
 
   constructor() {
     this._originalFetch = globalThis.fetch
+  }
+
+  /** Whether the global `fetch` is currently intercepted. */
+  get enabled(): boolean {
+    return this._enabled
   }
 
   enable(): void {
@@ -87,8 +120,16 @@ export class RequestInterceptor {
             status: response.status,
             headers: response.headers,
           })
+          // A Response built from a body carries no url, so a listener could not
+          // tell which request it answered (#1602). Filled in here, where the
+          // request is still in hand, rather than at each place one is emitted.
+          Object.defineProperty(mockResponse, 'url', { value: url, configurable: true })
         },
       }
+
+      // Before the handlers, so a request a route goes on to abort is still
+      // reported — the attempt happened either way.
+      interceptor._announceRequest(interceptedRequest)
 
       // Call handlers
       for (const handler of interceptor._handlers) {
@@ -100,9 +141,16 @@ export class RequestInterceptor {
         throw new Error('Request aborted')
       }
 
+      // Every path out of here goes through one announcement, so a new branch
+      // cannot quietly stop reporting its response.
+      const settle = (response: Response): Response => {
+        interceptor._announce(response, interceptedRequest)
+        return response
+      }
+
       // Handle mock response
       if (responded && mockResponse) {
-        return mockResponse
+        return settle(mockResponse)
       }
 
       // Continue with overrides or original request
@@ -111,12 +159,12 @@ export class RequestInterceptor {
       const finalHeaders = overrides.headers || headers
       const finalBody = overrides.postData !== undefined ? overrides.postData : init?.body
 
-      return interceptor._originalFetch(finalUrl, {
+      return settle(await interceptor._originalFetch(finalUrl, {
         ...init,
         method: finalMethod,
         headers: finalHeaders,
         body: finalBody,
-      })
+      }))
     }
     // Add the preconnect property to match fetch signature
     Object.assign(overriddenFetch, { preconnect: () => {} })
@@ -138,7 +186,55 @@ export class RequestInterceptor {
     this._handlers.delete(handler)
   }
 
+  /** Drop every handler. Observers are listeners and are left alone. */
   clear(): void {
     this._handlers.clear()
+  }
+
+  /** Watch every intercepted request. Not cleared by `clear()`. */
+  addRequestObserver(observer: RequestObserver): void {
+    this._requestObservers.add(observer)
+  }
+
+  removeRequestObserver(observer: RequestObserver): void {
+    this._requestObservers.delete(observer)
+  }
+
+  /** Watch the response of every intercepted request. Not cleared by `clear()`. */
+  addResponseObserver(observer: ResponseObserver): void {
+    this._observers.add(observer)
+  }
+
+  removeResponseObserver(observer: ResponseObserver): void {
+    this._observers.delete(observer)
+  }
+
+  /**
+   * Tell the observers, without letting one of them break the request.
+   *
+   * An observer is a listener, so a handler that throws must not turn a
+   * perfectly good response into a failed `fetch` — the page would report a
+   * network error for a bug in an event handler.
+   */
+  private _announce(response: Response, request: InterceptedRequest): void {
+    for (const observer of this._observers) {
+      try {
+        observer(response, request)
+      }
+      catch {
+        // Deliberately swallowed; see above.
+      }
+    }
+  }
+
+  private _announceRequest(request: InterceptedRequest): void {
+    for (const observer of this._requestObservers) {
+      try {
+        observer(request)
+      }
+      catch {
+        // As above: a listener must not be able to fail the request.
+      }
+    }
   }
 }
