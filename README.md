@@ -174,6 +174,27 @@ disabled — and `locator.waitFor({ state })` covers `attached`, `detached`,
 stable (not mid-animation) and receives-events (not covered by another element).
 Both need a layout pass.
 
+### Form Controls
+
+```typescript
+await page.locator('#area').selectOption('north')            // by value
+await page.locator('#area').selectOption({ label: 'North' }) // by option text
+await page.locator('#photos').setInputFiles({ name: 'trail.gpx', buffer: gpx })
+await page.locator('#photos').setInputFiles('./fixtures/trail.gpx')   // read from disk
+await page.locator('#search').press('Control+Enter')
+await page.locator('#search').clear()
+await page.locator('#row').dblclick()
+await page.locator('#terms').setChecked(true)
+```
+
+`selectOption` fires `input` then `change`, which is the point: assigning
+`select.value` by hand fires neither, so a component listening for it never
+updates and the test passes against a DOM the app never saw. `setInputFiles`
+builds the `FileList` that assigning `input.files` requires. Passing several
+values to a non-`multiple` control is refused rather than silently truncated.
+`press` focuses the element first — `page.keyboard` only reaches whatever already
+has focus.
+
 ### Keyboard
 
 ```typescript

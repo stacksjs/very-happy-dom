@@ -43,6 +43,37 @@ export interface WaitForEventOptions {
 /** The load states this page can actually report. */
 export type LoadState = 'load' | 'domcontentloaded'
 
+/** How a caller can name an `<option>`: by value, label, index, or bare value. */
+export type SelectOptionValue = string | { value?: string, label?: string, index?: number }
+
+/** A file to attach: a path on disk, or bytes with a name. */
+export type InputFile = string | { name: string, mimeType?: string, buffer: Uint8Array | ArrayBuffer | string }
+
+/**
+ * Whether an `<option>` answers to what the caller asked for.
+ *
+ * `label` falls back to the option's text, because `HTMLOptionElement.label` and
+ * `.text` are not implemented here — reading `textContent` is what makes
+ * `{ label: 'Alpha' }` work at all.
+ */
+function matchesOption(option: any, index: number, want: SelectOptionValue): boolean {
+  if (typeof want === 'string')
+    return String(option.value ?? '') === want
+
+  if (want.index !== undefined)
+    return index === want.index
+
+  if (want.value !== undefined)
+    return String(option.value ?? '') === want.value
+
+  if (want.label !== undefined) {
+    const label = option.getAttribute?.('label') ?? option.textContent ?? ''
+    return String(label).replace(/\s+/g, ' ').trim() === want.label
+  }
+
+  return false
+}
+
 /**
  * Marks a response that has already been reported, so the interceptor and a
  * navigation can both announce without the page seeing it twice.
@@ -603,6 +634,104 @@ export class BrowserPage {
   }
 
   /** @internal Shared by `fill()` and `Locator.fill()`. */
+  /**
+   * @internal Select options on a `<select>` and report what ended up chosen.
+   *
+   * Setting `select.value` directly does not fire `change`, so a component
+   * listening for it never updates and the test passes against a DOM the
+   * application never saw. That is the whole reason this exists rather than
+   * leaving callers to assign the property (#1608).
+   */
+  async _selectOptions(element: any, wanted: SelectOptionValue[]): Promise<string[]> {
+    const tag = String(element.tagName ?? '').toUpperCase()
+    if (tag !== 'SELECT')
+      throw new Error(`selectOption() expects a <select>, not <${tag.toLowerCase() || 'unknown'}>`)
+
+    if (wanted.length > 1 && !element.hasAttribute?.('multiple')) {
+      // Silently taking the last would leave the test asserting against a
+      // selection it never asked for.
+      throw new Error(
+        `selectOption() was given ${wanted.length} values, but this <select> is not multiple. `
+        + 'Add the multiple attribute, or pass one value.',
+      )
+    }
+
+    const options: any[] = Array.from(element.querySelectorAll?.('option') ?? [])
+
+    for (const option of options)
+      option.selected = false
+
+    const chosen: any[] = []
+    for (const want of wanted) {
+      const match = options.find((option, index) => matchesOption(option, index, want))
+      if (!match)
+        throw new Error(`selectOption() found no <option> matching ${JSON.stringify(want)}`)
+
+      match.selected = true
+      chosen.push(match)
+    }
+
+    element.focus?.()
+    this._dispatch(element, 'input', 'InputEvent', { inputType: 'insertReplacementText' })
+    this._dispatch(element, 'change', 'Event')
+
+    return chosen.map(option => String(option.value ?? ''))
+  }
+
+  /**
+   * @internal Attach files to an `<input type=file>` and announce the change.
+   *
+   * Assigning to `input.files` needs a `FileList`, which is why Playwright has a
+   * method for this at all. A string is read from disk, as Playwright does; an
+   * object is built in memory, which is what a test usually wants.
+   */
+  async _setInputFiles(element: any, files: InputFile[]): Promise<void> {
+    const tag = String(element.tagName ?? '').toUpperCase()
+    const type = String(element.getAttribute?.('type') ?? '').toLowerCase()
+    if (tag !== 'INPUT' || type !== 'file')
+      throw new Error(`setInputFiles() expects an <input type="file">, not <${tag.toLowerCase() || 'unknown'} type="${type}">`)
+
+    if (files.length > 1 && !element.hasAttribute?.('multiple')) {
+      throw new Error(
+        `setInputFiles() was given ${files.length} files, but this input is not multiple. `
+        + 'Add the multiple attribute, or pass one file.',
+      )
+    }
+
+    const window = this.mainFrame.window as any
+    const built: any[] = []
+
+    for (const file of files) {
+      if (typeof file === 'string') {
+        const handle = Bun.file(file)
+        const bytes = new Uint8Array(await handle.arrayBuffer())
+        built.push(new window.File([bytes], file.split('/').pop() ?? file, { type: handle.type || '' }))
+        continue
+      }
+
+      built.push(new window.File([file.buffer], file.name, { type: file.mimeType ?? '' }))
+    }
+
+    element.files = new window.FileList(built)
+
+    element.focus?.()
+    this._dispatch(element, 'input', 'InputEvent', { inputType: 'insertReplacementText' })
+    this._dispatch(element, 'change', 'Event')
+  }
+
+  /**
+   * @internal Two clicks and the `dblclick` a browser adds on top.
+   *
+   * The extra event is the part two `click()` calls does not give, and it is the
+   * one a double-click handler listens for.
+   */
+  async _dblclickElement(element: any): Promise<void> {
+    element.focus?.()
+    element.click?.()
+    element.click?.()
+    this._dispatch(element, 'dblclick', 'MouseEvent', { detail: 2 })
+  }
+
   async _fillElement(element: any, value: string): Promise<void> {
     element.focus?.()
     this._dispatch(element, 'beforeinput', 'InputEvent', { data: value, inputType: 'insertReplacementText' })
@@ -618,6 +747,55 @@ export class BrowserPage {
    * `document.activeElement` untouched, so anything reading it disagreed with
    * the event that had just fired.
    */
+  /** Choose options on a `<select>` found by selector. */
+  async selectOption(
+    selector: string,
+    values: SelectOptionValue | SelectOptionValue[] | null,
+  ): Promise<string[]> {
+    const wanted = values === null ? [] : (Array.isArray(values) ? values : [values])
+    return this._selectOptions(this._element(selector), wanted)
+  }
+
+  /** Attach files to an `<input type=file>` found by selector. */
+  async setInputFiles(selector: string, files: InputFile | InputFile[] | null): Promise<void> {
+    const wanted = files === null ? [] : (Array.isArray(files) ? files : [files])
+    await this._setInputFiles(this._element(selector), wanted)
+  }
+
+  /** Focus the element and press a key, or a `Modifier+Key` combination. */
+  async press(selector: string, key: string, options: { delay?: number } = {}): Promise<void> {
+    this._element(selector).focus?.()
+    await this.keyboard.press(key, options)
+  }
+
+  /** Empty a field. */
+  async clear(selector: string): Promise<void> {
+    await this._fillElement(this._element(selector), '')
+  }
+
+  /** Two clicks, plus the `dblclick` event. */
+  async dblclick(selector: string): Promise<void> {
+    await this._dblclickElement(this._element(selector))
+  }
+
+  /** Tick a checkbox or radio, doing nothing when it is already ticked. */
+  async check(selector: string): Promise<void> {
+    const element = this._element(selector)
+    if (!isChecked(element)) {
+      element.focus?.()
+      element.click?.()
+    }
+  }
+
+  /** Untick a checkbox, doing nothing when it is already clear. */
+  async uncheck(selector: string): Promise<void> {
+    const element = this._element(selector)
+    if (isChecked(element)) {
+      element.focus?.()
+      element.click?.()
+    }
+  }
+
   async focus(selector: string): Promise<void> {
     this._element(selector).focus?.()
   }

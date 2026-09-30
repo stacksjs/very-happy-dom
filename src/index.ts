@@ -69,7 +69,7 @@ export { VeryHappyFile as File, VeryHappyFileList as FileList, VeryHappyFileRead
 export { Browser } from './browser/Browser'
 export { BrowserContext } from './browser/BrowserContext'
 export { BrowserFrame } from './browser/BrowserFrame'
-export type { EventTarget, IBrowserPageViewport, LoadState, PageEventHandler, PageEventType, WaitForEventOptions } from './browser/BrowserPage'
+export type { EventTarget, InputFile, IBrowserPageViewport, LoadState, PageEventHandler, PageEventType, SelectOptionValue, WaitForEventOptions } from './browser/BrowserPage'
 export { BrowserPage } from './browser/BrowserPage'
 
 export type { ICookie } from './browser/CookieContainer'

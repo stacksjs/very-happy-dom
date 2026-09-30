@@ -23,6 +23,7 @@
  * saying plainly that they are skipped.
  */
 
+import type { InputFile, SelectOptionValue } from './BrowserPage'
 import { accessibleName, computeRole, headingLevel } from '../aria/roles'
 import { checkedState, isChecked, isSelected } from '../aria/state'
 import { isExposedToAria } from '../aria/visibility'
@@ -537,6 +538,67 @@ export class Locator {
     const element = await this._actionTarget('check', options.timeout)
     if (!isChecked(element))
       this._press(element)
+  }
+
+  /**
+   * Choose one or more `<option>`s, and report the values that ended up selected.
+   *
+   * Named by bare value, or by `{ value }`, `{ label }` or `{ index }`. Setting
+   * `select.value` by hand does not fire `change`, so a component listening for it
+   * never updates and the test passes against a DOM the application never saw —
+   * which is the reason this exists.
+   */
+  async selectOption(
+    values: SelectOptionValue | SelectOptionValue[] | null,
+    options: ActionOptions = {},
+  ): Promise<string[]> {
+    const element = await this._actionTarget('selectOption', options.timeout)
+    const wanted = values === null ? [] : (Array.isArray(values) ? values : [values])
+    return this._page._selectOptions(element, wanted)
+  }
+
+  /**
+   * Attach files to an `<input type=file>`.
+   *
+   * A string is a path read from disk, as in Playwright; an object is built in
+   * memory from bytes. Assigning `input.files` by hand needs a `FileList`, which
+   * is why a method exists for this at all.
+   */
+  async setInputFiles(
+    files: InputFile | InputFile[] | null,
+    options: ActionOptions = {},
+  ): Promise<void> {
+    const element = await this._actionTarget('setInputFiles', options.timeout)
+    const wanted = files === null ? [] : (Array.isArray(files) ? files : [files])
+    await this._page._setInputFiles(element, wanted)
+  }
+
+  /**
+   * Focus the element and press a key, or a `Modifier+Key` combination.
+   *
+   * Routed through the page's keyboard so the combination parsing lives in one
+   * place (#1615), and focused first because `page.keyboard` only ever reaches
+   * whatever already has focus — which is the half that is easy to forget.
+   */
+  async press(key: string, options: ActionOptions & { delay?: number } = {}): Promise<void> {
+    const element = await this._actionTarget('press', options.timeout)
+    element.focus?.()
+    await this._page.keyboard.press(key, { delay: options.delay })
+  }
+
+  /** Empty a field, firing the same events `fill('')` does. */
+  async clear(options: ActionOptions = {}): Promise<void> {
+    await this.fill('', options)
+  }
+
+  /** Two clicks, plus the `dblclick` event a browser adds on top. */
+  async dblclick(options: ActionOptions = {}): Promise<void> {
+    await this._page._dblclickElement(await this._actionTarget('dblclick', options.timeout))
+  }
+
+  /** Tick or untick, according to `checked`. */
+  async setChecked(checked: boolean, options: ActionOptions = {}): Promise<void> {
+    await (checked ? this.check(options) : this.uncheck(options))
   }
 
   /** Untick a checkbox, doing nothing when it is already clear. */
