@@ -270,6 +270,45 @@ export function accessibleName(element: ElementLike): string {
   return ''
 }
 
+/**
+ * The description a screen reader would announce after the name.
+ *
+ * `aria-describedby` first, resolved through the document the same way
+ * `accessibleName` resolves `aria-labelledby`; then `aria-description`, then
+ * `title`. An element with no description answers with an empty string rather than
+ * null, matching `accessibleName`.
+ *
+ * `title` is last because it is also a name source: an element whose only text is
+ * a `title` uses it as its name, and using it as the description too would have
+ * the same string answer both questions.
+ */
+export function accessibleDescription(element: ElementLike): string {
+  const describedBy = element.getAttribute('aria-describedby')
+  if (describedBy) {
+    const document = element.ownerDocument
+    const described = describedBy
+      .split(/\s+/)
+      .map(id => document?.getElementById(id))
+      .filter(Boolean)
+      .map(target => normalize(target!.textContent))
+      .filter(Boolean)
+      .join(' ')
+    if (described)
+      return described
+  }
+
+  const description = normalize(element.getAttribute('aria-description'))
+  if (description)
+    return description
+
+  // Only when the title is not already doing duty as the name.
+  const title = normalize(element.getAttribute('title'))
+  if (title && accessibleName(element) !== title)
+    return title
+
+  return ''
+}
+
 /** Heading depth, or null when the element is not a heading. */
 export function headingLevel(element: ElementLike): number | null {
   const explicit = element.getAttribute('aria-level')

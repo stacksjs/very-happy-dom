@@ -24,7 +24,7 @@
  */
 
 import type { InputFile, SelectOptionValue } from './BrowserPage'
-import { accessibleName, computeRole, headingLevel } from '../aria/roles'
+import { accessibleDescription, accessibleName, computeRole, headingLevel } from '../aria/roles'
 import { checkedState, isChecked, isSelected } from '../aria/state'
 import { isExposedToAria } from '../aria/visibility'
 import { waitUntil } from './waiting'
@@ -541,6 +541,17 @@ export class Locator {
   /** The name a screen reader would announce. */
   async accessibleName(): Promise<string> {
     return accessibleName(this._one())
+  }
+
+  /** The description a screen reader would announce after the name. */
+  async accessibleDescription(): Promise<string> {
+    return accessibleDescription(this._one())
+  }
+
+  /** Every selected value, for a `<select multiple>`. */
+  async selectedValues(): Promise<string[]> {
+    const element = this._one()
+    return Array.from(element.selectedOptions ?? []).map((option: any) => String(option.value ?? ''))
   }
 
   // --------------------------------------------------------------------- state

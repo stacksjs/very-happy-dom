@@ -56,6 +56,7 @@ export type {
 } from './apis/Canvas'
 export { accessibleName, computeRole, headingLevel } from './aria/roles'
 export type { CheckedState } from './aria/state'
+export { accessibleDescription } from './aria/roles'
 export { checkedState, isChecked, isSelected, selectedState } from './aria/state'
 export { Locator } from './browser/Locator'
 export type { ActionOptions, FilterOptions, GetByRoleOptions, GetByTextOptions, WaitForOptions, WaitForState } from './browser/Locator'

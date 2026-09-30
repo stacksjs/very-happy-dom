@@ -483,6 +483,114 @@ export const matchers = {
     ))
   },
 
+  async toHaveRole(this: MatcherContext, received: unknown, expected: string, options: AssertionOptions = {}): Promise<MatcherResult> {
+    const locator = asLocator(received, 'toHaveRole')
+    // The thing `getByRole` queries on, which is what makes a failing role query
+    // diagnosable: "nothing matched" says nothing about why.
+    return assertThat(this, locator, `the role ${JSON.stringify(expected)}`, timeoutOf(locator, options.timeout), onElement(
+      locator,
+      async () => {
+        const role = await locator.ariaRole()
+        return { pass: role === expected, actual: role === null ? 'no role' : JSON.stringify(role) }
+      },
+    ))
+  },
+
+  async toHaveAccessibleName(
+    this: MatcherContext,
+    received: unknown,
+    expected: string | RegExp,
+    options: AssertionOptions & { exact?: boolean } = {},
+  ): Promise<MatcherResult> {
+    const locator = asLocator(received, 'toHaveAccessibleName')
+    return assertThat(this, locator, expectationFor(expected, 'the accessible name'), timeoutOf(locator, options.timeout), onElement(
+      locator,
+      async () => compare(await locator.accessibleName(), expected, options.exact !== false),
+    ))
+  },
+
+  async toHaveAccessibleDescription(
+    this: MatcherContext,
+    received: unknown,
+    expected: string | RegExp,
+    options: AssertionOptions & { exact?: boolean } = {},
+  ): Promise<MatcherResult> {
+    const locator = asLocator(received, 'toHaveAccessibleDescription')
+    return assertThat(this, locator, expectationFor(expected, 'the accessible description'), timeoutOf(locator, options.timeout), onElement(
+      locator,
+      async () => compare(await locator.accessibleDescription(), expected, options.exact !== false),
+    ))
+  },
+
+  async toHaveCSS(
+    this: MatcherContext,
+    received: unknown,
+    name: string,
+    expected: string | RegExp,
+    options: AssertionOptions = {},
+  ): Promise<MatcherResult> {
+    const locator = asLocator(received, 'toHaveCSS')
+    const page = pageOf(locator)
+
+    return assertThat(this, locator, `${name}=${JSON.stringify(expected instanceof RegExp ? String(expected) : expected)}`, timeoutOf(locator, options.timeout), onElement(
+      locator,
+      (element) => {
+        const view = element.ownerDocument?.defaultView ?? page?.mainFrame?.window
+        const resolved = String(view?.getComputedStyle?.(element)?.getPropertyValue?.(name) ?? '')
+        const judged = compare(resolved, expected, true)
+
+        // Values are compared as the engine reports them. `'red'` against a
+        // computed `'rgb(255, 0, 0)'` has to fail rather than be normalised into
+        // passing, and saying so here saves the puzzling.
+        if (!judged.pass && typeof expected === 'string' && resolved !== '') {
+          return { pass: false, actual: `${judged.actual} (compared as written; computed values are not normalised)` }
+        }
+
+        return judged
+      },
+    ))
+  },
+
+  async toHaveId(this: MatcherContext, received: unknown, expected: string | RegExp, options: AssertionOptions = {}): Promise<MatcherResult> {
+    const locator = asLocator(received, 'toHaveId')
+    return assertThat(this, locator, expectationFor(expected, 'the id'), timeoutOf(locator, options.timeout), onElement(
+      locator,
+      element => compare(String(element.getAttribute?.('id') ?? ''), expected, true),
+    ))
+  },
+
+  async toHaveJSProperty(
+    this: MatcherContext,
+    received: unknown,
+    name: string,
+    expected: unknown,
+    options: AssertionOptions = {},
+  ): Promise<MatcherResult> {
+    const locator = asLocator(received, 'toHaveJSProperty')
+    return assertThat(this, locator, `${name} === ${JSON.stringify(expected)}`, timeoutOf(locator, options.timeout), onElement(
+      locator,
+      (element) => {
+        // Reached by path, so `validity.valid` works as it does in Playwright.
+        const actual = name.split('.').reduce<any>((value, key) => value?.[key], element)
+        return { pass: Object.is(actual, expected), actual: JSON.stringify(actual) ?? String(actual) }
+      },
+    ))
+  },
+
+  async toHaveValues(
+    this: MatcherContext,
+    received: unknown,
+    expected: Array<string | RegExp>,
+    options: AssertionOptions = {},
+  ): Promise<MatcherResult> {
+    const locator = asLocator(received, 'toHaveValues')
+    // Worth having now that `selectOption` exists to set the state (#1608).
+    return assertThat(this, locator, expectationFor(expected, 'the selected values'), timeoutOf(locator, options.timeout), onElement(
+      locator,
+      async () => compareAll(await locator.selectedValues(), expected, true),
+    ))
+  },
+
   async toHaveURL(this: MatcherContext, received: unknown, expected: string | RegExp, options: AssertionOptions = {}): Promise<MatcherResult> {
     const page = asPage(received, 'toHaveURL')
     return assertThat(this, { toString: () => 'the page' }, expectationFor(expected, 'the URL'), timeoutOf(page, options.timeout), () =>
@@ -538,6 +646,23 @@ declare module 'bun:test' {
     toBeFocused: (options?: AssertionOptions) => Promise<void>
     /** No text and no child elements. */
     toBeEmpty: (options?: AssertionOptions) => Promise<void>
+    /** The computed role, which is what `getByRole` queries on. */
+    toHaveRole: (expected: string, options?: AssertionOptions) => Promise<void>
+    toHaveAccessibleName: (
+      expected: string | RegExp,
+      options?: AssertionOptions & { exact?: boolean },
+    ) => Promise<void>
+    toHaveAccessibleDescription: (
+      expected: string | RegExp,
+      options?: AssertionOptions & { exact?: boolean },
+    ) => Promise<void>
+    /** Compared as the engine reports it: `'red'` will not match `'rgb(255, 0, 0)'`. */
+    toHaveCSS: (name: string, expected: string | RegExp, options?: AssertionOptions) => Promise<void>
+    toHaveId: (expected: string | RegExp, options?: AssertionOptions) => Promise<void>
+    /** A property, reachable by path — `validity.valid` works. */
+    toHaveJSProperty: (name: string, expected: unknown, options?: AssertionOptions) => Promise<void>
+    /** Every selected value of a `<select multiple>`. */
+    toHaveValues: (expected: Array<string | RegExp>, options?: AssertionOptions) => Promise<void>
     /** Asked of a page, not a locator. */
     toHaveURL: (expected: string | RegExp, options?: AssertionOptions) => Promise<void>
     /** Asked of a page, not a locator. */

@@ -155,10 +155,20 @@ element with no checked state rather than answering `false`, so
 `.not.toBeChecked()` cannot pass against a plain `<div>`.
 
 Locators: `toBeAttached`, `toBeVisible`, `toBeHidden`, `toHaveCount`,
-`toHaveText`, `toContainText`, `toHaveValue`, `toHaveAttribute`, `toHaveClass`,
-`toBeEnabled`, `toBeDisabled`, `toBeChecked`, `toBeEditable`, `toBeFocused`,
-`toBeEmpty`. Pages: `toHaveURL`, `toHaveTitle`. Each takes an optional
-`{ timeout }`, defaulting to `page.setDefaultTimeout()`.
+`toHaveText`, `toContainText`, `toHaveValue`, `toHaveValues`, `toHaveAttribute`,
+`toHaveClass`, `toHaveId`, `toHaveCSS`, `toHaveJSProperty`, `toHaveRole`,
+`toHaveAccessibleName`, `toHaveAccessibleDescription`, `toBeEnabled`,
+`toBeDisabled`, `toBeChecked`, `toBeEditable`, `toBeFocused`, `toBeEmpty`.
+Pages: `toHaveURL`, `toHaveTitle`. Each takes an optional `{ timeout }`,
+defaulting to `page.setDefaultTimeout()`.
+
+`toHaveRole` and `toHaveAccessibleName` assert what `getByRole` queries on, which
+is how a failing role query becomes diagnosable. `toHaveCSS` compares values **as
+the engine reports them**, so `'red'` will not match a computed `'rgb(255, 0, 0)'`
+— use a RegExp. `toHaveJSProperty` takes a path, so `validity.valueMissing` works.
+
+`toBeInViewport` is deliberately absent: with no layout pass a bounding box has no
+position, so it could only ever answer "yes".
 
 An element is hidden by `display: none`, `visibility: hidden`, the `hidden`
 attribute, or a **declared** zero size — `height: 0`, `max-height: 0` and the
