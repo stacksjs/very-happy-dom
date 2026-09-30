@@ -28,15 +28,20 @@ beforeEach(() => {
   page.setDefaultTimeout(200)
 })
 
-function render(css: string, markup: string): void {
-  document.head.innerHTML = css ? `<style>${css}</style>` : ''
-  document.body.innerHTML = markup
+/**
+ * Put a stylesheet and markup in the page.
+ *
+ * This was a hand-rolled `setContent` before there was one to call — written out
+ * in two test files, which is what #1610 was filed about.
+ */
+async function render(css: string, markup: string): Promise<void> {
+  await page.setContent(`<head>${css ? `<style>${css}</style>` : ''}</head><body>${markup}</body>`)
 }
 
 describe('a declared zero collapses the element', () => {
   test('a closed drawer hides the button inside it', async () => {
     // The reproduction from the issue.
-    render('.collapsed { height: 0; overflow: hidden }', '<div class="collapsed"><button>Hidden action</button></div>')
+    await render('.collapsed { height: 0; overflow: hidden }', '<div class="collapsed"><button>Hidden action</button></div>')
 
     expect(await page.getByRole('button').count()).toBe(0)
     expect(await page.getByRole('button').isVisible()).toBe(false)
@@ -45,7 +50,7 @@ describe('a declared zero collapses the element', () => {
   test('the action no longer succeeds against it', async () => {
     // Since #1604 an action auto-waits and then clicks, so this used to resolve
     // and report success for a button nobody could reach.
-    render('.collapsed { height: 0 }', '<div class="collapsed"><button>Go</button></div>')
+    await render('.collapsed { height: 0 }', '<div class="collapsed"><button>Go</button></div>')
 
     await expect(page.getByRole('button').click({ timeout: 40 }))
       .rejects
@@ -53,7 +58,7 @@ describe('a declared zero collapses the element', () => {
   })
 
   test('height and width both count, alone', async () => {
-    render(
+    await render(
       '.zh { height: 0 } .zw { width: 0 }',
       '<button class="zh">A</button><button class="zw">B</button><button>C</button>',
     )
@@ -65,31 +70,31 @@ describe('a declared zero collapses the element', () => {
   test('max-height: 0 is the other common spelling', async () => {
     // The reason `overflow: hidden` is not required: this collapses too, and
     // demanding both properties would miss it.
-    render('.shut { max-height: 0; overflow: hidden }', '<div class="shut"><button>Inside</button></div>')
+    await render('.shut { max-height: 0; overflow: hidden }', '<div class="shut"><button>Inside</button></div>')
 
     expect(await page.getByRole('button').count()).toBe(0)
   })
 
   test('max-width: 0 as well', async () => {
-    render('.shut { max-width: 0 }', '<div class="shut"><button>Inside</button></div>')
+    await render('.shut { max-width: 0 }', '<div class="shut"><button>Inside</button></div>')
 
     expect(await page.getByRole('button').count()).toBe(0)
   })
 
   test('an inline style counts, not only a stylesheet rule', async () => {
-    render('', '<div style="height: 0"><button>Inside</button></div>')
+    await render('', '<div style="height: 0"><button>Inside</button></div>')
 
     expect(await page.getByRole('button').count()).toBe(0)
   })
 
   test('0% is zero of any container', async () => {
-    render('.pct { height: 0% }', '<div class="pct"><button>Inside</button></div>')
+    await render('.pct { height: 0% }', '<div class="pct"><button>Inside</button></div>')
 
     expect(await page.getByRole('button').count()).toBe(0)
   })
 
   test('0px is the same as 0', async () => {
-    render('.px { height: 0px }', '<div class="px"><button>Inside</button></div>')
+    await render('.px { height: 0px }', '<div class="px"><button>Inside</button></div>')
 
     expect(await page.getByRole('button').count()).toBe(0)
   })
@@ -100,7 +105,7 @@ describe('what must stay visible', () => {
     // The guard against the naive fix, and the most important test in this file.
     // Without layout this button's bounding box is empty, so a rule based on the
     // box would hide it — and with it, most of the suite.
-    render('', '<button>Save</button>')
+    await render('', '<button>Save</button>')
 
     expect(await page.getByRole('button').count()).toBe(1)
     expect(await page.getByRole('button').isVisible()).toBe(true)
@@ -113,13 +118,13 @@ describe('what must stay visible', () => {
   })
 
   test('height: auto is not zero', async () => {
-    render('.auto { height: auto; width: auto }', '<div class="auto"><button>Inside</button></div>')
+    await render('.auto { height: auto; width: auto }', '<div class="auto"><button>Inside</button></div>')
 
     expect(await page.getByRole('button').count()).toBe(1)
   })
 
   test('a non-zero size is visible', async () => {
-    render('.sized { height: 20px; width: 100px }', '<div class="sized"><button>Inside</button></div>')
+    await render('.sized { height: 20px; width: 100px }', '<div class="sized"><button>Inside</button></div>')
 
     expect(await page.getByRole('button').count()).toBe(1)
   })
@@ -128,13 +133,13 @@ describe('what must stay visible', () => {
     // `calc(0px)` is zero, but parsing arithmetic to find out is a different
     // project. Assuming it is not zero keeps the element reachable, which is the
     // safe direction to be wrong in.
-    render('.calc { height: calc(0px) }', '<div class="calc"><button>Inside</button></div>')
+    await render('.calc { height: calc(0px) }', '<div class="calc"><button>Inside</button></div>')
 
     expect(await page.getByRole('button').count()).toBe(1)
   })
 
   test('an open drawer shows its contents again', async () => {
-    render('.drawer { height: 0; overflow: hidden } .drawer.open { height: 200px }',
+    await render('.drawer { height: 0; overflow: hidden } .drawer.open { height: 200px }',
       '<div class="drawer" id="d"><button>Inside</button></div>')
     expect(await page.getByRole('button').count()).toBe(0)
 
@@ -148,7 +153,7 @@ describe('what must stay visible', () => {
 
 describe('the two predicates stay separate', () => {
   test('includeHidden still finds a collapsed element', async () => {
-    render('.collapsed { height: 0 }', '<div class="collapsed"><button>Shut</button></div>')
+    await render('.collapsed { height: 0 }', '<div class="collapsed"><button>Shut</button></div>')
 
     expect(await page.getByRole('button', { includeHidden: true }).count()).toBe(1)
   })
@@ -156,21 +161,21 @@ describe('the two predicates stay separate', () => {
   test('aria-hidden is still not the same question', async () => {
     // #1601's distinction, unaffected: an aria-hidden element is painted, so it
     // is visible even though a role query skips it.
-    render('', '<button id="d" aria-hidden="true">Decorative</button>')
+    await render('', '<button id="d" aria-hidden="true">Decorative</button>')
 
     expect(await page.isVisible('#d')).toBe(true)
     expect(await page.getByRole('button').count()).toBe(0)
   })
 
   test('toBeHidden agrees about a collapsed element', async () => {
-    render('.collapsed { height: 0 }', '<div class="collapsed" id="c">shut</div>')
+    await render('.collapsed { height: 0 }', '<div class="collapsed" id="c">shut</div>')
 
     await expect(page.locator('#c')).toBeHidden()
     await expect(page.locator('#c')).toBeAttached()
   })
 
   test('waitFor({ state: hidden }) resolves when a drawer closes', async () => {
-    render('.drawer { height: 200px }', '<div class="drawer" id="d">open</div>')
+    await render('.drawer { height: 200px }', '<div class="drawer" id="d">open</div>')
     setTimeout(() => { document.querySelector('#d').style.height = '0' }, 20)
 
     await expect(page.locator('#d').waitFor({ state: 'hidden' })).resolves.toBeUndefined()

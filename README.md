@@ -174,6 +174,18 @@ disabled — and `locator.waitFor({ state })` covers `attached`, `detached`,
 stable (not mid-animation) and receives-events (not covered by another element).
 Both need a layout pass.
 
+### Setting Page Content
+
+```typescript
+await page.setContent('<button>Save</button>')
+await expect(page.getByRole('button')).toBeVisible()
+```
+
+A bare fragment becomes the body; a full `<!DOCTYPE html><html><head>…` string
+lands intact. It replaces the whole document rather than filling the body, fires
+`domcontentloaded` and `load` so an assertion straight afterwards needs no wait,
+and leaves the URL alone — setting content is not navigating.
+
 ### Form Controls
 
 ```typescript

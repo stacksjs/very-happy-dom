@@ -24,15 +24,19 @@ beforeEach(() => {
   document = page.mainFrame.window.document
 })
 
-/** Put a stylesheet and markup in the page. */
-function render(css: string, markup: string): void {
-  document.head.innerHTML = css ? `<style>${css}</style>` : ''
-  document.body.innerHTML = markup
+/**
+ * Put a stylesheet and markup in the page.
+ *
+ * This was a hand-rolled `setContent` before there was one to call — written out
+ * in two test files, which is what #1610 was filed about.
+ */
+async function render(css: string, markup: string): Promise<void> {
+  await page.setContent(`<head>${css ? `<style>${css}</style>` : ''}</head><body>${markup}</body>`)
 }
 
 describe('role queries skip hidden elements', async () => {
   test('a display:none copy does not compete with the visible one', async () => {
-    render('.closed { display: none }', '<div class="closed"><button>Save</button></div><button>Save</button>')
+    await render('.closed { display: none }', '<div class="closed"><button>Save</button></div><button>Save</button>')
 
     const save = page.getByRole('button', { name: 'Save' })
     expect(await save.count()).toBe(1)
@@ -41,20 +45,20 @@ describe('role queries skip hidden elements', async () => {
   })
 
   test('clicking resolves instead of throwing on a hidden duplicate', async () => {
-    render('.closed { display: none }', '<div class="closed"><button>Save</button></div><button>Save</button>')
+    await render('.closed { display: none }', '<div class="closed"><button>Save</button></div><button>Save</button>')
 
     // Used to throw: '2 elements match getByRole("button")'.
     await expect(page.getByRole('button', { name: 'Save' }).click()).resolves.toBeUndefined()
   })
 
   test('an element hidden by an ancestor is skipped', async () => {
-    render('.panel { display: none }', '<div class="panel"><section><button>Only</button></section></div>')
+    await render('.panel { display: none }', '<div class="panel"><section><button>Only</button></section></div>')
 
     expect(await page.getByRole('button', { name: 'Only' }).count()).toBe(0)
   })
 
   test('visibility: hidden and collapse are skipped', async () => {
-    render(
+    await render(
       '.invisible { visibility: hidden } .collapsed { visibility: collapse }',
       '<button class="invisible">A</button><button class="collapsed">B</button><button>C</button>',
     )
@@ -64,7 +68,7 @@ describe('role queries skip hidden elements', async () => {
   })
 
   test('the hidden attribute is skipped', async () => {
-    render('', '<button hidden>A</button><button>B</button>')
+    await render('', '<button hidden>A</button><button>B</button>')
 
     expect(await page.getByRole('button').count()).toBe(1)
   })
@@ -72,14 +76,14 @@ describe('role queries skip hidden elements', async () => {
   test('aria-hidden is skipped even though the element is painted', async () => {
     // Visually present but removed from the accessibility tree, which is what
     // a role query reads. This is the case `isVisible()` must NOT copy.
-    render('', '<button aria-hidden="true">Decorative</button><button>Real</button>')
+    await render('', '<button aria-hidden="true">Decorative</button><button>Real</button>')
 
     expect(await page.getByRole('button').count()).toBe(1)
     expect(await page.getByRole('button').textContent()).toBe('Real')
   })
 
   test('aria-hidden on an ancestor hides the subtree', async () => {
-    render('', '<div aria-hidden="true"><button>Inside</button></div><button>Outside</button>')
+    await render('', '<div aria-hidden="true"><button>Inside</button></div><button>Outside</button>')
 
     expect(await page.getByRole('button').count()).toBe(1)
     expect(await page.getByRole('button').textContent()).toBe('Outside')
@@ -88,13 +92,13 @@ describe('role queries skip hidden elements', async () => {
   test('nothing matches when the only candidate is hidden', async () => {
     // The quiet failure: this used to resolve and let an assertion pass
     // against markup no user could reach.
-    render('.closed { display: none }', '<div class="closed"><button>Ghost</button></div>')
+    await render('.closed { display: none }', '<div class="closed"><button>Ghost</button></div>')
 
     expect(await page.getByRole('button', { name: 'Ghost' }).count()).toBe(0)
   })
 
   test('includeHidden brings them back deliberately', async () => {
-    render('.closed { display: none }', '<div class="closed"><button>Save</button></div><button>Save</button>')
+    await render('.closed { display: none }', '<div class="closed"><button>Save</button></div><button>Save</button>')
 
     expect(await page.getByRole('button', { name: 'Save', includeHidden: true }).count()).toBe(2)
   })
@@ -102,19 +106,19 @@ describe('role queries skip hidden elements', async () => {
 
 describe('the other getBy helpers agree with getByRole', async () => {
   test('getByText skips a hidden copy', async () => {
-    render('.closed { display: none }', '<div class="closed"><span>Total</span></div><span>Total</span>')
+    await render('.closed { display: none }', '<div class="closed"><span>Total</span></div><span>Total</span>')
 
     expect(await page.getByText('Total').count()).toBe(1)
   })
 
   test('getByLabel skips a control in a hidden panel', async () => {
-    render('.closed { display: none }', '<div class="closed"><label for="a">Email</label><input id="a"></div>')
+    await render('.closed { display: none }', '<div class="closed"><label for="a">Email</label><input id="a"></div>')
 
     expect(await page.getByLabel('Email').count()).toBe(0)
   })
 
   test('getByPlaceholder, getByAltText, getByTitle and getByTestId skip hidden', async () => {
-    render('.closed { display: none }', `
+    await render('.closed { display: none }', `
       <div class="closed">
         <input placeholder="Search">
         <img alt="Logo">
@@ -134,13 +138,13 @@ describe('isVisible keeps its own meaning', async () => {
   test('an aria-hidden element is still visible to a user', async () => {
     // Role queries skip it; isVisible must not, because it is painted. Two
     // related questions with different answers, kept deliberately apart.
-    render('', '<button id="d" aria-hidden="true">Decorative</button>')
+    await render('', '<button id="d" aria-hidden="true">Decorative</button>')
 
     expect(await page.isVisible('#d')).toBe(true)
   })
 
   test('a display:none element is not visible', async () => {
-    render('.closed { display: none }', '<button id="h" class="closed">Hidden</button>')
+    await render('.closed { display: none }', '<button id="h" class="closed">Hidden</button>')
 
     expect(await page.isVisible('#h')).toBe(false)
   })

@@ -279,6 +279,23 @@ export class BrowserFrame {
   }
 
   /**
+   * Replace the document with `html`, as `page.setContent()` does.
+   *
+   * Goes through the same `_commit` a navigation uses, rather than assigning
+   * `body.innerHTML`, which is what the reach-through looked like before (#1610).
+   * Two consequences follow from that and are the reason it matters: a full
+   * document string lands where it belongs, `<head>` included, and the document
+   * is *replaced* rather than having its body filled — so `head` and `body` are
+   * rebuilt instead of going stale, which was the bug behind #1595.
+   *
+   * The URL is left alone. Setting content is not navigating, and rewriting the
+   * URL would make `toHaveURL` disagree with where the page actually is.
+   */
+  setContent(html: string): void {
+    this._commit(this.url, html, false)
+  }
+
+  /**
    * Navigates the frame to a URL
    */
   /**
@@ -446,10 +463,23 @@ export class BrowserFrame {
    * navigation.
    */
   private _asDocumentMarkup(html: string): string {
-    if (/<(?:html|body|head)\b/i.test(html))
-      return html
+    // A doctype is a prologue, not a node `documentElement` can hold.
+    let markup = html.replace(/^\s*<!doctype[^>]*>/i, '').trim()
 
-    return `<head></head><body>${html}</body>`
+    // `documentElement` *is* the <html>, so a full document's own wrapper has to
+    // come off. Assigning it whole nested an <html> inside the <html>, and the
+    // result was a document whose elements existed — `body.innerHTML` showed
+    // them — but which `document.querySelector` could not reach. A navigation
+    // to any full document without a doctype landed in that state, so this is a
+    // `goto` fix as much as a `setContent` one.
+    const wrapped = /^<html\b[^>]*>([\s\S]*)<\/html\s*>$/i.exec(markup)
+    if (wrapped)
+      markup = wrapped[1]
+
+    if (/<(?:html|body|head)\b/i.test(markup))
+      return markup
+
+    return `<head></head><body>${markup}</body>`
   }
 
   /**

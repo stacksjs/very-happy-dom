@@ -298,6 +298,24 @@ export class BrowserPage {
     this._defaultTimeout = timeout
   }
 
+  /**
+   * Replace the page's document with `html`.
+   *
+   * `page.content` was a getter with no setter, so putting markup in a page meant
+   * reaching through three objects to `mainFrame.window.document.body.innerHTML`
+   * (#1610). That is not only verbose: it assumes there is a body, which is not
+   * true of a page whose document was replaced, and it skips what this does
+   * around the assignment — replacing the whole document, and firing
+   * `domcontentloaded` and `load` so an assertion immediately afterwards is safe
+   * without a wait.
+   *
+   * A bare fragment becomes the body; a full `<!DOCTYPE html><html>…` string lands
+   * intact, `<head>` included.
+   */
+  async setContent(html: string): Promise<void> {
+    (this.mainFrame as any).setContent(html)
+  }
+
   /** @internal The timeout a `waitFor*` call should use when given none. */
   _defaultTimeoutMs(): number {
     return this._defaultTimeout ?? (this._context as any)?._timeout?.() ?? 30000
