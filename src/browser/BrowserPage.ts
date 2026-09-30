@@ -9,6 +9,7 @@ import type { GetByRoleOptions, GetByTextOptions } from './Locator'
 import { matchesPattern, RouteRegistry } from '../network/routing'
 import { byAttribute, byLabel, byRole, byText, Locator } from './Locator'
 import { BrowserFrame } from './BrowserFrame'
+import { canonicalModifier, codeFor, modifierFlagFor, parseCombination, shiftKeyValue } from './keys'
 import { TimeoutError, waitUntil } from './waiting'
 
 export interface IBrowserPageViewport {
@@ -77,6 +78,8 @@ export class BrowserPage {
   private _frames: BrowserFrame[] = []
   private _eventListeners = new Map<PageEventType, Set<PageEventHandler>>()
   private _requestInterceptor = new RequestInterceptor()
+  /** Modifiers currently held down, so a later press reports them. */
+  private _heldModifiers = new Set<string>()
   /** Whether `setRequestInterception(true)` asked for interception in its own right. */
   private _explicitInterception = false
   /** The one handler that drives routing, held so it can be taken off again. */
@@ -647,43 +650,134 @@ export class BrowserPage {
    */
   get keyboard(): {
     press: (key: string, options?: { delay?: number }) => Promise<void>
+    down: (key: string) => Promise<void>
+    up: (key: string) => Promise<void>
     type: (text: string, options?: { delay?: number }) => Promise<void>
   } {
     return {
-      press: async (key: string, options: { delay?: number } = {}): Promise<void> => {
+      /**
+       * Press a key, or a `Modifier+Key` combination.
+       *
+       * Composed from `down`/`up` rather than dispatching its own events, so a
+       * combination and a held modifier cannot disagree about what a press looks
+       * like. Modifiers go down in the order given and come up in reverse, which
+       * is what a browser does.
+       */
+      press: async (combination: string, options: { delay?: number } = {}): Promise<void> => {
         const { delay = 0 } = options
-        const document = this.mainFrame.document as any
-        // Keyboard input goes to the focused element, and only falls back to
-        // the document when nothing has focus.
-        const target = document.activeElement ?? document
+        const { held, key } = parseCombination(combination)
 
-        this._dispatch(target, 'keydown', 'KeyboardEvent', { key })
+        for (const modifier of held)
+          await this.keyboard.down(modifier)
 
-        const editable = target !== document && (this._isValueField(target) || target.isContentEditable)
-        if (editable && key.length === 1) {
-          this._dispatch(target, 'beforeinput', 'InputEvent', { data: key, inputType: 'insertText' })
-          this._writeField(target, this._readField(target) + key)
-          this._dispatch(target, 'input', 'InputEvent', { data: key, inputType: 'insertText' })
-        }
-        else if (editable && key === 'Backspace') {
-          const current = this._readField(target)
-          if (current.length > 0) {
-            this._dispatch(target, 'beforeinput', 'InputEvent', { inputType: 'deleteContentBackward' })
-            this._writeField(target, current.slice(0, -1))
-            this._dispatch(target, 'input', 'InputEvent', { inputType: 'deleteContentBackward' })
-          }
-        }
+        await this.keyboard.down(key)
 
         if (delay > 0)
           await this.waitForTimeout(delay)
 
-        this._dispatch(target, 'keyup', 'KeyboardEvent', { key })
+        await this.keyboard.up(key)
+
+        for (const modifier of [...held].reverse())
+          await this.keyboard.up(modifier)
+      },
+
+      /** Hold a key down, so later presses see it. */
+      down: async (key: string): Promise<void> => {
+        const modifier = canonicalModifier(key)
+        if (modifier)
+          this._heldModifiers.add(modifier)
+
+        const resolved = modifier ?? key
+        const target = this._keyboardTarget()
+        this._dispatchKey(target, 'keydown', resolved)
+
+        if (modifier)
+          return
+
+        this._insertForKey(target, resolved)
+      },
+
+      /** Release a key. */
+      up: async (key: string): Promise<void> => {
+        const modifier = canonicalModifier(key)
+        // Cleared before the event, so releasing Control reports ctrlKey false
+        // on its own keyup, as a browser does.
+        if (modifier)
+          this._heldModifiers.delete(modifier)
+
+        this._dispatchKey(this._keyboardTarget(), 'keyup', modifier ?? key)
       },
 
       type: async (text: string, options: { delay?: number } = {}): Promise<void> => {
         for (const char of text)
           await this.keyboard.press(char, options)
       },
+    }
+  }
+
+  /**
+   * Where keyboard input goes: the focused element, or the document when nothing
+   * has focus.
+   */
+  private _keyboardTarget(): any {
+    const document = this.mainFrame.document as any
+    return document.activeElement ?? document
+  }
+
+  /** The modifier flags currently held, as a `KeyboardEvent` init. */
+  private _modifierState(): Record<string, boolean> {
+    const state: Record<string, boolean> = { ctrlKey: false, shiftKey: false, altKey: false, metaKey: false }
+    for (const modifier of this._heldModifiers) {
+      const flag = modifierFlagFor(modifier)
+      if (flag)
+        state[flag] = true
+    }
+    return state
+  }
+
+  /** A keyboard event carrying the held modifiers and the key's `code`. */
+  private _dispatchKey(target: any, type: 'keydown' | 'keyup', key: string): void {
+    const resolved = shiftKeyValue(key, this._heldModifiers.has('Shift'))
+    this._dispatch(target, type, 'KeyboardEvent', {
+      key: resolved,
+      code: codeFor(key),
+      ...this._modifierState(),
+    })
+  }
+
+  /**
+   * Write the key's text into an editable target, if it produces any.
+   *
+   * A modified key does not: `Control+a` selects, it does not type an "a". Shift
+   * is the exception, because shifting is how a capital is produced in the first
+   * place.
+   */
+  private _insertForKey(target: any, key: string): void {
+    const document = this.mainFrame.document as any
+    const editable = target !== document && (this._isValueField(target) || target.isContentEditable)
+    if (!editable)
+      return
+
+    const held = this._modifierState()
+    if (held.ctrlKey || held.altKey || held.metaKey)
+      return
+
+    const text = shiftKeyValue(key, held.shiftKey)
+
+    if (text.length === 1) {
+      this._dispatch(target, 'beforeinput', 'InputEvent', { data: text, inputType: 'insertText' })
+      this._writeField(target, this._readField(target) + text)
+      this._dispatch(target, 'input', 'InputEvent', { data: text, inputType: 'insertText' })
+      return
+    }
+
+    if (key === 'Backspace') {
+      const current = this._readField(target)
+      if (current.length === 0)
+        return
+      this._dispatch(target, 'beforeinput', 'InputEvent', { inputType: 'deleteContentBackward' })
+      this._writeField(target, current.slice(0, -1))
+      this._dispatch(target, 'input', 'InputEvent', { inputType: 'deleteContentBackward' })
     }
   }
 

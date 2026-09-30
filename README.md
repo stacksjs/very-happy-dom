@@ -174,6 +174,24 @@ disabled — and `locator.waitFor({ state })` covers `attached`, `detached`,
 stable (not mid-animation) and receives-events (not covered by another element).
 Both need a layout pass.
 
+### Keyboard
+
+```typescript
+await page.keyboard.press('Control+Enter')   // key 'Enter', ctrlKey true
+await page.keyboard.press('Shift+a')         // types 'A'
+await page.keyboard.down('Shift')
+await page.keyboard.press('Tab')             // shiftKey true
+await page.keyboard.up('Shift')
+```
+
+`Control`/`Ctrl`, `Shift`, `Alt`/`Option` and `Meta`/`Cmd`/`Command` are
+recognised, several at a time; modifiers go down in order and come up in reverse.
+`event.code` is populated (`KeyA`, `Digit1`, `ArrowDown`, `ShiftLeft`). A key held
+with Control, Alt or Meta does not insert text — `Control+A` selects rather than
+typing an "a" — while Shift produces the capital. Only a known modifier name is
+consumed, so `press('Enter')` and even a nonsense `press('a+b')` are passed
+through as literal keys.
+
 ### Running Code Against a Locator
 
 ```typescript
