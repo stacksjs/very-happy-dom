@@ -135,6 +135,87 @@ export class CSSRule {
 // CSSGroupingRule
 // ---------------------------------------------------------------------------
 
+/**
+ * Read a declaration block into a style rule's `style`.
+ *
+ * `!important` is kept out of the value and recorded as the priority, so the
+ * cascade can rank it rather than comparing it as part of a string.
+ */
+function readDeclarations(body: string, target: CSSStyleRule): void {
+  for (const declaration of body.split(';')) {
+    const colon = declaration.indexOf(':')
+    if (colon === -1)
+      continue
+
+    const property = declaration.slice(0, colon).trim()
+    const raw = declaration.slice(colon + 1).trim()
+    if (!property || !raw)
+      continue
+
+    const important = /!\s*important$/i.test(raw)
+    const value = important ? raw.replace(/\s*!\s*important$/i, '').trim() : raw
+    if (value)
+      target.style.setProperty(property, value, important ? 'important' : '')
+  }
+}
+
+/**
+ * Parse a stylesheet's text into rules.
+ *
+ * `@media` becomes a real `CSSMediaRule` holding its own nested rules. It used to
+ * become a `CSSStyleRule` whose `selectorText` was the whole `@media (...)` line
+ * and whose `style` held the block body read as declarations — so `.a { color`
+ * was a property name (#1611). The cascade had to skip anything starting with
+ * `@` to avoid applying that nonsense to elements, which is why no `@media` rule
+ * ever took effect.
+ *
+ * Other at-rules are still flattened the old way. They are skipped by the cascade
+ * and nothing reads them yet, so giving each its own class would be motion
+ * without a caller.
+ */
+function parseRuleList(text: string, sheet: CSSStyleSheet | null): CSSRule[] {
+  const parsed: CSSRule[] = []
+
+  for (const raw of splitTopLevelRules(text)) {
+    const rule = raw.trim()
+    if (!rule)
+      continue
+
+    const braceIdx = rule.indexOf('{')
+    if (braceIdx === -1)
+      continue
+
+    const selector = rule.slice(0, braceIdx).trim()
+    const body = rule.slice(braceIdx + 1, rule.lastIndexOf('}')).trim()
+
+    const media = /^@media\b(.*)$/is.exec(selector)
+    if (media) {
+      const mediaRule = new CSSMediaRule()
+      const condition = media[1].trim()
+      mediaRule.conditionText = condition
+      mediaRule.media.mediaText = condition
+      mediaRule.parentStyleSheet = sheet
+      // The body is a rule list of its own, read by this same function so a
+      // nested block cannot be parsed differently from a top-level one.
+      const nestedRules = mediaRule.cssRules as CSSRule[]
+      for (const nested of parseRuleList(body, sheet)) {
+        nested.parentRule = mediaRule
+        nestedRules.push(nested)
+      }
+      parsed.push(mediaRule)
+      continue
+    }
+
+    const styleRule = new CSSStyleRule()
+    styleRule.selectorText = selector
+    styleRule.parentStyleSheet = sheet
+    readDeclarations(body, styleRule)
+    parsed.push(styleRule)
+  }
+
+  return parsed
+}
+
 export class CSSGroupingRule extends CSSRule {
   readonly cssRules: CSSRule[] = []
 
@@ -320,34 +401,8 @@ export class CSSStyleSheet {
   replaceSync(text: string): void {
     const rules = this.cssRules as CSSRule[]
     rules.length = 0
-    for (const raw of splitTopLevelRules(text)) {
-      const rule = raw.trim()
-      if (!rule)
-        continue
-      const braceIdx = rule.indexOf('{')
-      if (braceIdx === -1)
-        continue
-      const selector = rule.slice(0, braceIdx).trim()
-      const body = rule.slice(braceIdx + 1, rule.lastIndexOf('}')).trim()
-      const styleRule = new CSSStyleRule()
-      styleRule.selectorText = selector
-      styleRule.parentStyleSheet = this
-      for (const decl of body.split(';')) {
-        const colon = decl.indexOf(':')
-        if (colon === -1) continue
-        const prop = decl.slice(0, colon).trim()
-        const raw = decl.slice(colon + 1).trim()
-        if (!prop || !raw)
-          continue
-        // Keep `!important` out of the value and record it as the priority, so
-        // the cascade can rank it rather than comparing it as part of a string.
-        const important = /!\s*important$/i.test(raw)
-        const value = important ? raw.replace(/\s*!\s*important$/i, '').trim() : raw
-        if (value)
-          styleRule.style.setProperty(prop, value, important ? 'important' : '')
-      }
-      rules.push(styleRule)
-    }
+    for (const rule of parseRuleList(text, this))
+      rules.push(rule)
   }
 }
 

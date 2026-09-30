@@ -30,6 +30,9 @@ export class BrowserFrame {
   private _historyIndex = 0
   private _navigations: Array<() => void> = []
 
+  /** The device settings the browser started with, for `emulateMedia(null)`. */
+  private _deviceBaseline: Record<string, any> = {}
+
   constructor(page: BrowserPage, parentFrame: BrowserFrame | null = null) {
     this._page = page
     this._parentFrame = parentFrame
@@ -43,6 +46,11 @@ export class BrowserFrame {
       console: page.console,
       settings: page.context?.browser?.settings,
     })
+
+    // What the browser's own settings established, kept so `emulateMedia(null)`
+    // has something to restore to. Without it, dropping an override would leave
+    // the last emulated value in place and `null` would mean nothing.
+    this._deviceBaseline = { ...((this.window as any)._settings?.device ?? {}) }
 
     this._forwardConsole()
 
@@ -107,6 +115,21 @@ export class BrowserFrame {
 
     if (navigator)
       navigator.onLine = !emulation.offline
+
+    // The window's device settings are what `_mediaContext()` reads, so writing
+    // them here is what makes both `matchMedia` and the cascade see the change
+    // on a page that is already open (#1611).
+    const device = (this.window as any)._settings?.device
+    if (device && emulation.media) {
+      // An override where there is one, the browser's own setting where there is
+      // not — so `emulateMedia({ colorScheme: null })` restores rather than
+      // leaving the last emulated value in place.
+      const baseline = this._deviceBaseline
+      device.prefersColorScheme = emulation.media.colorScheme ?? baseline.prefersColorScheme ?? 'light'
+      device.prefersReducedMotion = emulation.media.reducedMotion ?? baseline.prefersReducedMotion ?? 'no-preference'
+      device.forcedColors = emulation.media.forcedColors ?? baseline.forcedColors ?? 'none'
+      device.mediaType = emulation.media.type ?? baseline.mediaType ?? 'screen'
+    }
   }
 
   /** Evaluate the context's init scripts in this frame. */

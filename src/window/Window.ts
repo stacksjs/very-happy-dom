@@ -1,5 +1,7 @@
 import type { Storage } from '../storage/Storage'
 import type { DetachedWindowAPI } from './DetachedWindowAPI'
+import type { MediaContext } from '../css/media'
+import { matchesMediaQuery } from '../css/media'
 import {
   Attr as VHDAttr,
   DOMMatrix as VHDDOMMatrix,
@@ -240,6 +242,9 @@ export interface IOptionalBrowserSettings {
   }
   device?: {
     prefersColorScheme?: 'light' | 'dark'
+    prefersReducedMotion?: 'reduce' | 'no-preference'
+    forcedColors?: 'active' | 'none'
+    mediaType?: 'screen' | 'print'
   }
 }
 
@@ -249,6 +254,9 @@ export interface IBrowserSettings {
   }
   device: {
     prefersColorScheme: 'light' | 'dark'
+    prefersReducedMotion?: 'reduce' | 'no-preference'
+    forcedColors?: 'active' | 'none'
+    mediaType?: 'screen' | 'print'
   }
 }
 
@@ -811,53 +819,26 @@ export class Window extends VirtualEventTarget {
     return this._location.origin
   }
 
+  /**
+   * What this window would report for a media query.
+   *
+   * @internal Shared with the cascade, so a `@media` block and `matchMedia`
+   * cannot disagree about the same document (#1611). Evaluating it in two places
+   * is how they came to.
+   */
+  _mediaContext(): MediaContext {
+    return {
+      width: this._width,
+      height: this._height,
+      colorScheme: this._settings.device.prefersColorScheme,
+      reducedMotion: this._settings.device.prefersReducedMotion ?? 'no-preference',
+      forcedColors: this._settings.device.forcedColors ?? 'none',
+      type: this._settings.device.mediaType ?? 'screen',
+    }
+  }
+
   matchMedia(query: string): VHDMediaQueryList {
-    let matches = false
-
-    // prefers-color-scheme
-    const colorSchemeMatch = query.match(/\(\s*prefers-color-scheme\s*:\s*(light|dark)\s*\)/)
-    if (colorSchemeMatch) {
-      matches = this._settings.device.prefersColorScheme === colorSchemeMatch[1]
-    }
-
-    // min-width / max-width
-    const minWidthMatch = query.match(/\(\s*min-width\s*:\s*(\d+(?:\.\d+)?)(px|em|rem)?\s*\)/)
-    if (minWidthMatch) {
-      const value = Number.parseFloat(minWidthMatch[1])
-      matches = this._width >= value
-    }
-    const maxWidthMatch = query.match(/\(\s*max-width\s*:\s*(\d+(?:\.\d+)?)(px|em|rem)?\s*\)/)
-    if (maxWidthMatch) {
-      const value = Number.parseFloat(maxWidthMatch[1])
-      matches = this._width <= value
-    }
-
-    // min-height / max-height
-    const minHeightMatch = query.match(/\(\s*min-height\s*:\s*(\d+(?:\.\d+)?)(px|em|rem)?\s*\)/)
-    if (minHeightMatch) {
-      const value = Number.parseFloat(minHeightMatch[1])
-      matches = this._height >= value
-    }
-    const maxHeightMatch = query.match(/\(\s*max-height\s*:\s*(\d+(?:\.\d+)?)(px|em|rem)?\s*\)/)
-    if (maxHeightMatch) {
-      const value = Number.parseFloat(maxHeightMatch[1])
-      matches = this._height <= value
-    }
-
-    // orientation
-    const orientationMatch = query.match(/\(\s*orientation\s*:\s*(portrait|landscape)\s*\)/)
-    if (orientationMatch) {
-      const isPortrait = this._height >= this._width
-      matches = orientationMatch[1] === 'portrait' ? isPortrait : !isPortrait
-    }
-
-    // prefers-reduced-motion
-    const reducedMotionMatch = query.match(/\(\s*prefers-reduced-motion\s*:\s*(reduce|no-preference)\s*\)/)
-    if (reducedMotionMatch) {
-      matches = reducedMotionMatch[1] === 'no-preference'
-    }
-
-    return new VHDMediaQueryList(query, matches)
+    return new VHDMediaQueryList(query, matchesMediaQuery(query, this._mediaContext()))
   }
 
   // History proxy — delegates to document.history

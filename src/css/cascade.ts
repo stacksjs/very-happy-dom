@@ -11,6 +11,9 @@
  * this resolves declarations that target the element itself.
  */
 
+import type { MediaContext } from './media'
+import { matchesMediaQuery } from './media'
+
 /** The parts of an element this module needs, kept structural to avoid a cycle. */
 interface ElementLike {
   matches: (selector: string) => boolean
@@ -25,6 +28,9 @@ interface StyleDeclarationLike {
 interface StyleRuleLike {
   selectorText?: string
   style?: StyleDeclarationLike
+  /** Present on a `@media` rule, whose nested rules apply when it matches. */
+  conditionText?: string
+  cssRules?: ArrayLike<unknown>
 }
 
 interface StyleSheetLike {
@@ -98,11 +104,16 @@ export function specificity(selector: string): number {
   return ids * 1_000_000 + classes * 1_000 + types
 }
 
-/** True for anything that cannot be matched against an element. */
+/**
+ * True for anything that cannot be matched against an element.
+ *
+ * `@media` is no longer among them: it arrives as a `CSSMediaRule` with its own
+ * nested rules now (#1611), and is handled before this is reached. The other
+ * at-rules — `@font-face`, `@keyframes`, `@supports` — are still flattened by
+ * the parser into a rule whose body was never meant to be read as declarations,
+ * so they must never apply to an element.
+ */
 function isUnmatchable(selectorText: string): boolean {
-  // `replaceSync` does not descend into at-rule blocks, so a `@media` rule
-  // arrives with its selector intact and a body that was never meant to be
-  // read as declarations. Such a rule must never apply to an element.
   return selectorText.length === 0 || selectorText.startsWith('@')
 }
 
@@ -151,17 +162,35 @@ function record(into: Map<string, Declaration>, property: string, candidate: Dec
  * `sheets` must already be in cascade order — document order for `<style>`
  * elements, with adopted stylesheets after them.
  */
-export function collectCascade(element: ElementLike, sheets: readonly StyleSheetLike[]): Cascade {
+export function collectCascade(
+  element: ElementLike,
+  sheets: readonly StyleSheetLike[],
+  media?: MediaContext,
+): Cascade {
   const cascade: Cascade = { normal: new Map(), important: new Map() }
   let order = 0
 
-  for (const sheet of sheets) {
-    const rules = sheet?.cssRules
-    if (!rules)
-      continue
-
+  /**
+   * Walk a rule list, descending into any `@media` block whose condition holds.
+   *
+   * Nested rules take their order from the same counter as their neighbours, so
+   * a declaration inside a matching `@media` beats an identical one written
+   * above it and loses to one written below — which is what document order means
+   * and what a browser does.
+   */
+  const walk = (rules: ArrayLike<unknown>): void => {
     for (let i = 0; i < rules.length; i++) {
       const rule = rules[i] as StyleRuleLike
+
+      if (rule?.conditionText !== undefined && rule.cssRules) {
+        // Without a context nothing can be evaluated, so the block is skipped
+        // rather than guessed at — which is the behaviour every caller had
+        // before a context existed to pass.
+        if (media && matchesMediaQuery(rule.conditionText, media))
+          walk(rule.cssRules)
+        continue
+      }
+
       const selectorText = rule?.selectorText?.trim()
       if (!selectorText || isUnmatchable(selectorText) || !rule.style)
         continue
@@ -184,6 +213,11 @@ export function collectCascade(element: ElementLike, sheets: readonly StyleSheet
         record(target, property, { value, specificity: spec, order })
       }
     }
+  }
+
+  for (const sheet of sheets) {
+    if (sheet?.cssRules)
+      walk(sheet.cssRules)
   }
 
   return cascade

@@ -961,7 +961,11 @@ export class VirtualDocument extends VirtualNodeBase {
     let cascade: ReturnType<typeof collectCascade> | null = null
     const cascadeFor = (): ReturnType<typeof collectCascade> => {
       if (!cascade)
-        cascade = collectCascade(self as any, [...this.styleSheets, ...this._adoptedStyleSheets])
+        cascade = collectCascade(
+          self as any,
+          [...this.styleSheets, ...this._adoptedStyleSheets],
+          (this as any).defaultView?._mediaContext?.(),
+        )
       return cascade
     }
 

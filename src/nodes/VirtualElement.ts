@@ -2497,7 +2497,9 @@ export class VirtualElement extends VirtualNodeBase {
     if (sheets.length === 0 && adopted.length === 0)
       return null
 
-    return collectCascade(this as any, [...sheets, ...adopted])
+    // The window owns the viewport and the device settings, so it is the one
+    // that can say what a `@media` condition resolves to (#1611).
+    return collectCascade(this as any, [...sheets, ...adopted], document.defaultView?._mediaContext?.())
   }
 
   /**

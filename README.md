@@ -174,6 +174,27 @@ disabled — and `locator.waitFor({ state })` covers `attached`, `detached`,
 stable (not mid-animation) and receives-events (not covered by another element).
 Both need a layout pass.
 
+### Media Queries
+
+```typescript
+await page.emulateMedia({ colorScheme: 'dark' })
+await page.emulateMedia({ media: 'print' })
+await page.emulateMedia({ reducedMotion: 'reduce', forcedColors: 'active' })
+await page.emulateMedia({ colorScheme: null })   // back to the browser's setting
+```
+
+`@media` blocks are parsed into real `CSSMediaRule`s and applied when their
+condition holds, so a dark-mode or responsive stylesheet takes effect in
+`getComputedStyle`, in `getBoundingClientRect` and in the locator queries that
+read visibility. `matchMedia` and the cascade evaluate the query with the same
+code, so they cannot disagree about the same document.
+
+Understood features: `prefers-color-scheme`, `prefers-reduced-motion`,
+`forced-colors`, `orientation`, and the `width`/`height` family with `px`, `em`
+and `rem`. Media types (`screen`, `print`, `all`), `and`, comma lists, `not` and
+`only` all work. Any other feature — `(hover: hover)`, for instance — makes its
+query false, as an unrecognised feature does in a browser.
+
 ### Geometry
 
 ```typescript

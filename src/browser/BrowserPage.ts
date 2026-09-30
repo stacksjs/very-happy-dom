@@ -316,6 +316,21 @@ export class BrowserPage {
     (this.mainFrame as any).setContent(html)
   }
 
+  /**
+   * Emulate the media the page believes it is being rendered for.
+   *
+   * Delegated to the context, which owns the emulation state and pushes it to
+   * every page — the same route `setGeolocation` and `setOffline` take.
+   */
+  async emulateMedia(options: {
+    media?: 'screen' | 'print' | null
+    colorScheme?: 'light' | 'dark' | null
+    reducedMotion?: 'reduce' | 'no-preference' | null
+    forcedColors?: 'active' | 'none' | null
+  } = {}): Promise<void> {
+    await (this._context as any)?.emulateMedia?.(options)
+  }
+
   /** @internal The timeout a `waitFor*` call should use when given none. */
   _defaultTimeoutMs(): number {
     return this._defaultTimeout ?? (this._context as any)?._timeout?.() ?? 30000

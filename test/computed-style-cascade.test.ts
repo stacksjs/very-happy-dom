@@ -89,11 +89,30 @@ describe('getComputedStyle resolves stylesheet rules', () => {
     expect(style.getPropertyValue('background-color')).toBe('rgb(1, 2, 3)')
   })
 
-  test('at-rule blocks never match an element', () => {
-    // replaceSync does not descend into @media, so the rule arrives with its
-    // at-rule selector intact. It must not be applied to anything.
+  test('a matching @media block applies', () => {
+    // This used to assert the opposite, as a record of the limitation: the
+    // parser flattened @media into a rule whose body was read as declarations,
+    // so the cascade had to skip anything starting with '@'. It is a real
+    // CSSMediaRule now and is descended into when its condition holds (#1611).
     const window = styled('@media screen { .c { display: none } }', '<div class="c">x</div>')
+    expect(computed(window, '.c', 'display')).toBe('none')
+  })
+
+  test('a @media block that does not match is skipped', () => {
+    const window = styled('@media print { .c { display: none } }', '<div class="c">x</div>')
     expect(computed(window, '.c', 'display')).toBe('block')
+  })
+
+  test('the other at-rules still never match an element', () => {
+    // The boundary that remains. @font-face and friends are still flattened by
+    // the parser into a rule whose body was never meant to be read as
+    // declarations, so they must not reach an element.
+    const window = styled(
+      '@font-face { font-family: "X"; color: red } @keyframes spin { from { color: blue } }',
+      '<div class="c">x</div>',
+    )
+    expect(computed(window, '.c', 'color')).not.toBe('red')
+    expect(computed(window, '.c', 'color')).not.toBe('blue')
   })
 })
 

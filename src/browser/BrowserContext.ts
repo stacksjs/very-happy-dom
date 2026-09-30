@@ -36,6 +36,20 @@ export class BrowserContext {
   private _permissions: string[] | null = null
   private _geolocation: { latitude: number, longitude: number, accuracy?: number } | null = null
   private _offline = false
+  /**
+   * Media overrides, and only the ones actually asked for.
+   *
+   * Deliberately sparse. Filling it with defaults would overwrite whatever
+   * `new Browser({ settings: { device: ... } })` established, so a context that
+   * was never told anything about media would silently reset the browser's own
+   * setting.
+   */
+  private _media: {
+    type?: 'screen' | 'print'
+    colorScheme?: 'light' | 'dark'
+    reducedMotion?: 'reduce' | 'no-preference'
+    forcedColors?: 'active' | 'none'
+  } = {}
   private _extraHeaders: Record<string, string> = {}
   private _initScripts: Array<string | ((...args: any[]) => any)> = []
   private _defaultTimeout: number | null = null
@@ -79,6 +93,43 @@ export class BrowserContext {
    * by page code is *not* blocked — interception is what would be needed for
    * that, and silently swapping it here would fight with `route()`.
    */
+  /**
+   * Emulate the media the page believes it is being rendered for.
+   *
+   * `prefersColorScheme` could only be set on the `Browser` constructor before,
+   * so a test could not switch a live page between light and dark — and the
+   * cascade ignored `@media` entirely, so even the initial setting reached
+   * `matchMedia` and nothing else (#1611).
+   *
+   * `null` for any option restores the default, as in Playwright.
+   */
+  async emulateMedia(options: {
+    media?: 'screen' | 'print' | null
+    colorScheme?: 'light' | 'dark' | null
+    reducedMotion?: 'reduce' | 'no-preference' | null
+    forcedColors?: 'active' | 'none' | null
+  } = {}): Promise<void> {
+    // `null` drops the override rather than pinning a default, so whatever the
+    // browser's own settings established shows through again — which is what
+    // "restore to the system default" means when there is no system.
+    const apply = <K extends keyof typeof this._media>(key: K, value: (typeof this._media)[K] | null | undefined): void => {
+      if (value === undefined)
+        return
+      if (value === null)
+        delete this._media[key]
+      else
+        this._media[key] = value
+    }
+
+    apply('type', options.media)
+    apply('colorScheme', options.colorScheme)
+    apply('reducedMotion', options.reducedMotion)
+    apply('forcedColors', options.forcedColors)
+
+    for (const page of this._pages)
+      (page as any)._applyEmulation?.()
+  }
+
   async setOffline(offline: boolean): Promise<void> {
     this._offline = offline
     this._applyToPages()
@@ -111,8 +162,19 @@ export class BrowserContext {
     permissions: string[] | null
     geolocation: { latitude: number, longitude: number, accuracy?: number } | null
     offline: boolean
+    media: {
+      type?: 'screen' | 'print'
+      colorScheme?: 'light' | 'dark'
+      reducedMotion?: 'reduce' | 'no-preference'
+      forcedColors?: 'active' | 'none'
+    }
   } {
-    return { permissions: this._permissions, geolocation: this._geolocation, offline: this._offline }
+    return {
+      permissions: this._permissions,
+      geolocation: this._geolocation,
+      offline: this._offline,
+      media: { ...this._media },
+    }
   }
 
   /** @internal Headers to merge into a navigation request. */
