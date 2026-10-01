@@ -211,9 +211,17 @@ describe('the walk stays linear', () => {
       for (let i = 0; i < 5; i++)
         void element.innerText
 
-      const started = Bun.nanoseconds()
-      void element.innerText
-      return Bun.nanoseconds() - started
+      // The minimum of several samples, not one. A single reading is dominated by
+      // whatever else the machine is doing — this failed once in a full-suite run
+      // and passed every time in isolation, which is a flaky test rather than a
+      // slow implementation. The fastest sample is the one least polluted by load.
+      let best = Number.POSITIVE_INFINITY
+      for (let i = 0; i < 7; i++) {
+        const started = Bun.nanoseconds()
+        void element.innerText
+        best = Math.min(best, Bun.nanoseconds() - started)
+      }
+      return best
     }
 
     const small = await render(200)

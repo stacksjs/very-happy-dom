@@ -143,3 +143,48 @@ describe('a colon inside a quoted attribute value', () => {
     expect(document.querySelectorAll('meta:not([property="og:x"])').length).toBe(1)
   })
 })
+
+describe('attribute names a framework uses', () => {
+  // Found in the same real document, and the worst of the three: `@click` was not
+  // a name the scanner accepted, so it stopped at the `@`, abandoned the whole tag,
+  // and emitted `@click="tap()">Go` as *text*. A page of Alpine or Vue markup came
+  // through as visible attribute soup with its elements gone.
+  //
+  // The spec allows almost any character in an attribute name, which is exactly why
+  // these work in a browser with no build step.
+  function first(html: string): any {
+    const window = new Window() as any
+    window.document.body.innerHTML = html
+    return window.document.body
+  }
+
+  test('an @ event binding is an attribute, not text', () => {
+    const body = first('<button @click="tap()">Go</button>')
+    expect(body.textContent).toBe('Go')
+    expect(body.querySelector('button')?.getAttribute('@click')).toBe('tap()')
+  })
+
+  test('a # shorthand is an attribute', () => {
+    const body = first('<template #slot>Go</template>')
+    expect(body.textContent).toBe('Go')
+  })
+
+  test('a : binding, an x- directive and a bare directive', () => {
+    const body = first('<button :aria-pressed="x()" x-class="a ? b : c" x-cloak>Go</button>')
+    const button = body.querySelector('button')
+    expect(body.textContent).toBe('Go')
+    expect(button?.getAttribute(':aria-pressed')).toBe('x()')
+    expect(button?.getAttribute('x-class')).toBe('a ? b : c')
+    expect(button?.hasAttribute('x-cloak')).toBe(true)
+  })
+
+  test('v-on: style names keep their colon', () => {
+    expect(first('<button v-on:click="tap()">Go</button>').querySelector('button')?.getAttribute('v-on:click'))
+      .toBe('tap()')
+  })
+
+  test('a value containing < still survives beside them', () => {
+    const button = first('<button @click="f()" :p="(s <= n()) ? 1 : 0">Go</button>').querySelector('button')
+    expect(button?.getAttribute(':p')).toBe('(s <= n()) ? 1 : 0')
+  })
+})

@@ -295,14 +295,24 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
       if (peek() === '>' || peek() === '/')
         break
 
-      // Parse attribute name
+      // Parse attribute name.
+      //
+      // Anything but whitespace and the four characters that end a name or start
+      // a value. The spec allows almost any character here, which is why `@click`
+      // and `#slot` work in a browser with no build step — and the previous
+      // `[\w\-:]` rejected them, so the scanner stopped at the `@`, abandoned the
+      // whole tag, and emitted `@click="tap()">Go` as text. Alpine, Vue and stx
+      // markup all came through as visible attribute soup.
       let attrName = ''
-      while (peek() && /[\w\-:]/.test(peek())) {
+      while (peek() && !/[\s/>="']/.test(peek())) {
         attrName += consume()
       }
 
-      if (!attrName)
-        break
+      if (!attrName) {
+        // Nothing consumable and not a tag end: step over it rather than spinning.
+        consume()
+        continue
+      }
 
       consumeWhitespace()
 
