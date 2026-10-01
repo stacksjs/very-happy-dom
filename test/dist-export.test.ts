@@ -232,11 +232,20 @@ describe('the emitted declarations are valid TypeScript', () => {
       JSON.stringify({
         compilerOptions: {
           noEmit: true,
-          skipLibCheck: true,
+          // Deliberately NOT skipped. `skipLibCheck` skips checking every `.d.ts`,
+          // which is precisely what this guard has to check — with it on, a module
+          // missing from behind a declaration (TS2307) is never reported.
+          skipLibCheck: false,
           strict: true,
           module: 'esnext',
           target: 'esnext',
           moduleResolution: 'bundler',
+          // What a consumer has. Without them the package's own `node:buffer`
+          // imports fail to resolve and every file looks broken, which is a defect
+          // in the probe rather than in what it is probing.
+          types: ['bun'],
+          lib: ['esnext', 'DOM'],
+          typeRoots: [resolve(ROOT, 'node_modules/@types'), resolve(ROOT, 'node_modules')],
         },
         files: ['use.ts'],
       }),
@@ -265,13 +274,36 @@ describe('the emitted declarations are valid TypeScript', () => {
       ])
 
       const output = `${stdout}${stderr}`
-      // Syntax errors are the class this exists for: a declaration that cannot be
-      // parsed at all. Reported in full, because the line it names is the fix.
-      const syntaxErrors = output
-        .split('\n')
-        .filter(line => /error TS1\d{3}:/.test(line))
 
-      expect({ syntaxErrors, exitCode }).toEqual({ syntaxErrors: [], exitCode: 0 })
+      // Any error whose file is inside the package's own `dist/`, whatever its
+      // code. Filtering to syntax errors was too narrow: 0.3.1 passed this guard
+      // while `dist/screenshot/webview.d.ts` was missing altogether, because a
+      // module that is only reached through `await import()` never entered the
+      // declaration graph. `capture.d.ts` imports its types and the entry point
+      // re-exports `capture`, so every consumer's typecheck failed on TS2307 — a
+      // resolution error, not a syntax one.
+      //
+      // Errors from the consumer's own toolchain are excluded by the same rule:
+      // only paths under dist/ count, so ambient `bun-types` noise cannot mask or
+      // cause a failure here.
+      // Any error naming a file under `dist/`, however tsc chose to spell the
+      // path. It reports relative to the cwd here, but that is not worth relying
+      // on — two earlier versions of this filter matched nothing because each
+      // assumed one spelling, and a guard that matches nothing passes everything.
+      const packageErrors = output
+        .split('\n')
+        // Anchored to this package's own dist, so an unrelated `node_modules/x/dist`
+        // cannot trip it.
+        .filter(line => /^dist[/\\].*error TS\d+:/.test(line.trim()))
+        // The probe's own file lives under dist/ as well; its errors belong to the
+        // consumer, not to the package.
+        .filter(line => !line.includes('.dts-probe'))
+
+      // `exitCode` is deliberately not asserted. With lib checking on, the
+      // consumer's own ambient types can fail for reasons that have nothing to do
+      // with this package, and that must not be reported as the package's defect.
+      // The dist-path filter above is the whole signal.
+      expect(packageErrors).toEqual([])
     }
     finally {
       await Bun.$`rm -rf ${probe}`.quiet().nothrow()
