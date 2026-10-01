@@ -38,21 +38,28 @@ jobs:
         run: |
           set -euo pipefail
 
-          # actions/checkout leaves no local tag ref for a tag push — it checks out
-          # the commit — so `git tag -l` matches nothing and the message is simply
-          # not there. v0.3.1 fell back to the changelog for exactly this reason.
-          # Fetching the ref brings the annotated object with it.
-          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME" 2>/dev/null || true
-
-          # The annotated tag's message is where the notes are authored. The
-          # trailing "chore: release vX.Y.Z" line is git plumbing, not notes.
-          notes="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/^chore: release v/d')"
+          # Read from the API rather than from the checkout. actions/checkout leaves
+          # no usable local tag object for a tag push, and fetching the ref back —
+          # which works locally — still did not recover the message in CI for
+          # v0.3.1 or v0.3.2. The API is authoritative and does not depend on what
+          # checkout chose to bring, so there is nothing left to be wrong about.
+          notes=''
           notes_source='the tag message'
 
-          # A lightweight tag has no message of its own: `%(contents)` falls back
-          # to the commit's, which the line above then strips. That is the mistake
-          # that shipped v0.1.11, so this degrades to the changelog rather than to
-          # nothing, and says so.
+          ref="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" 2>/dev/null || true)"
+          tag_type="$(printf '%s' "$ref" | jq -r '.object.type // empty')"
+          tag_sha="$(printf '%s' "$ref" | jq -r '.object.sha // empty')"
+          echo "tag $GITHUB_REF_NAME -> type=${tag_type:-unknown} sha=${tag_sha:0:12}"
+
+          # Only an annotated tag carries a message of its own. A lightweight one
+          # points straight at a commit, whose message is not release notes.
+          if [ "$tag_type" = 'tag' ] && [ -n "$tag_sha" ]; then
+            notes="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_sha" --jq '.message' 2>/dev/null || true)"
+            notes="$(printf '%s' "$notes" | sed '/^chore: release v/d')"
+          fi
+
+          # Still nothing? Degrade to the changelog rather than to an empty body,
+          # and say why. A lightweight tag is the mistake that shipped v0.1.11.
           if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
             echo "::warning title=No annotated tag message::$GITHUB_REF_NAME carries no message, so the release notes fall back to CHANGELOG.md. Use 'git tag -a' to author them."
             notes="$(awk '/^\[Compare changes\]/{n++} n==1' CHANGELOG.md)"
@@ -68,6 +75,8 @@ jobs:
           # Reported so the next release's log says whether notes were found,
           # rather than leaving an empty body to be noticed months later.
           printf 'Release notes: %s characters from %s.\n' "${#notes}" "$notes_source" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
         uses: stacksjs/action-releaser@v1.2.11
