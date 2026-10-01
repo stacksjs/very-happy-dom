@@ -216,6 +216,69 @@ describe('dist/matchers.js', () => {
   })
 })
 
+describe('the emitted declarations are valid TypeScript', () => {
+  // 0.3.0 shipped a `dist/browser/Dialog.d.ts` that did not parse. A doc comment
+  // inside a constructor parameter list made the declaration emitter splice the
+  // comment's text into the class body as a member and drop the parameter, so the
+  // package failed to typecheck for every consumer the moment they imported it.
+  //
+  // Nothing here caught that. The suite typechecks `src/`, and the packing guard
+  // below checks the files exist — neither reads the generated `.d.ts`. A
+  // consumer's position is the only one that finds it, so that is what this takes.
+  test('a consumer can typecheck against the built package', async () => {
+    const probe = resolve(ROOT, 'dist/.dts-probe')
+    await Bun.write(
+      `${probe}/tsconfig.json`,
+      JSON.stringify({
+        compilerOptions: {
+          noEmit: true,
+          skipLibCheck: true,
+          strict: true,
+          module: 'esnext',
+          target: 'esnext',
+          moduleResolution: 'bundler',
+        },
+        files: ['use.ts'],
+      }),
+    )
+    // Imports the surface broadly, so a malformed declaration anywhere in the
+    // graph is reached rather than only the entry point's own file.
+    await Bun.write(
+      `${probe}/use.ts`,
+      [
+        `import { Browser, BrowserContext, BrowserPage, Dialog, Locator, TimeoutError, Window } from ${JSON.stringify(resolve(ROOT, 'dist/index.js'))}`,
+        'export type Surface = [Browser, BrowserContext, BrowserPage, Dialog, Locator, TimeoutError, Window]',
+      ].join('\n'),
+    )
+
+    try {
+      const proc = Bun.spawn({
+        cmd: ['bunx', '--bun', 'tsc', '--noEmit', '-p', probe],
+        cwd: ROOT,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      })
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ])
+
+      const output = `${stdout}${stderr}`
+      // Syntax errors are the class this exists for: a declaration that cannot be
+      // parsed at all. Reported in full, because the line it names is the fix.
+      const syntaxErrors = output
+        .split('\n')
+        .filter(line => /error TS1\d{3}:/.test(line))
+
+      expect({ syntaxErrors, exitCode }).toEqual({ syntaxErrors: [], exitCode: 0 })
+    }
+    finally {
+      await Bun.$`rm -rf ${probe}`.quiet().nothrow()
+    }
+  }, 120_000)
+})
+
 // =============================================================================
 // Regression guard: those files must also survive packing. `files` in
 // package.json decides what the tarball carries, so dist can be complete on

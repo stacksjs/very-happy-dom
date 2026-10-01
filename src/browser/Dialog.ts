@@ -32,11 +32,20 @@ export class Dialog {
   private _accepted = false
   private _text: string | null = null
 
-  /** @internal */
+  /**
+   * @internal
+   *
+   * `defaultValue` is the `prompt()` default, or an empty string.
+   *
+   * Documented here rather than on the parameter itself. A doc comment inside a
+   * parameter list breaks the declaration emitter: it splices the comment's own
+   * text into the class body as though it were a member, and drops the parameter
+   * from the emitted constructor signature. That shipped in 0.3.0 and made the
+   * package fail to typecheck for every consumer, so the comment stays out here.
+   */
   constructor(
     readonly type: DialogType,
     readonly message: string,
-    /** The `prompt()` default, or an empty string. */
     readonly defaultValue: string = '',
   ) {}
 
