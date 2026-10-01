@@ -264,7 +264,8 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
       return null // Signal closing tag
     }
 
-    // Parse tag name
+    // Parse tag name. The first character has to be a letter — a digit cannot
+    // start one — and `opensMarkup()` has already guaranteed that.
     let tagName = ''
     while (peek() && /[a-z0-9-]/i.test(peek())) {
       tagName += consume()
@@ -371,9 +372,52 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
     return element
   }
 
+  /**
+   * Whether the `<` at the cursor opens markup, or is simply a character.
+   *
+   * `a < b` is text, and so is `a <1 b`. The spec's tag-open state emits the `<`
+   * as a character unless what follows can begin a tag, a closing tag, a comment
+   * or a DOCTYPE — and a tag name has to start with an ASCII letter, so a digit
+   * does not open one either.
+   *
+   * Both cases were wrong before, in opposite directions: `a < b` threw
+   * "Invalid tag name", and `a <1 b` was read as a tag and silently swallowed the
+   * rest of the line. Real markup hits this constantly — a comparison in an
+   * attribute expression, a price, "<3" — and a crash on valid HTML is the worse
+   * half.
+   *
+   * A `<!` that is neither a comment nor a DOCTYPE, and `<?`, are treated as text
+   * rather than as the bogus comments a browser would make of them. That is a
+   * deliberate narrowing: it cannot crash and it cannot discard content, which are
+   * the two failures that matter here.
+   */
+  function opensMarkup(): boolean {
+    if (peek() !== '<')
+      return false
+
+    const next = html[pos + 1]
+    if (next === undefined)
+      return false
+
+    if (/[a-z]/i.test(next))
+      return true
+
+    // A closing tag still needs a name.
+    if (next === '/')
+      return /[a-z]/i.test(html[pos + 2] ?? '')
+
+    if (next === '!') {
+      return html.slice(pos + 1, pos + 4) === '!--'
+        || html.slice(pos + 1, pos + 9).toUpperCase() === '!DOCTYPE'
+    }
+
+    return false
+  }
+
   function parseText(): VirtualTextNode | null {
     let text = ''
-    while (peek() && peek() !== '<') {
+    // Stops only at a `<` that opens something; any other `<` is content.
+    while (peek() && !opensMarkup()) {
       text += consume()
     }
 
@@ -400,7 +444,7 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
         break
       }
 
-      if (peek() === '<') {
+      if (opensMarkup()) {
         const node = parseTag(namespaceURI)
         if (node === null) {
           // DOCTYPE or closing tag - skip it and continue
