@@ -514,6 +514,26 @@ export class BrowserFrame {
    * so `document.body.appendChild(...)` would fail after a perfectly ordinary
    * navigation.
    */
+  /**
+   * Attributes on the document's own `<html>` tag, which assigning to
+   * `documentElement.innerHTML` cannot carry.
+   *
+   * `lang` is the one that matters: it is on nearly every real document, it is
+   * what a screen reader reads to pick a voice, and it was silently lost — so a
+   * test asserting the page declares a language failed against a page that does.
+   */
+  private _documentElementAttributes(html: string): Array<[string, string]> {
+    const opening = /<html\b([^>]*)>/i.exec(html.replace(/^\s*<!doctype[^>]*>/i, ''))
+    if (!opening)
+      return []
+
+    const attributes: Array<[string, string]> = []
+    for (const match of opening[1].matchAll(/([a-z_:][\w:.-]*)\s*(?:=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/gi))
+      attributes.push([match[1], match[2] ?? match[3] ?? match[4] ?? ''])
+
+    return attributes
+  }
+
   private _asDocumentMarkup(html: string): string {
     // A doctype is a prologue, not a node `documentElement` can hold.
     let markup = html.replace(/^\s*<!doctype[^>]*>/i, '').trim()
@@ -560,6 +580,10 @@ export class BrowserFrame {
     // Replace the document's contents wholesale. `head` and `body` are derived
     // from documentElement, so they follow this rather than going stale.
     document.documentElement.innerHTML = this._asDocumentMarkup(html)
+
+    // Carried over separately, since an innerHTML assignment cannot set them.
+    for (const [name, value] of this._documentElementAttributes(html))
+      document.documentElement.setAttribute?.(name, value)
     this._content = html
 
     // Init scripts run against the fresh document, before the page's own code

@@ -43,6 +43,42 @@ function isSimpleTagSelector(s: string): boolean {
 const parsedSelectorCache = new Map<string, ParsedSimpleSelector>()
 const combinatorCache = new Map<string, boolean>()
 
+/**
+ * Blank the inside of quoted strings, keeping their length and their quotes.
+ *
+ * A colon inside a quoted attribute value is a character, not the start of a
+ * pseudo-class — but the pseudo scan read the raw selector, so
+ * `meta[property="og:title"]` was taken to carry a pseudo-class named `title`
+ * and threw "Unsupported pseudo-class". Every `og:` meta selector, every value
+ * holding a URL or a time, failed that way.
+ *
+ * Masking rather than stripping, so the positions still line up and the real text
+ * can be sliced out of the original.
+ */
+function maskQuotedContent(selector: string): string {
+  let masked = ''
+  let quote: string | null = null
+
+  for (const char of selector) {
+    if (quote !== null) {
+      masked += char === quote ? char : '\u0000'
+      if (char === quote)
+        quote = null
+      continue
+    }
+
+    if (char === '"' || char === '\'') {
+      quote = char
+      masked += char
+      continue
+    }
+
+    masked += char
+  }
+
+  return masked
+}
+
 function parseSimpleSelector(selector: string): ParsedSimpleSelector {
   const cached = parsedSelectorCache.get(selector)
   if (cached) return cached
@@ -54,14 +90,22 @@ function parseSimpleSelector(selector: string): ParsedSimpleSelector {
   const idMatch = selectorWithoutAttr.match(/#([\w-]+)/)
   const classMatches = selectorWithoutAttr.match(/\.([\w-]+)/g)
   const attrMatches = selectorWithoutPseudo.match(/\[([^\]]+)\]/g)
-  const pseudoMatches = selector.match(/::?[a-z-]+(\([^)]*\))?/gi)
+
+  // Found on the masked copy so a quoted value cannot contribute syntax, then
+  // sliced out of the original so the pseudo's own text is exact.
+  const masked = maskQuotedContent(selector)
+  const pseudoMatches: string[] = []
+  for (const match of masked.matchAll(/::?[a-z-]+(\([^)]*\))?/gi)) {
+    if (match.index !== undefined)
+      pseudoMatches.push(selector.slice(match.index, match.index + match[0].length))
+  }
 
   const result: ParsedSimpleSelector = {
     tag: tagMatch ? tagMatch[1].toLowerCase() : null,
     id: idMatch ? idMatch[1] : null,
     classes: classMatches ? classMatches.map(c => c.slice(1)) : null,
     attrs: attrMatches ? attrMatches.map(a => a.slice(1, -1)) : null,
-    pseudos: pseudoMatches || null,
+    pseudos: pseudoMatches.length > 0 ? pseudoMatches : null,
   }
 
   parsedSelectorCache.set(selector, result)

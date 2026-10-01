@@ -111,3 +111,35 @@ describe('a < inside an attribute value', () => {
       .toBe('formRating() < 1 || submittingReview()')
   })
 })
+
+describe('a colon inside a quoted attribute value', () => {
+  // Found with the same real document: `meta[property="og:title"]` threw
+  // "Unsupported pseudo-class: :title", because the pseudo scan read the raw
+  // selector including the inside of `[...]`. Every og: meta selector, and every
+  // value holding a URL or a time, failed that way.
+  function head(html: string): any {
+    const window = new Window() as any
+    window.document.head.innerHTML = html
+    return window.document
+  }
+
+  test('an og: meta selector resolves', () => {
+    const document = head('<meta property="og:title" content="T">')
+    expect(document.querySelector('meta[property="og:title"]')?.getAttribute('content')).toBe('T')
+  })
+
+  test('any colon-bearing value resolves', () => {
+    const document = head('<meta name="x" content="12:30">')
+    expect(document.querySelector('[content="12:30"]')).not.toBeNull()
+  })
+
+  test('a real pseudo-class still works beside one', () => {
+    const document = head('<meta property="og:title" content="T"><meta property="og:image" content="I">')
+    expect(document.querySelectorAll('meta[property="og:title"]:first-of-type').length).toBe(1)
+  })
+
+  test('a pseudo-class with an attribute argument still works', () => {
+    const document = head('<meta name="a"><meta property="og:x">')
+    expect(document.querySelectorAll('meta:not([property="og:x"])').length).toBe(1)
+  })
+})

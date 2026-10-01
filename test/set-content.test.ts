@@ -67,6 +67,25 @@ describe('a full document lands intact', () => {
     expect(document.querySelector('#b').getBoundingClientRect().width).toBe(120)
   })
 
+  test('attributes on <html> are carried over', async () => {
+    // An innerHTML assignment cannot set them, so they were silently lost. `lang`
+    // is on nearly every real document and is what a screen reader reads to pick a
+    // voice, so a test asserting the page declares one failed against a page that
+    // does.
+    await page.setContent('<!DOCTYPE html><html lang="en" data-theme="dark"><head><title>T</title></head><body>x</body></html>')
+
+    expect(document.documentElement.getAttribute('lang')).toBe('en')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+  })
+
+  test('a fragment leaves the existing html attributes alone', async () => {
+    await page.setContent('<html lang="fr"><body>one</body></html>')
+    await page.setContent('<p>two</p>')
+
+    // Nothing in a fragment says anything about <html>, so nothing is changed.
+    expect(document.documentElement.getAttribute('lang')).toBe('fr')
+  })
+
   test('head and body are rebuilt, not left stale', async () => {
     // #1595's failure mode, which the reach-through is exposed to and this is not.
     await page.setContent('<html><head><title>One</title></head><body><p>a</p></body></html>')
