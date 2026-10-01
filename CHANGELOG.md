@@ -1,3 +1,17 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.3.1...HEAD)
+
+## 🐛 Bug Fixes
+
+- **build**: emit the missing webview declaration ([4c69500](https://github.com/stacksjs/very-happy-dom/commit/4c69500)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## 🤖 Continuous Integration
+
+- **release**: fetch the tag so its message is actually there ([2c56942](https://github.com/stacksjs/very-happy-dom/commit/2c56942)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## Contributors
+
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.3.0...HEAD)
 
 ## 🐛 Bug Fixes
