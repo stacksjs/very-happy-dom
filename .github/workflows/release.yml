@@ -38,6 +38,12 @@ jobs:
         run: |
           set -euo pipefail
 
+          # actions/checkout leaves no local tag ref for a tag push — it checks out
+          # the commit — so `git tag -l` matches nothing and the message is simply
+          # not there. v0.3.1 fell back to the changelog for exactly this reason.
+          # Fetching the ref brings the annotated object with it.
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME" 2>/dev/null || true
+
           # The annotated tag's message is where the notes are authored. The
           # trailing "chore: release vX.Y.Z" line is git plumbing, not notes.
           notes="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/^chore: release v/d')"
