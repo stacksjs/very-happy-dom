@@ -1,3 +1,17 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.3.0...HEAD)
+
+## 🐛 Bug Fixes
+
+- **dialog**: emit a declaration that parses ([55aa421](https://github.com/stacksjs/very-happy-dom/commit/55aa421)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## 🤖 Continuous Integration
+
+- **release**: pass the tag's notes to the GitHub Release ([3550904](https://github.com/stacksjs/very-happy-dom/commit/3550904)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## Contributors
+
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.2.0...HEAD)
 
 ## 🚀 Features
