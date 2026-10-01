@@ -1,3 +1,17 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.3.2...HEAD)
+
+## 🐛 Bug Fixes
+
+- **parser**: treat a < that cannot open a tag as text ([d3edc1b](https://github.com/stacksjs/very-happy-dom/commit/d3edc1b)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## 🤖 Continuous Integration
+
+- **release**: read the tag message from the API ([8a01766](https://github.com/stacksjs/very-happy-dom/commit/8a01766)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## Contributors
+
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.3.1...HEAD)
 
 ## 🐛 Bug Fixes
