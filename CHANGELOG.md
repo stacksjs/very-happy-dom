@@ -1,3 +1,13 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.3.3...HEAD)
+
+## 🐛 Bug Fixes
+
+- resolve a colon in an attribute value, and keep html attributes ([690c0fe](https://github.com/stacksjs/very-happy-dom/commit/690c0fe)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## Contributors
+
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.3.2...HEAD)
 
 ## 🐛 Bug Fixes
