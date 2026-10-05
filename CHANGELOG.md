@@ -1,3 +1,17 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.3.5...v0.3.6)
+
+## 🐛 Bug Fixes
+
+- **dom**: clone constructs custom elements; template content is inert ([6475fcb](https://github.com/stacksjs/very-happy-dom/commit/6475fcb)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 🔧 Chores
+
+- release v0.3.6 ([29dbe9a](https://github.com/stacksjs/very-happy-dom/commit/29dbe9a)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.3.4...HEAD)
 
 ## 🐛 Bug Fixes
