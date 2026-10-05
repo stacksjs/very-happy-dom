@@ -152,26 +152,19 @@ export class CustomElementRegistry {
 
   upgrade(root: Node): void {
     const visit = (node: any): void => {
-      if (node?.tagName) {
-        const name = `${node.tagName}`.toLowerCase()
-        const constructor = this._definitions.get(name)
-        if (constructor && !(node instanceof constructor)) {
-          initializeUpgradedElement(node, constructor)
-          Object.setPrototypeOf(node, constructor.prototype)
-          // eslint-disable-next-line max-statements-per-line
-          ;(node as any).__veryHappyCustomElementName = name
-          for (const [attrName, attrValue] of node.attributes ?? []) {
-            invokeAttributeChangedCallback(node, attrName, null, attrValue)
-          }
-          if (node.isConnected) {
-            invokeConnectedCallback(node)
-          }
-        }
+      if (this._upgradeElement(node) && node.isConnected) {
+        invokeConnectedCallback(node)
       }
 
       const internalShadowRoot = node?._getInternalShadowRoot?.()
       if (internalShadowRoot) {
         visit(internalShadowRoot)
+      }
+
+      // Template content is inert: a browser does not upgrade what is in it.
+      // A template's childNodes are its content here, so this used to.
+      if (node?.tagName === 'TEMPLATE') {
+        return
       }
 
       for (const child of node?.childNodes ?? []) {
@@ -180,6 +173,30 @@ export class CustomElementRegistry {
     }
 
     visit(root)
+  }
+
+  /**
+   * Make one element its defined class, if it has a definition and is not
+   * one yet: constructor, then attributeChangedCallback for each attribute.
+   * True when it upgraded. The caller decides about connectedCallback.
+   */
+  _upgradeElement(node: any): boolean {
+    if (!node?.tagName) {
+      return false
+    }
+    const name = `${node.tagName}`.toLowerCase()
+    const constructor = this._definitions.get(name)
+    if (!constructor || node instanceof constructor) {
+      return false
+    }
+    initializeUpgradedElement(node, constructor)
+    Object.setPrototypeOf(node, constructor.prototype)
+    // eslint-disable-next-line max-statements-per-line
+    ;(node as any).__veryHappyCustomElementName = name
+    for (const [attrName, attrValue] of node.attributes ?? []) {
+      invokeAttributeChangedCallback(node, attrName, null, attrValue)
+    }
+    return true
   }
 }
 

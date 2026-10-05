@@ -1,3 +1,4 @@
+import { inert } from './inert'
 import { VirtualDocumentFragment } from './VirtualDocumentFragment'
 import type { VirtualNode } from './VirtualNode'
 import { VirtualElement } from './VirtualElement'
@@ -8,6 +9,9 @@ export class VirtualTemplateElement extends VirtualElement {
   constructor() {
     super('template')
     this.content = new VirtualDocumentFragment()
+    // Marks the fragment as template content, which is inert (see ./inert).
+    // eslint-disable-next-line max-statements-per-line
+    ;(this.content as any)._isTemplateContent = true
 
     Object.defineProperty(this, 'childNodes', {
       configurable: true,
@@ -48,12 +52,15 @@ export class VirtualTemplateElement extends VirtualElement {
     }
 
     if (deep) {
-      for (const child of this.content.childNodes) {
-        const childClone = (child as any).cloneNode?.(true)
-        if (childClone) {
-          clone.appendChild(childClone)
+      // Content is copied inert, into the copy's own inert content.
+      inert(() => {
+        for (const child of this.content.childNodes) {
+          const childClone = (child as any).cloneNode?.(true)
+          if (childClone) {
+            clone.appendChild(childClone)
+          }
         }
-      }
+      })
     }
 
     return clone

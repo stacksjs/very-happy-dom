@@ -58,6 +58,11 @@ function visitOwnedElementSubtree(node: VirtualNode, visitor: (node: any) => voi
 
 export function invokeConnectedCallback(node: VirtualNode): void {
   visitConnectedElementSubtree(node, (element) => {
+    // An element made inert (in template content, or cloned from it) is
+    // upgraded as it joins a live document, as a browser does.
+    if (element.isConnected) {
+      element.ownerDocument?.defaultView?.customElements?._upgradeElement?.(element)
+    }
     if (typeof element.connectedCallback === 'function' && element.isConnected) {
       element.connectedCallback()
     }

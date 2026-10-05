@@ -1,3 +1,4 @@
+import { inert, isInert, isInTemplateContent } from './inert'
 import type { ShadowRootInit } from '../webcomponents/ShadowRoot'
 import { DOMRect } from '../dom/DOMClasses'
 import { hidesItself } from '../aria/visibility'
@@ -408,9 +409,22 @@ export class VirtualElement extends VirtualNodeBase {
   }
 
   cloneNode(deep = false): VirtualElement {
+    // A copy is made the way the document makes an element, so it keeps its
+    // element class and a custom element is constructed - as cloneNode does in
+    // a browser. It always made a plain VirtualElement, so a cloned custom
+    // element never ran its constructor or callbacks. A node in template
+    // content is copied inert, as a browser copies it into the template's
+    // inert document; it is upgraded when inserted into a live document.
+    const inertCopy = isInert() || isInTemplateContent(this)
+    if (inertCopy && !isInert())
+      return inert(() => this.cloneNode(deep))
+    const doc = this.ownerDocument
+    const isHtml = !this.namespaceURI || this.namespaceURI === 'http://www.w3.org/1999/xhtml'
     const clone = this.namespaceURI === 'http://www.w3.org/2000/svg'
       ? new (require('./VirtualSVGElement').VirtualSVGElement)(this.tagName)
-      : new VirtualElement(this.tagName)
+      : isHtml && typeof doc?.createElement === 'function'
+        ? doc.createElement(this.tagName.toLowerCase())
+        : new VirtualElement(this.tagName)
     clone.namespaceURI = this.namespaceURI
     clone.nodeName = this.nodeName
     clone.tagName = this.tagName
@@ -612,7 +626,10 @@ export class VirtualElement extends VirtualNodeBase {
       this.childNodes.length = 0
     }
     if (html) {
-      const nodes = parseHTML(html, this.ownerDocument)
+      // A template's markup becomes its content, which is inert.
+      const nodes = this.tagName === 'TEMPLATE'
+        ? inert(() => parseHTML(html, this.ownerDocument))
+        : parseHTML(html, this.ownerDocument)
 
       // Special case: if we're the documentElement (<html>) and the parsed HTML
       // contains an <html> element, extract its children instead of nesting

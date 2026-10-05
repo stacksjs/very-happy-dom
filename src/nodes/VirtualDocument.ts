@@ -1,3 +1,4 @@
+import { isInert } from './inert'
 import type { XPathResult } from '../xpath/XPathResult'
 import type { CSSStyleSheet } from '../css/CSSOM'
 import { CSSStyleSheet as RuntimeCSSStyleSheet } from '../css/CSSOM'
@@ -634,7 +635,8 @@ export class VirtualDocument extends VirtualNodeBase {
       el.ownerDocument = this
       return el
     }
-    const customElement = this.defaultView?.customElements?.get?.(tagName.toLowerCase())
+    // Not inside template content: those elements are inert until instantiated.
+    const customElement = isInert() ? undefined : this.defaultView?.customElements?.get?.(tagName.toLowerCase())
     const el: any = customElement
       ? constructCustomElement<any>(customElement as any, this, tagName)
       : new VirtualElement(tagName)
@@ -714,6 +716,10 @@ export class VirtualDocument extends VirtualNodeBase {
     }
     const clone = (node as any).cloneNode(deep)
     this._setOwnerDocumentRecursive(clone, this)
+    // Imported into this document, so no longer inert: its custom elements
+    // are constructed now, as importNode does in a browser - even when the
+    // source was template content (the usual case).
+    this.defaultView?.customElements?.upgrade?.(clone)
     return clone
   }
 

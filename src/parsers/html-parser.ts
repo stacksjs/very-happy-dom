@@ -1,3 +1,4 @@
+import { inert } from '../nodes/inert'
 import type { VirtualNode } from '../nodes/VirtualNode'
 import type { VirtualElement } from '../nodes/VirtualElement'
 import type { VirtualSVGElement } from '../nodes/VirtualSVGElement'
@@ -373,8 +374,11 @@ export function parseHTML(html: string, ownerDocument?: any): VirtualNode[] {
       return element
     }
 
-    // Parse children
-    const children = parseNodes(tagNameLower, childNamespace)
+    // Parse children. A template's are its content, which is inert: a custom
+    // element in it is not constructed until the content is instantiated.
+    const children = tagNameLower === 'template'
+      ? inert(() => parseNodes(tagNameLower, childNamespace))
+      : parseNodes(tagNameLower, childNamespace)
     for (const child of children) {
       appendParsedChild(element, child)
     }
