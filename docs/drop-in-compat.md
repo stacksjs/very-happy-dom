@@ -342,11 +342,18 @@ input.blur()    // fires blur + bubbling focusout
   block, `position: relative`, and `absolute`/`fixed` taken out of flow against the nearest positioned
   ancestor. Lengths in `px`, `%`, `vh`/`vw`/`vmin`/`vmax`, `rem` and the absolute units.
 
+  **Flexbox** is implemented: `flex-direction` including both reverses, `flex-wrap` including
+  `wrap-reverse`, `justify-content`, `align-items`, `align-content`, `align-self`, `flex-grow`,
+  `flex-shrink`, `flex-basis`, the `flex` and `flex-flow` shorthands, `gap`/`row-gap`/`column-gap`, and
+  `order`. Growing and shrinking respect `min-*` and `max-*`, including the automatic minimum that stops
+  an item shrinking below its content. `inline-flex` shrinks to fit the sum of its items.
+
   **Not** modelled, and these are the differences from a browser worth knowing before you assert a number:
 
   | | |
   | --- | --- |
-  | **Flex and grid** | A flex or grid container lays its children out as blocks, so they stack instead of sitting in a row. The biggest gap, and most app markup is flex. |
+  | **Grid** | A grid container lays its children out as blocks, so they stack instead of being placed in cells. |
+  | **Flex `baseline` and `auto` margins** | `align-items: baseline` falls back to `flex-start`, for want of font baselines. An `auto` margin does not absorb free space, so `margin-left: auto` will not push an item to the end — use `justify-content` or a `flex: 1` spacer. |
   | **Margin collapsing** | Adjacent vertical margins add up; a browser collapses them to the larger. Anything below two stacked siblings with margins sits further down than a browser would say. |
   | **Text metrics** | No font engine, so a line count is estimated from the character count at `font-size x 0.5` per glyph. A height that comes only from wrapped text is approximate. |
   | **User-agent stylesheet** | An element has only the margins and padding the page declares. `body` starts at `(0, 0)`, not a browser's 8px inset, and a `<p>` has no margins of its own. |
@@ -407,9 +414,9 @@ Use this when deciding if a given test suite will migrate cleanly:
 
       hit testing, is-it-above-the-fold)? — Supported for normal flow.
 
-- [ ] Does it rely on flexbox or grid placement, collapsed margins, or a height
+- [ ] Does it rely on grid placement, collapsed margins, flex `baseline` alignment,
 
-      measured from wrapped text? — See the layout note above; these are approximated.
+      or a height measured from wrapped text? — See the layout note above; these are approximated.
 
 - [ ] Does it depend on node source locations? — Not tracked.
 - [ ] Does it depend on Service Workers / Web Workers? — Not implemented.

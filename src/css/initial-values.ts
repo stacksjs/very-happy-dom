@@ -57,6 +57,18 @@ export function initialValue(prop: string, tagName: string): string {
     case 'z-index': return 'auto'
     case 'flex-direction': return 'row'
     case 'flex-wrap': return 'nowrap'
+    case 'flex-grow': return '0'
+    // Not 0: an item shrinks by default, which is why flex children get
+    // squeezed rather than overflowing when the line is too narrow.
+    case 'flex-shrink': return '1'
+    case 'flex-basis': return 'auto'
+    case 'align-self': return 'auto'
+    case 'justify-self': return 'auto'
+    case 'justify-items': return 'legacy'
+    case 'order': return '0'
+    case 'row-gap':
+    case 'column-gap':
+      return 'normal'
     case 'justify-content': return 'normal'
     case 'align-items': return 'normal'
     case 'align-content': return 'normal'

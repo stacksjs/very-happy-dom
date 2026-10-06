@@ -331,17 +331,16 @@ describe('display', () => {
     expect(box('b').y).toBe(0)
   })
 
-  test('flex children stack, which a browser puts in a row', () => {
-    // Not implemented. A flex container lays its children out as blocks, so
-    // they stack vertically. Asserted so the gap is visible: this is the
-    // biggest difference from a browser, and most app markup is flex.
+  test('flex children sit in a row', () => {
+    // They used to stack, because a flex container laid its children out as
+    // blocks. test/layout-flex.test.ts covers the rest of the algorithm.
     const box = render('<div style="display:flex">'
       + '<div id="a" style="width:50px;height:10px"></div>'
       + '<div id="b" style="width:50px;height:10px"></div>'
       + '</div>')
 
-    expect(box('a').y).toBe(0)
-    expect(box('b').y).toBe(10)
+    expect(at(box('a'))).toEqual({ x: 0, y: 0, width: 50, height: 10 })
+    expect(at(box('b'))).toEqual({ x: 50, y: 0, width: 50, height: 10 })
   })
 })
 

@@ -284,9 +284,15 @@ and wrap. `box-sizing`, margins, padding, borders, min/max sizes, percentages,
 ancestor are all modelled, as are lengths in `px`, `%`, `vh`/`vw`/`vmin`/`vmax`,
 `rem` and the absolute units.
 
-What is not: **flex and grid containers lay their children out as blocks**, so
-they stack rather than sitting in a row — the biggest difference from a browser,
-and most app markup is flex. Vertical margins do not collapse. There is no font
+**Flexbox works**: both axes and both reverses, wrapping including
+`wrap-reverse`, `justify-content`, `align-items`, `align-content`, `align-self`,
+`flex-grow`/`shrink`/`basis` with the `flex` and `flex-flow` shorthands, `gap`,
+and `order`. Growing and shrinking respect `min-*` and `max-*`, including the
+automatic minimum that keeps an item from shrinking below its content.
+
+What is not: **grid containers lay their children out as blocks**. Vertical
+margins do not collapse. In a flex container, `align-items: baseline` falls back
+to `flex-start` and an `auto` margin does not absorb free space. There is no font
 engine, so a height measured from wrapped text is estimated. There is no
 user-agent stylesheet, so `body` starts at `(0, 0)` rather than a browser's 8px
 inset. Floats, `transform`, `z-index` ordering and intrinsic image sizes are

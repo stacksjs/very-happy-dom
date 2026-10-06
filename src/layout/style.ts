@@ -9,7 +9,7 @@
 
 import { initialValue } from '../css/initial-values'
 import { type LengthBasis, resolveLength, resolveLengthOrZero } from './length'
-import { type Insets, type LayoutStyle } from './types'
+import { type FlexContainerStyle, type FlexItemStyle, type Insets, type LayoutStyle } from './types'
 
 /** The parts of an element this module needs, kept structural to avoid a cycle. */
 export interface StyledElement {
@@ -87,6 +87,47 @@ function readBorder(read: (property: string) => string, basis: LengthBasis): Ins
   return { top: side('top'), right: side('right'), bottom: side('bottom'), left: side('left') }
 }
 
+/** A number, or the fallback when the value is not one. */
+function readNumber(declared: string, fallback: number): number {
+  const parsed = Number.parseFloat(declared.trim())
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
+}
+
+/**
+ * A `gap`, where `normal` means zero.
+ *
+ * `normal` is the initial value, and for a flex container it computes to 0 —
+ * unlike in a multi-column context, which is not modelled.
+ */
+function readGap(declared: string, basis: LengthBasis): number {
+  const trimmed = declared.trim()
+  if (trimmed === '' || trimmed === 'normal')
+    return 0
+  return Math.max(0, resolveLength(trimmed, basis) ?? 0)
+}
+
+function readFlexContainer(declared: (property: string) => string, basis: LengthBasis): FlexContainerStyle {
+  return {
+    direction: declared('flex-direction').trim().toLowerCase(),
+    wrap: declared('flex-wrap').trim().toLowerCase(),
+    justifyContent: declared('justify-content').trim().toLowerCase(),
+    alignItems: declared('align-items').trim().toLowerCase(),
+    alignContent: declared('align-content').trim().toLowerCase(),
+    rowGap: readGap(declared('row-gap'), basis),
+    columnGap: readGap(declared('column-gap'), basis),
+  }
+}
+
+function readFlexItem(declared: (property: string) => string): FlexItemStyle {
+  return {
+    grow: readNumber(declared('flex-grow'), 0),
+    shrink: readNumber(declared('flex-shrink'), 1),
+    basis: declared('flex-basis').trim().toLowerCase(),
+    alignSelf: declared('align-self').trim().toLowerCase(),
+    order: Math.trunc(Number.parseFloat(declared('order')) || 0),
+  }
+}
+
 /**
  * Resolve everything layout needs for one element.
  *
@@ -122,6 +163,8 @@ export function resolveLayoutStyle(element: StyledElement, basis: LengthBasis): 
     visibility: declared('visibility').trim().toLowerCase(),
     fontSize,
     lineHeight: readLineHeight(declared('line-height'), fontSize, basis),
+    flexContainer: readFlexContainer(declared, basis),
+    flexItem: readFlexItem(declared),
     width: size('width'),
     height: size('height'),
     minWidth: read('min-width'),

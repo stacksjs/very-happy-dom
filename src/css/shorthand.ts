@@ -39,6 +39,24 @@ const PAIR_SHORTHANDS: Record<string, readonly [string, string]> = {
 /** The one-side border shorthands, e.g. `border-top` -> width/style/color. */
 const SIDE_BORDERS = ['top', 'right', 'bottom', 'left'] as const
 
+/** `flex-direction` values, for telling the two halves of `flex-flow` apart. */
+const FLEX_DIRECTIONS = new Set(['row', 'row-reverse', 'column', 'column-reverse'])
+
+/** `flex-wrap` values, likewise. */
+const FLEX_WRAPS = new Set(['nowrap', 'wrap', 'wrap-reverse'])
+
+/**
+ * The three `flex` longhands for the keywords that stand in for all of them.
+ *
+ * `flex: auto` and `flex: none` read as opposites but differ in the shrink
+ * factor as well as the grow one, which is the part that catches people out.
+ */
+const FLEX_KEYWORDS: Record<string, [string, string, string]> = {
+  none: ['0', '0', 'auto'],
+  auto: ['1', '1', 'auto'],
+  initial: ['0', '1', 'auto'],
+}
+
 const BORDER_STYLES = new Set([
   'none',
   'hidden',
@@ -135,6 +153,76 @@ function boxValues(values: string[]): [string, string, string, string] | null {
   }
 }
 
+/** Is this a bare number, as `flex-grow` and `flex-shrink` take? */
+function isNumber(value: string): boolean {
+  return /^[+-]?(?:\d*\.)?\d+$/.test(value)
+}
+
+/**
+ * Expand `flex`, whose one to three values are told apart by shape.
+ *
+ * A single number is a grow factor and resets the basis to `0%` — which is why
+ * `flex: 1` makes items share the space equally rather than keeping their
+ * content widths. A single length is a basis. Two numbers are grow and shrink.
+ */
+function expandFlex(values: string[]): Array<[string, string]> | null {
+  if (values.length === 1) {
+    const only = values[0].toLowerCase()
+    const keyword = FLEX_KEYWORDS[only]
+    if (keyword)
+      return [['flex-grow', keyword[0]], ['flex-shrink', keyword[1]], ['flex-basis', keyword[2]]]
+
+    if (isNumber(values[0]))
+      return [['flex-grow', values[0]], ['flex-shrink', '1'], ['flex-basis', '0%']]
+
+    if (isLength(values[0]) || only === 'content' || only === 'min-content' || only === 'max-content' || only === 'fit-content')
+      return [['flex-grow', '1'], ['flex-shrink', '1'], ['flex-basis', values[0]]]
+
+    return null
+  }
+
+  if (values.length === 2) {
+    if (!isNumber(values[0]))
+      return null
+
+    // `flex: <grow> <shrink>` or `flex: <grow> <basis>`.
+    if (isNumber(values[1]))
+      return [['flex-grow', values[0]], ['flex-shrink', values[1]], ['flex-basis', '0%']]
+
+    return [['flex-grow', values[0]], ['flex-shrink', '1'], ['flex-basis', values[1]]]
+  }
+
+  if (values.length === 3) {
+    if (!isNumber(values[0]) || !isNumber(values[1]))
+      return null
+    return [['flex-grow', values[0]], ['flex-shrink', values[1]], ['flex-basis', values[2]]]
+  }
+
+  return null
+}
+
+/** Expand `flex-flow`, whose two halves may appear in either order. */
+function expandFlexFlow(values: string[]): Array<[string, string]> | null {
+  if (values.length > 2)
+    return null
+
+  let direction: string | undefined
+  let wrap: string | undefined
+
+  for (const value of values) {
+    const lower = value.toLowerCase()
+    if (FLEX_DIRECTIONS.has(lower) && direction === undefined)
+      direction = value
+    else if (FLEX_WRAPS.has(lower) && wrap === undefined)
+      wrap = value
+    else
+      return null
+  }
+
+  // A half left out comes back at its initial value, as a shorthand requires.
+  return [['flex-direction', direction ?? 'row'], ['flex-wrap', wrap ?? 'nowrap']]
+}
+
 /** Is this a length, a percentage, or a bare number? */
 function isLength(value: string): boolean {
   return /^[+-]?(?:\d*\.)?\d+(?:px|em|rem|%|vh|vw|vmin|vmax|ch|ex|cm|mm|in|pt|pc|q)?$/i.test(value)
@@ -188,6 +276,8 @@ const SHORTHAND_NAMES: ReadonlySet<string> = new Set([
   ...Object.keys(BOX_SHORTHANDS),
   ...Object.keys(PAIR_SHORTHANDS),
   'border',
+  'flex',
+  'flex-flow',
   ...SIDE_BORDERS.map(side => `border-${side}`),
 ])
 
@@ -207,6 +297,12 @@ function longhandsOf(property: string): readonly string[] | null {
 
   if (PAIR_SHORTHANDS[property])
     return PAIR_SHORTHANDS[property]
+
+  if (property === 'flex')
+    return ['flex-grow', 'flex-shrink', 'flex-basis']
+
+  if (property === 'flex-flow')
+    return ['flex-direction', 'flex-wrap']
 
   if (property === 'border') {
     return SIDE_BORDERS.flatMap(side => [
@@ -280,6 +376,12 @@ export function expandShorthand(property: string, value: string): Array<[string,
       [pair[1], values[1] ?? values[0]],
     ]
   }
+
+  if (name === 'flex')
+    return expandFlex(values)
+
+  if (name === 'flex-flow')
+    return expandFlexFlow(values)
 
   const components = borderComponents(values)
   if (!components)

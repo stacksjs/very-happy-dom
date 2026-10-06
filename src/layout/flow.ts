@@ -9,9 +9,11 @@
  *
  * What it does not model, and reports plainly rather than approximating badly:
  *
- * - **Flex and grid.** A flex container lays its children out as blocks, so
- *   they stack instead of sitting in a row. Most app markup is flex, so this is
- *   the biggest gap.
+ * - **Grid.** A grid container lays its children out as blocks, so they stack
+ *   instead of being placed in cells. Flex is implemented, in `flex.ts`.
+ * - **Baseline alignment and auto margins in a flex container.** `baseline`
+ *   falls back to `flex-start` for want of font baselines, and an `auto` margin
+ *   does not absorb free space.
  * - **Margin collapsing.** Adjacent vertical margins add up here; a browser
  *   collapses them to the larger. Every vertical position below two stacked
  *   siblings with margins is therefore further down than a browser would say.
@@ -27,6 +29,7 @@
  *   declared size has no size.
  */
 
+import { type FlexItemInput, solveFlex } from './flex'
 import { clampSize, type LengthBasis, resolveLength } from './length'
 import { resolveLayoutStyle, type StyledElement } from './style'
 import { EMPTY_INSETS, type Insets, type LayoutBox, type LayoutResult, type LayoutStyle } from './types'
@@ -128,6 +131,49 @@ function lineHeightOf(style: LayoutStyle): number {
 }
 
 /**
+ * A flex container's max-content width.
+ *
+ * Along a row that is the sum of the items' outer widths plus the gaps between
+ * them; down a column it is the widest of them. Measuring it the way a block is
+ * measured gives the widest child, which for an `inline-flex` row then squeezes
+ * every item into one item's width.
+ */
+function intrinsicFlexWidth(context: Context, node: FlowNode, style: LayoutStyle, available: number): number {
+  const horizontal = style.flexContainer.direction !== 'column'
+    && style.flexContainer.direction !== 'column-reverse'
+
+  let total = 0
+  let widest = 0
+  let count = 0
+
+  for (const child of node.childNodes) {
+    if (!isElement(child))
+      continue
+
+    const childStyle = styleFor(context, child, available)
+    if (childStyle.display === 'none' || NOT_RENDERED.has(child.tagName ?? ''))
+      continue
+    if (childStyle.position === 'absolute' || childStyle.position === 'fixed')
+      continue
+
+    const surrounds = horizontalSurrounds(childStyle)
+    const margins = childStyle.margin.left + childStyle.margin.right
+    const declared = resolveLength(childStyle.width, basisFor(context, available))
+
+    const outer = declared !== null
+      ? (childStyle.boxSizing === 'border-box' ? declared : declared + surrounds) + margins
+      : intrinsicWidth(context, child, Math.max(0, available - surrounds - margins)) + surrounds + margins
+
+    total += outer
+    widest = Math.max(widest, outer)
+    count++
+  }
+
+  const gaps = Math.max(0, count - 1) * style.flexContainer.columnGap
+  return Math.min(available, horizontal ? total + gaps : widest)
+}
+
+/**
  * Resolve a length, but treat a percentage as unresolved.
  *
  * A percentage height against a containing block whose own height is `auto`
@@ -168,6 +214,10 @@ function autoContentWidth(style: LayoutStyle, containingWidth: number): number {
  * paint order is not disturbed by the measurement.
  */
 function intrinsicWidth(context: Context, node: FlowNode, available: number): number {
+  const own = isElement(node) ? styleFor(context, node, available) : null
+  if (own && (own.display === 'flex' || own.display === 'inline-flex'))
+    return intrinsicFlexWidth(context, node, own, available)
+
   let widest = 0
   let lineWidth = 0
 
@@ -274,6 +324,14 @@ function layoutBox(
   y: number,
   inheritedInvisible: boolean,
   ancestors: FlowNode[],
+  /**
+   * Content sizes to use instead of resolving the declared ones.
+   *
+   * A flex item's size is decided by the solver, from the space on its line and
+   * its grow and shrink factors, so the declared `width` has already been taken
+   * into account and must not be applied again.
+   */
+  forced?: { contentWidth?: number, contentHeight?: number },
 ): LayoutBox {
   const style = styleFor(context, node, containingWidth)
 
@@ -289,7 +347,10 @@ function layoutBox(
   // --- width -------------------------------------------------------------
   const declaredWidth = resolveLength(style.width, basis)
   let contentWidth: number
-  if (declaredWidth !== null) {
+  if (forced?.contentWidth !== undefined) {
+    contentWidth = forced.contentWidth
+  }
+  else if (declaredWidth !== null) {
     contentWidth = contentWidthFrom(declaredWidth, style)
   }
   else if (INLINE_LEVEL.has(style.display)) {
@@ -299,8 +360,11 @@ function layoutBox(
     contentWidth = autoContentWidth(style, containingWidth)
   }
 
-  // min/max clamp the content width, adjusted for box-sizing the same way.
-  const clampedOuter = clampSize(
+  // min/max clamp the content width, adjusted for box-sizing the same way. A
+  // forced size was clamped by the solver already.
+  const clampedOuter = forced?.contentWidth !== undefined
+    ? (style.boxSizing === 'border-box' ? contentWidth + horizontalSurrounds(style) : contentWidth)
+    : clampSize(
     style.boxSizing === 'border-box' ? contentWidth + horizontalSurrounds(style) : contentWidth,
     style.minWidth,
     style.maxWidth,
@@ -319,7 +383,9 @@ function layoutBox(
   const declaredHeight = heightBasis === null
     ? absoluteOnly(style.height, basis)
     : resolveLength(style.height, heightBasis)
-  const definiteContentHeight = declaredHeight === null ? null : contentHeightFrom(declaredHeight, style)
+  const definiteContentHeight = forced?.contentHeight !== undefined
+    ? forced.contentHeight
+    : declaredHeight === null ? null : contentHeightFrom(declaredHeight, style)
 
   // --- children ----------------------------------------------------------
   const contentX = x + style.border.left + style.padding.left
@@ -328,12 +394,14 @@ function layoutBox(
 
   let contentHeight = definiteContentHeight ?? children.height
 
-  const clampedHeight = clampSize(
-    style.boxSizing === 'border-box' ? contentHeight + verticalSurrounds(style) : contentHeight,
-    style.minHeight,
-    style.maxHeight,
-    heightBasis ?? basisFor(context, context.viewportHeight),
-  )
+  const clampedHeight = forced?.contentHeight !== undefined
+    ? (style.boxSizing === 'border-box' ? contentHeight + verticalSurrounds(style) : contentHeight)
+    : clampSize(
+        style.boxSizing === 'border-box' ? contentHeight + verticalSurrounds(style) : contentHeight,
+        style.minHeight,
+        style.maxHeight,
+        heightBasis ?? basisFor(context, context.viewportHeight),
+      )
   contentHeight = style.boxSizing === 'border-box'
     ? Math.max(0, clampedHeight - verticalSurrounds(style))
     : clampedHeight
@@ -423,6 +491,11 @@ function layoutChildren(
   invisible: boolean,
   ancestors: FlowNode[],
 ): ChildrenResult {
+  const ownStyle = styleFor(context, node, contentWidth)
+  if (ownStyle.display === 'flex' || ownStyle.display === 'inline-flex') {
+    return layoutFlexChildren(context, node, ownStyle, contentWidth, contentHeight, contentX, contentY, invisible, ancestors)
+  }
+
   let cursorY = contentY
   let maxRight = contentX
   let maxBottom = contentY
@@ -546,6 +619,316 @@ function layoutChildren(
     scrollWidth: Math.max(0, maxRight - contentX),
     scrollHeight: Math.max(0, maxBottom - contentY),
   }
+}
+
+/**
+ * Lay a flex container's children out.
+ *
+ * Each item is measured first, because the solver needs a base size and a
+ * hypothetical cross size before it can distribute anything; then the solver
+ * says how big each item ends up and where it goes; then each item is laid out
+ * again at that size, so its own subtree is positioned inside the final box
+ * rather than the measured one.
+ *
+ * Laying out twice is what a flex container costs. The measuring pass restores
+ * the paint counter and the out-of-flow queue afterwards, so nothing it does is
+ * visible except the boxes the second pass overwrites.
+ */
+function layoutFlexChildren(
+  context: Context,
+  node: FlowNode,
+  style: LayoutStyle,
+  contentWidth: number,
+  contentHeight: number | null,
+  contentX: number,
+  contentY: number,
+  invisible: boolean,
+  ancestors: FlowNode[],
+): ChildrenResult {
+  const flex = style.flexContainer
+  const horizontal = flex.direction !== 'column' && flex.direction !== 'column-reverse'
+  const reverseMain = flex.direction === 'row-reverse' || flex.direction === 'column-reverse'
+  const reverseCross = flex.wrap === 'wrap-reverse'
+
+  const availableMain = horizontal ? contentWidth : contentHeight
+  const availableCross = horizontal ? contentHeight : contentWidth
+  const childAncestors = [node, ...ancestors]
+
+  const children: FlowNode[] = []
+  for (const child of node.childNodes) {
+    if (!isElement(child))
+      continue
+
+    const childStyle = styleFor(context, child, contentWidth)
+
+    if (childStyle.display === 'none' || NOT_RENDERED.has(child.tagName ?? '')) {
+      markSubtreeEmpty(context, child, childStyle)
+      continue
+    }
+
+    // Absolutely positioned children are not flex items, as in a browser.
+    if (childStyle.position === 'absolute' || childStyle.position === 'fixed') {
+      context.deferred.push({
+        node: child,
+        style: childStyle,
+        ancestors: childAncestors,
+        staticX: contentX,
+        staticY: contentY,
+      })
+      continue
+    }
+
+    children.push(child)
+  }
+
+  if (children.length === 0)
+    return { height: 0, scrollWidth: 0, scrollHeight: 0 }
+
+  // `order` reorders the items without touching the DOM. Sorted stably, so
+  // items sharing an order keep document order between them.
+  const ordered = children
+    .map((child, index) => ({ child, index, order: styleFor(context, child, contentWidth).flexItem.order }))
+    .sort((a, b) => (a.order - b.order) || (a.index - b.index))
+    .map(entry => entry.child)
+
+  const inputs: FlexItemInput[] = []
+  const measured: LayoutStyle[] = []
+
+  for (const child of ordered) {
+    const childStyle = styleFor(context, child, contentWidth)
+    measured.push(childStyle)
+
+    const basis = basisFor(context, contentWidth)
+    const mainSurrounds = horizontal ? horizontalSurrounds(childStyle) : verticalSurrounds(childStyle)
+    const crossSurrounds = horizontal ? verticalSurrounds(childStyle) : horizontalSurrounds(childStyle)
+
+    // The declared size along each axis, as a border-box number.
+    const toBorderBox = (content: number, surrounds: number): number =>
+      childStyle.boxSizing === 'border-box' ? content : content + surrounds
+
+    const declaredMainText = horizontal ? childStyle.width : childStyle.height
+    const declaredMain = resolveLength(declaredMainText, horizontal ? basis : basisFor(context, availableCross ?? context.viewportHeight))
+
+    // The flex base size: `flex-basis` first, then the declared main size, then
+    // the content's own size. `flex: 1` sets the basis to 0%, which is what
+    // makes items share the line equally regardless of their content.
+    // Measuring the content size means an intrinsic-width pass along a row, or a
+    // whole trial layout down a column. Both the base size and the automatic
+    // minimum can want it, so it is computed at most once per item.
+    let contentMain: number | null = null
+    const contentMainSize = (): number => {
+      contentMain ??= measureMain(context, child, childStyle, horizontal, contentWidth, availableCross, childAncestors)
+      return contentMain
+    }
+
+    const basisText = childStyle.flexItem.basis
+    let baseMain: number
+    if (basisText !== '' && basisText !== 'auto' && basisText !== 'content') {
+      const resolved = resolveLength(basisText, horizontal
+        ? basisFor(context, availableMain ?? contentWidth)
+        : basisFor(context, availableMain ?? context.viewportHeight))
+      baseMain = resolved === null ? contentMainSize() : toBorderBox(resolved, mainSurrounds)
+    }
+    else if (declaredMain !== null && basisText !== 'content') {
+      baseMain = toBorderBox(declaredMain, mainSurrounds)
+    }
+    else {
+      baseMain = contentMainSize()
+    }
+
+    const minText = horizontal ? childStyle.minWidth : childStyle.minHeight
+    const maxText = horizontal ? childStyle.maxWidth : childStyle.maxHeight
+    const minResolved = resolveLength(minText, basis)
+    const maxResolved = resolveLength(maxText, basis)
+
+    // An item never shrinks below its content along the main axis unless it
+    // says so, which is the `min-width: auto` rule flex items get.
+    const autoMin = childStyle.flexItem.shrink > 0 && minText.trim() === ''
+      ? Math.min(baseMain, contentMainSize())
+      : 0
+
+    const minMain = minResolved === null ? autoMin : toBorderBox(minResolved, mainSurrounds)
+    const maxMain = maxResolved === null ? Infinity : toBorderBox(maxResolved, mainSurrounds)
+
+    // The hypothetical cross size, and whether it was declared at all.
+    const declaredCrossText = horizontal ? childStyle.height : childStyle.width
+    const declaredCross = horizontal
+      ? (availableCross === null ? absoluteOnly(declaredCrossText, basis) : resolveLength(declaredCrossText, basisFor(context, availableCross)))
+      : resolveLength(declaredCrossText, basis)
+
+    const crossIsAuto = declaredCross === null
+
+    const align = childStyle.flexItem.alignSelf === 'auto' || childStyle.flexItem.alignSelf === ''
+      ? flex.alignItems
+      : childStyle.flexItem.alignSelf
+
+    // An item that will stretch to a cross size the container already fixes
+    // does not need measuring: the line's size comes from the container, and
+    // the item is resized to it. That skips a trial layout per item, which is
+    // the single most expensive thing a flex container does.
+    const willStretch = crossIsAuto
+      && (align === 'stretch' || align === 'normal' || align === '')
+      && availableCross !== null
+      && flex.wrap === 'nowrap'
+
+    const baseCross = !crossIsAuto
+      ? toBorderBox(declaredCross, crossSurrounds)
+      : willStretch
+        ? 0
+        : measureCross(context, child, horizontal, baseMain, mainSurrounds, contentWidth, availableCross, childAncestors)
+
+    inputs.push({
+      baseMain: Math.min(Math.max(baseMain, minMain), maxMain),
+      minMain,
+      maxMain,
+      grow: childStyle.flexItem.grow,
+      shrink: childStyle.flexItem.shrink,
+      marginMainStart: horizontal ? childStyle.margin.left : childStyle.margin.top,
+      marginMainEnd: horizontal ? childStyle.margin.right : childStyle.margin.bottom,
+      marginCrossStart: horizontal ? childStyle.margin.top : childStyle.margin.left,
+      marginCrossEnd: horizontal ? childStyle.margin.bottom : childStyle.margin.right,
+      baseCross,
+      crossIsAuto,
+      align,
+    })
+  }
+
+  const solved = solveFlex(inputs, {
+    availableMain,
+    availableCross,
+    wrap: flex.wrap,
+    justifyContent: flex.justifyContent,
+    alignContent: flex.alignContent,
+    mainGap: horizontal ? flex.columnGap : flex.rowGap,
+    crossGap: horizontal ? flex.rowGap : flex.columnGap,
+  })
+
+  const mainExtent = availableMain ?? solved.contentMain
+  const crossExtent = availableCross ?? solved.contentCross
+
+  let maxRight = contentX
+  let maxBottom = contentY
+
+  for (const line of solved.lines) {
+    for (const placed of line.items) {
+      const child = ordered[placed.index]
+      const childStyle = measured[placed.index]
+
+      // Reversing happens here rather than in the solver, which works in
+      // start-to-end terms along both axes.
+      const mainStart = reverseMain
+        ? mainExtent - placed.mainStart - placed.mainSize
+        : placed.mainStart
+      const crossStart = reverseCross
+        ? crossExtent - placed.crossStart - placed.crossSize
+        : placed.crossStart
+
+      const borderBoxWidth = horizontal ? placed.mainSize : placed.crossSize
+      const borderBoxHeight = horizontal ? placed.crossSize : placed.mainSize
+
+      const box = layoutBox(
+        context,
+        child,
+        contentWidth,
+        contentHeight,
+        contentX + (horizontal ? mainStart : crossStart),
+        contentY + (horizontal ? crossStart : mainStart),
+        invisible,
+        childAncestors,
+        {
+          contentWidth: Math.max(0, borderBoxWidth - horizontalSurrounds(childStyle)),
+          contentHeight: Math.max(0, borderBoxHeight - verticalSurrounds(childStyle)),
+        },
+      )
+
+      maxRight = Math.max(maxRight, box.x + box.width + childStyle.margin.right)
+      maxBottom = Math.max(maxBottom, box.y + box.height + childStyle.margin.bottom)
+    }
+  }
+
+  const height = horizontal ? solved.contentCross : solved.contentMain
+
+  return {
+    height: Math.max(0, height),
+    scrollWidth: Math.max(0, maxRight - contentX),
+    scrollHeight: Math.max(0, maxBottom - contentY),
+  }
+}
+
+/**
+ * An item's content-based main size, as a border-box number.
+ *
+ * Along a row this is the intrinsic width, which can be measured without
+ * laying anything out. Along a column it is the content's height, and there is
+ * no way to know that without a trial layout.
+ */
+function measureMain(
+  context: Context,
+  child: FlowNode,
+  childStyle: LayoutStyle,
+  horizontal: boolean,
+  containingWidth: number,
+  containingHeight: number | null,
+  ancestors: FlowNode[],
+): number {
+  if (horizontal) {
+    const content = intrinsicWidth(context, child, containingWidth)
+    return content + horizontalSurrounds(childStyle)
+  }
+
+  return trialLayout(context, child, containingWidth, containingHeight, ancestors).height
+}
+
+/** An item's content-based cross size at a known main size, as a border box. */
+function measureCross(
+  context: Context,
+  child: FlowNode,
+  horizontal: boolean,
+  baseMain: number,
+  mainSurrounds: number,
+  containingWidth: number,
+  containingHeight: number | null,
+  ancestors: FlowNode[],
+): number {
+  if (!horizontal) {
+    // The cross axis is horizontal, so the cross size is the intrinsic width.
+    const childStyle = styleFor(context, child, containingWidth)
+    return intrinsicWidth(context, child, containingWidth) + horizontalSurrounds(childStyle)
+  }
+
+  // The cross axis is vertical: lay the item out at the main size it will have
+  // and see how tall its content comes out.
+  const trial = trialLayout(context, child, containingWidth, containingHeight, ancestors, {
+    contentWidth: Math.max(0, baseMain - mainSurrounds),
+  })
+  return trial.height
+}
+
+/**
+ * Lay a subtree out to measure it, then undo everything but the boxes.
+ *
+ * The paint counter and the out-of-flow queue are restored, so a measurement
+ * cannot shift paint order or place an absolutely positioned box twice. The
+ * boxes it records are overwritten by the real pass, which visits the same
+ * nodes.
+ */
+function trialLayout(
+  context: Context,
+  node: FlowNode,
+  containingWidth: number,
+  containingHeight: number | null,
+  ancestors: FlowNode[],
+  forced?: { contentWidth?: number, contentHeight?: number },
+): LayoutBox {
+  const order = context.order
+  const deferred = context.deferred.length
+
+  const box = layoutBox(context, node, containingWidth, containingHeight, 0, 0, true, ancestors, forced)
+
+  context.order = order
+  context.deferred.length = deferred
+
+  return box
 }
 
 /**

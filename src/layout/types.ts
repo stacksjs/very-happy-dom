@@ -42,6 +42,27 @@ export interface LayoutBox {
   order: number
 }
 
+/** How a flex container arranges its line, and its items within it. */
+export interface FlexContainerStyle {
+  direction: string
+  wrap: string
+  justifyContent: string
+  alignItems: string
+  alignContent: string
+  rowGap: number
+  columnGap: number
+}
+
+/** How one flex item sizes and aligns itself. */
+export interface FlexItemStyle {
+  grow: number
+  shrink: number
+  /** The declared `flex-basis`, kept as text: `auto` and `content` are not lengths. */
+  basis: string
+  alignSelf: string
+  order: number
+}
+
 /** The layout-relevant computed values for one element. */
 export interface LayoutStyle {
   display: string
@@ -52,6 +73,8 @@ export interface LayoutStyle {
   visibility: string
   fontSize: number
   lineHeight: number | null
+  flexContainer: FlexContainerStyle
+  flexItem: FlexItemStyle
   width: string
   height: string
   minWidth: string
