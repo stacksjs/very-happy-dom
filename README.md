@@ -281,8 +281,10 @@ Block-level boxes stack down their containing block and fill its width unless
 they declare one; inline and inline-block boxes flow along a line, shrink to fit
 and wrap. `box-sizing`, margins, padding, borders, min/max sizes, percentages,
 `position: relative`, and `absolute`/`fixed` against the nearest positioned
-ancestor are all modelled, as are lengths in `px`, `%`, `vh`/`vw`/`vmin`/`vmax`,
-`rem` and the absolute units.
+ancestor are all modelled, as are lengths in `px`, `%`, `em`, `rem`,
+`vh`/`vw`/`vmin`/`vmax` and the absolute units — plus `calc()`, `min()`, `max()`
+and `clamp()`. `font-size` and `line-height` inherit, so an `em` measures
+against the size an element actually has.
 
 **Flexbox works**: both axes and both reverses, wrapping including
 `wrap-reverse`, `justify-content`, `align-items`, `align-content`, `align-self`,

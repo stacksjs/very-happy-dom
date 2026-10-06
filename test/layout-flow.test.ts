@@ -299,10 +299,16 @@ describe('percentages and units', () => {
     expect(box('a').height).toBe(16)
   })
 
-  test('an unsupported unit falls back to automatic sizing', () => {
-    // `em` needs the inherited font-size chain, which is not modelled.
-    // Degrading to `auto` is better than reporting a wrong number.
+  test('em resolves against the element\'s own font size', () => {
+    // This used to fall back to automatic sizing, for want of the inherited
+    // font-size chain. test/layout-units.test.ts covers the rest.
     const box = render('<div id="a" style="width: 10em"></div>')
+    expect(box('a').width).toBe(160)
+  })
+
+  test('an unsupported unit still falls back to automatic sizing', () => {
+    // Degrading to `auto` is better than reporting a wrong number.
+    const box = render('<div id="a" style="width: 10lh"></div>')
     expect(box('a').width).toBe(1024)
   })
 })

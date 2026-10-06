@@ -25,29 +25,69 @@ const BORDER_WIDTH_KEYWORDS: Record<string, number> = { thin: 1, medium: 3, thic
 /** Border styles that suppress the border, making its used width zero. */
 const NO_BORDER = new Set(['', 'none', 'hidden'])
 
+/** The absolute-size keywords, as the pixel sizes browsers give them. */
+const FONT_SIZE_KEYWORDS: Record<string, number> = {
+  'xx-small': 9,
+  'x-small': 10,
+  'small': 13,
+  'medium': 16,
+  'large': 18,
+  'x-large': 24,
+  'xx-large': 32,
+  'xxx-large': 48,
+}
+
 /**
  * The font size in pixels.
  *
- * Only absolute units are read. `em` and the size keywords would need the
- * inherited chain, and layout uses this solely to estimate text height, so a
- * wrong answer here is worse than the 16px initial value.
+ * `font-size` is inherited, so an element declaring none takes its parent's. A
+ * percentage or an `em` here measures against the *parent's* size rather than
+ * its own, which is what stops it being circular, and `larger`/`smaller` step
+ * from the parent by the conventional 1.2.
  */
-function readFontSize(declared: string, basis: LengthBasis): number {
-  const resolved = resolveLength(declared, basis)
-  return resolved !== null && resolved > 0 ? resolved : 16
+function readFontSize(declared: string, basis: LengthBasis, inherited: number): number {
+  const trimmed = declared.trim().toLowerCase()
+
+  if (trimmed === '' || trimmed === 'inherit')
+    return inherited
+
+  const keyword = FONT_SIZE_KEYWORDS[trimmed]
+  if (keyword !== undefined)
+    return keyword
+
+  if (trimmed === 'larger')
+    return inherited * 1.2
+  if (trimmed === 'smaller')
+    return inherited / 1.2
+
+  const parentRelative: LengthBasis = { ...basis, basis: inherited, fontSize: inherited }
+  const resolved = resolveLength(trimmed, parentRelative)
+  return resolved !== null && resolved > 0 ? resolved : inherited
 }
 
-/** `line-height`, or `null` for `normal` — which the caller turns into a ratio. */
-function readLineHeight(declared: string, fontSize: number, basis: LengthBasis): number | null {
+/**
+ * `line-height`, or `null` for `normal` — which the caller turns into a ratio.
+ *
+ * Inherited, like `font-size`. A bare number is a multiple of the element's own
+ * font size, and a percentage resolves against it too.
+ */
+function readLineHeight(
+  declared: string,
+  fontSize: number,
+  basis: LengthBasis,
+  inherited: number | null,
+): number | null {
   const trimmed = declared.trim()
-  if (trimmed === '' || trimmed === 'normal')
+  if (trimmed === '' || trimmed === 'inherit')
+    return inherited
+  if (trimmed === 'normal')
     return null
 
   // A bare number is a multiple of the font size, not a pixel count.
   if (/^[+-]?(?:\d*\.)?\d+$/.test(trimmed))
     return Number.parseFloat(trimmed) * fontSize
 
-  return resolveLength(trimmed, { ...basis, basis: fontSize })
+  return resolveLength(trimmed, { ...basis, basis: fontSize, fontSize })
 }
 
 /** Resolve the four sides of `margin` or `padding`. */
@@ -158,17 +198,30 @@ function readGridItem(declared: (property: string) => string): GridItemStyle {
   }
 }
 
+/** The values an element takes from its parent when it declares none. */
+export interface InheritedStyle {
+  fontSize: number
+  lineHeight: number | null
+}
+
 /**
  * Resolve everything layout needs for one element.
  *
  * `basis` carries the containing block's inline size, because percentages and
  * viewport units cannot be resolved without it.
  */
-export function resolveLayoutStyle(element: StyledElement, basis: LengthBasis): LayoutStyle {
+export function resolveLayoutStyle(
+  element: StyledElement,
+  basis: LengthBasis,
+  inherited: InheritedStyle,
+): LayoutStyle {
   const read = element._styleReader()
   const declared = (property: string): string => read(property) || initialValue(property, element.tagName)
 
-  const fontSize = readFontSize(declared('font-size'), basis)
+  // Resolved first, and against the parent's size, because every other length
+  // on this element that uses `em` measures against the result.
+  const fontSize = readFontSize(read('font-size'), basis, inherited.fontSize)
+  const own: LengthBasis = { ...basis, fontSize }
 
   /**
    * A declared size, or the `width`/`height` attribute when CSS says nothing.
@@ -192,10 +245,10 @@ export function resolveLayoutStyle(element: StyledElement, basis: LengthBasis): 
     pointerEvents: declared('pointer-events').trim().toLowerCase(),
     visibility: declared('visibility').trim().toLowerCase(),
     fontSize,
-    lineHeight: readLineHeight(declared('line-height'), fontSize, basis),
-    flexContainer: readFlexContainer(declared, basis),
+    lineHeight: readLineHeight(read('line-height'), fontSize, own, inherited.lineHeight),
+    flexContainer: readFlexContainer(declared, own),
     flexItem: readFlexItem(declared),
-    gridContainer: readGridContainer(declared, basis),
+    gridContainer: readGridContainer(declared, own),
     gridItem: readGridItem(declared),
     width: size('width'),
     height: size('height'),
@@ -204,9 +257,9 @@ export function resolveLayoutStyle(element: StyledElement, basis: LengthBasis): 
     maxWidth: read('max-width'),
     maxHeight: read('max-height'),
     // Margins may be negative; padding and border may not.
-    margin: readInsets(read, 'margin', basis, true),
-    padding: readInsets(read, 'padding', basis, false),
-    border: readBorder(read, basis),
+    margin: readInsets(read, 'margin', own, true),
+    padding: readInsets(read, 'padding', own, false),
+    border: readBorder(read, own),
     offsets: {
       top: read('top'),
       right: read('right'),

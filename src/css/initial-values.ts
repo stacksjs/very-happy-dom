@@ -7,6 +7,42 @@
  * `getComputedStyle` already answered with.
  */
 
+/**
+ * The properties that inherit when nothing declares them.
+ *
+ * Shared so `getComputedStyle` and the layout pass cannot disagree about what
+ * comes down from a parent. They resolve it differently — layout wants a number
+ * and `getComputedStyle` reports the declaration — but which properties
+ * inherit at all is one fact and lives in one place.
+ *
+ * Only the ones a caller reads or layout uses. A complete list would be longer;
+ * an inherited property missing from here falls back to its initial value,
+ * which is the behaviour everything had before any of this.
+ */
+export const INHERITED_PROPERTIES: ReadonlySet<string> = new Set([
+  'color',
+  'cursor',
+  'direction',
+  'font',
+  'font-family',
+  'font-size',
+  'font-style',
+  'font-variant',
+  'font-weight',
+  'letter-spacing',
+  'line-height',
+  'list-style',
+  'list-style-image',
+  'list-style-position',
+  'list-style-type',
+  'text-align',
+  'text-indent',
+  'text-transform',
+  'visibility',
+  'white-space',
+  'word-spacing',
+])
+
 const DEFAULT_DISPLAY: Record<string, string> = {
   // Block
   ADDRESS: 'block', ARTICLE: 'block', ASIDE: 'block', BLOCKQUOTE: 'block',

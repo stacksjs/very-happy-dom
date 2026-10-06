@@ -20,6 +20,8 @@
  *   its content to their sizes, named grid lines are parsed away rather than
  *   resolved, `auto-fit` behaves as `auto-fill` without collapsing the empty
  *   tracks it implies, and an `fr` track can shrink below its content.
+ * - **`ex` and `ch`.** Approximated at half the font size. Both need the
+ *   font — `ex` is its x-height and `ch` the width of its zero.
  * - **Floats.** Not implemented. A floated box stays in flow.
  * - **Text metrics.** There is no font engine, so a line count is estimated
  *   from the character count. An element whose height comes only from wrapped
@@ -36,13 +38,14 @@ import { type FlexItemInput, solveFlex } from './flex'
 import { AUTO_TRACK, type GridItemLines, type GridPlacement, parseAreas, parseTrackList, placeItems, sizeTracks, type Track, trackOffsets } from './grid'
 import { clampSize, type LengthBasis, resolveLength } from './length'
 import { isEmptyMargin, joinMargins, type Margin, marginOf, marginValue, NO_MARGIN } from './margins'
-import { resolveLayoutStyle, type StyledElement } from './style'
+import { type InheritedStyle, resolveLayoutStyle, type StyledElement } from './style'
 import { EMPTY_INSETS, type Insets, type LayoutBox, type LayoutResult, type LayoutStyle } from './types'
 
 /** The parts of a node the flow needs, kept structural to avoid a cycle. */
 interface FlowNode {
   nodeType: number
   childNodes: FlowNode[]
+  parentNode?: FlowNode | null
   nodeValue?: string | null
   tagName?: string
   _styleReader?: () => (property: string) => string
@@ -90,6 +93,15 @@ interface Context {
    */
   margins: Map<FlowNode, { top: Margin, bottom: Margin, collapsesThrough: boolean }>
   /**
+   * What each element passes down to its children.
+   *
+   * `font-size` and `line-height` inherit, and `em` measures against the
+   * inherited size, so a child cannot be resolved without its parent's. Filled
+   * in as each element's style is resolved, which the top-down order makes
+   * reliable: a parent is always resolved before its children.
+   */
+  inherited: Map<FlowNode, InheritedStyle>
+  /**
    * The last resolved style per element, for this pass.
    *
    * Resolving means matching every rule against the element, and the flow asks
@@ -105,13 +117,44 @@ interface Context {
   styles: Map<FlowNode, { width: number, style: LayoutStyle }>
 }
 
-function basisFor(context: Context, basis: number): LengthBasis {
+/**
+ * What a relative length on `node` resolves against.
+ *
+ * The font size is the element's own when it has been resolved, and the root's
+ * otherwise — which is the case while the element's own style is still being
+ * worked out, and is exactly when `em` must measure against the parent instead.
+ */
+function basisFor(context: Context, basis: number, node?: FlowNode): LengthBasis {
   return {
     basis,
     viewportWidth: context.viewportWidth,
     viewportHeight: context.viewportHeight,
     rootFontSize: context.rootFontSize,
+    // The element's own size once its style is resolved, which is the case
+    // whenever its own lengths are being read; its parent's before that.
+    fontSize: node
+      ? context.inherited.get(node)?.fontSize ?? inheritedFor(context, node).fontSize
+      : context.rootFontSize,
   }
+}
+
+/**
+ * What `node` inherits from its ancestors.
+ *
+ * Walks up to the nearest ancestor whose style has been resolved. That is
+ * normally the parent; the walk is there because a measurement can reach a node
+ * whose immediate parent is mid-resolution.
+ */
+function inheritedFor(context: Context, node: FlowNode): InheritedStyle {
+  let current = node.parentNode ?? null
+  while (current) {
+    const found = context.inherited.get(current)
+    if (found)
+      return found
+    current = current.parentNode ?? null
+  }
+
+  return { fontSize: context.rootFontSize, lineHeight: null }
 }
 
 /** The element's resolved style for this containing width, matched once. */
@@ -120,8 +163,20 @@ function styleFor(context: Context, node: FlowNode, containingWidth: number): La
   if (cached && cached.width === containingWidth)
     return cached.style
 
-  const style = resolveLayoutStyle(node as unknown as StyledElement, basisFor(context, containingWidth))
+  const inherited = inheritedFor(context, node)
+  const basis: LengthBasis = {
+    basis: containingWidth,
+    viewportWidth: context.viewportWidth,
+    viewportHeight: context.viewportHeight,
+    rootFontSize: context.rootFontSize,
+    // The parent's size: `font-size: 2em` doubles what was inherited, and
+    // everything else on the element is then resolved against the result.
+    fontSize: inherited.fontSize,
+  }
+
+  const style = resolveLayoutStyle(node as unknown as StyledElement, basis, inherited)
   context.styles.set(node, { width: containingWidth, style })
+  context.inherited.set(node, { fontSize: style.fontSize, lineHeight: style.lineHeight })
   return style
 }
 
@@ -171,7 +226,7 @@ function intrinsicFlexWidth(context: Context, node: FlowNode, style: LayoutStyle
 
     const surrounds = horizontalSurrounds(childStyle)
     const margins = childStyle.margin.left + childStyle.margin.right
-    const declared = resolveLength(childStyle.width, basisFor(context, available))
+    const declared = resolveLength(childStyle.width, basisFor(context, available, child))
 
     const outer = (declared !== null
       ? (childStyle.boxSizing === 'border-box' ? declared : declared + surrounds)
@@ -223,7 +278,7 @@ function establishesBlockContext(style: LayoutStyle): boolean {
  */
 function intrinsicGridWidth(context: Context, node: FlowNode, style: LayoutStyle, available: number): number {
   const grid = style.gridContainer
-  const basis = basisFor(context, available)
+  const basis = basisFor(context, available, node)
 
   const tracks = parseTrackList(grid.templateColumns, {
     resolve: text => resolveLength(text, basis),
@@ -349,7 +404,7 @@ function intrinsicWidth(context: Context, node: FlowNode, available: number): nu
       continue
 
     const surrounds = horizontalSurrounds(childStyle) + childStyle.margin.left + childStyle.margin.right
-    const declared = resolveLength(childStyle.width, basisFor(context, available))
+    const declared = resolveLength(childStyle.width, basisFor(context, available, child))
 
     // A block child with no declared width contributes its own content's width,
     // not the room it would fill. Reporting the room made an `fr` grid track
@@ -448,7 +503,7 @@ function layoutBox(
 
   const order = context.order++
   const invisible = inheritedInvisible || style.visibility === 'hidden' || style.visibility === 'collapse'
-  const basis = basisFor(context, containingWidth)
+  const basis = basisFor(context, containingWidth, node)
 
   // --- width -------------------------------------------------------------
   const declaredWidth = resolveLength(style.width, basis)
@@ -485,7 +540,7 @@ function layoutBox(
   // percentage heights resolve against. A percentage against an indefinite
   // containing block computes to `auto` instead — a fraction of something
   // indefinite is not a number.
-  const heightBasis = containingHeight === null ? null : basisFor(context, containingHeight)
+  const heightBasis = containingHeight === null ? null : basisFor(context, containingHeight, node)
   const declaredHeight = heightBasis === null
     ? absoluteOnly(style.height, basis)
     : resolveLength(style.height, heightBasis)
@@ -518,7 +573,7 @@ function layoutBox(
         style.boxSizing === 'border-box' ? contentHeight + verticalSurrounds(style) : contentHeight,
         style.minHeight,
         style.maxHeight,
-        heightBasis ?? basisFor(context, context.viewportHeight),
+        heightBasis ?? basisFor(context, context.viewportHeight, node),
       )
   contentHeight = style.boxSizing === 'border-box'
     ? Math.max(0, clampedHeight - verticalSurrounds(style))
@@ -535,7 +590,7 @@ function layoutBox(
   if (style.position === 'relative') {
     const left = resolveLength(style.offsets.left, basis)
     const right = resolveLength(style.offsets.right, basis)
-    const verticalBasis = heightBasis ?? basisFor(context, context.viewportHeight)
+    const verticalBasis = heightBasis ?? basisFor(context, context.viewportHeight, node)
     const top = resolveLength(style.offsets.top, verticalBasis)
     const bottom = resolveLength(style.offsets.bottom, verticalBasis)
 
@@ -938,7 +993,7 @@ function layoutFlexChildren(
     const childStyle = styleFor(context, child, contentWidth)
     measured.push(childStyle)
 
-    const basis = basisFor(context, contentWidth)
+    const basis = basisFor(context, contentWidth, child)
     const mainSurrounds = horizontal ? horizontalSurrounds(childStyle) : verticalSurrounds(childStyle)
     const crossSurrounds = horizontal ? verticalSurrounds(childStyle) : horizontalSurrounds(childStyle)
 
@@ -947,7 +1002,7 @@ function layoutFlexChildren(
       childStyle.boxSizing === 'border-box' ? content : content + surrounds
 
     const declaredMainText = horizontal ? childStyle.width : childStyle.height
-    const declaredMain = resolveLength(declaredMainText, horizontal ? basis : basisFor(context, availableCross ?? context.viewportHeight))
+    const declaredMain = resolveLength(declaredMainText, horizontal ? basis : basisFor(context, availableCross ?? context.viewportHeight, child))
 
     // The flex base size: `flex-basis` first, then the declared main size, then
     // the content's own size. `flex: 1` sets the basis to 0%, which is what
@@ -965,8 +1020,8 @@ function layoutFlexChildren(
     let baseMain: number
     if (basisText !== '' && basisText !== 'auto' && basisText !== 'content') {
       const resolved = resolveLength(basisText, horizontal
-        ? basisFor(context, availableMain ?? contentWidth)
-        : basisFor(context, availableMain ?? context.viewportHeight))
+        ? basisFor(context, availableMain ?? contentWidth, child)
+        : basisFor(context, availableMain ?? context.viewportHeight, child))
       baseMain = resolved === null ? contentMainSize() : toBorderBox(resolved, mainSurrounds)
     }
     else if (declaredMain !== null && basisText !== 'content') {
@@ -993,7 +1048,7 @@ function layoutFlexChildren(
     // The hypothetical cross size, and whether it was declared at all.
     const declaredCrossText = horizontal ? childStyle.height : childStyle.width
     const declaredCross = horizontal
-      ? (availableCross === null ? absoluteOnly(declaredCrossText, basis) : resolveLength(declaredCrossText, basisFor(context, availableCross)))
+      ? (availableCross === null ? absoluteOnly(declaredCrossText, basis) : resolveLength(declaredCrossText, basisFor(context, availableCross, child)))
       : resolveLength(declaredCrossText, basis)
 
     const crossIsAuto = declaredCross === null
@@ -1122,7 +1177,7 @@ function layoutGridChildren(
 ): ChildrenResult {
   const grid = style.gridContainer
   const childAncestors = [node, ...ancestors]
-  const basis = basisFor(context, contentWidth)
+  const basis = basisFor(context, contentWidth, node)
 
   const items: FlowNode[] = []
   for (const child of node.childNodes) {
@@ -1153,7 +1208,7 @@ function layoutGridChildren(
     gap: grid.columnGap,
   })
   const rows = parseTrackList(grid.templateRows, {
-    resolve: text => resolveLength(text, contentHeight === null ? basis : basisFor(context, contentHeight)),
+    resolve: text => resolveLength(text, contentHeight === null ? basis : basisFor(context, contentHeight, node)),
     available: contentHeight,
     gap: grid.rowGap,
   })
@@ -1253,7 +1308,7 @@ function layoutGridChildren(
 
     const declaredHeight = contentHeight === null
       ? absoluteOnly(childStyle.height, basis)
-      : resolveLength(childStyle.height, basisFor(context, contentHeight))
+      : resolveLength(childStyle.height, basisFor(context, contentHeight, child))
 
     const outer = (declaredHeight !== null
       ? (childStyle.boxSizing === 'border-box' ? declaredHeight : declaredHeight + verticalSurrounds(childStyle))
@@ -1295,7 +1350,7 @@ function layoutGridChildren(
     const declaredWidth = resolveLength(childStyle.width, basis)
     const declaredHeight = contentHeight === null
       ? absoluteOnly(childStyle.height, basis)
-      : resolveLength(childStyle.height, basisFor(context, contentHeight))
+      : resolveLength(childStyle.height, basisFor(context, contentHeight, child))
 
     const axis = (
       mode: string,
@@ -1470,12 +1525,12 @@ function placeDeferred(context: Context): void {
 
       const containingWidth = containing?.content.width ?? context.viewportWidth
       const containingHeight = containing?.content.height ?? context.viewportHeight
-      const basis = basisFor(context, containingWidth)
+      const basis = basisFor(context, containingWidth, node)
 
       const left = resolveLength(style.offsets.left, basis)
       const right = resolveLength(style.offsets.right, basis)
-      const top = resolveLength(style.offsets.top, basisFor(context, containingHeight))
-      const bottom = resolveLength(style.offsets.bottom, basisFor(context, containingHeight))
+      const top = resolveLength(style.offsets.top, basisFor(context, containingHeight, node))
+      const bottom = resolveLength(style.offsets.bottom, basisFor(context, containingHeight, node))
 
       // Offsets are measured from the containing block's PADDING box, so the
       // border is crossed but the padding is not.
@@ -1546,6 +1601,7 @@ export function layoutTree(
     deferred: [],
     styles: new Map(),
     margins: new Map(),
+    inherited: new Map(),
   }
 
   if (isElement(root))

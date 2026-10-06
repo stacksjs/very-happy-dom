@@ -3,7 +3,7 @@ import type { XPathResult } from '../xpath/XPathResult'
 import type { CSSStyleSheet } from '../css/CSSOM'
 import { CSSStyleSheet as RuntimeCSSStyleSheet } from '../css/CSSOM'
 import { collectCascade, resolveProperty } from '../css/cascade'
-import { initialValue } from '../css/initial-values'
+import { INHERITED_PROPERTIES, initialValue } from '../css/initial-values'
 import { elementsFromPointIn } from '../layout'
 import type { ICookie } from '../browser/CookieContainer'
 import { CookieContainer, CookieSameSiteEnum } from '../browser/CookieContainer'
@@ -220,6 +220,17 @@ export class VirtualDocument extends VirtualNodeBase {
   private _parsedStyleSheets = new WeakMap<object, { text: string, sheet: CSSStyleSheet }>()
   /** The sheet list, cached against the version that would change it. */
   private _styleSheetList: { version: number, sheets: CSSStyleSheet[] } | null = null
+  /**
+   * Resolved values for inherited properties, against the layout version.
+   *
+   * Resolving one means asking each ancestor in turn, and asking an ancestor
+   * builds its cascade — so a single `getComputedStyle(el).fontSize` on a
+   * deep tree cost one full rule match per level. At depth 30 with 30 rules
+   * that was 122us against 2.6us for a property that does not inherit.
+   */
+  private _inheritedValues: { version: number, byElement: WeakMap<object, Map<string, string>> } | null = null
+  /** Properties some rule in the document declares, against the same version. */
+  private _declaredByRules: { version: number, properties: Set<string> } | null = null
   /** Bumped by any DOM mutation; read by the layout cache and the one above. */
   _layoutVersion: number = 0
   /** The last layout pass, if nothing has changed since. */
@@ -265,6 +276,90 @@ export class VirtualDocument extends VirtualNodeBase {
 
     this._styleSheetList = { version, sheets }
     return sheets
+  }
+
+  /**
+   * What `element` reports for an inherited property, memoised.
+   *
+   * Walked from the element upwards rather than by asking each ancestor for its
+   * whole computed style, so one cascade is built per level at most once per
+   * layout version — and not at all when no rule in the document declares the
+   * property, which is the common case and leaves only the inline styles to
+   * check.
+   */
+  _inheritedValue(element: VirtualElement, property: string): string {
+    const version = this._layoutVersion ?? 0
+
+    if (!this._inheritedValues || this._inheritedValues.version !== version)
+      this._inheritedValues = { version, byElement: new WeakMap() }
+
+    const byElement = this._inheritedValues.byElement
+    const cached = byElement.get(element)?.get(property)
+    if (cached !== undefined)
+      return cached
+
+    const fromRules = this._ruleDeclares(property, version)
+
+    let current: VirtualElement | null = element
+    let resolved: string | null = null
+
+    while (current) {
+      const inline = (current as any)._internalStyles?.get(property)
+      if (inline !== undefined && inline.trim() !== '' && inline.trim() !== 'inherit') {
+        resolved = inline
+        break
+      }
+
+      if (fromRules) {
+        const declared = (current as any)._styleReader()(property)
+        if (declared !== '' && declared.trim() !== 'inherit') {
+          resolved = declared
+          break
+        }
+      }
+
+      current = current.parentElement
+    }
+
+    const value = resolved ?? initialValue(property, element.tagName)
+
+    let forElement = byElement.get(element)
+    if (!forElement) {
+      forElement = new Map()
+      byElement.set(element, forElement)
+    }
+    forElement.set(property, value)
+
+    return value
+  }
+
+  /** Does any rule in the document declare this property? */
+  private _ruleDeclares(property: string, version: number): boolean {
+    if (!this._declaredByRules || this._declaredByRules.version !== version) {
+      const properties = new Set<string>()
+
+      const walk = (rules: ArrayLike<any>): void => {
+        for (let i = 0; i < rules.length; i++) {
+          const rule = rules[i]
+          if (rule?.cssRules)
+            walk(rule.cssRules)
+          const style = rule?.style
+          if (style?._allProperties) {
+            for (const name of style._allProperties())
+              properties.add(name)
+          }
+        }
+      }
+
+      for (const sheet of [...this.styleSheets, ...this._adoptedStyleSheets]) {
+        if (sheet?.cssRules)
+          walk(sheet.cssRules)
+      }
+
+      this._declaredByRules = { version, properties }
+    }
+
+    return this._declaredByRules.properties.has(property)
   }
 
   get adoptedStyleSheets(): CSSStyleSheet[] {
@@ -898,8 +993,21 @@ export class VirtualDocument extends VirtualNodeBase {
 
     const resolve = (property: string): string => {
       const declared = resolveProperty(property, self.style as any, cascadeFor())
-      if (declared !== null)
+
+      if (declared !== null && declared.trim() !== 'inherit')
         return declared
+
+      // An inherited property with nothing of its own takes its parent's, and
+      // an explicit `inherit` asks for that whatever the property. Without
+      // this, a child of `font-size: 24px` reported 16px here while the layout
+      // pass sized its `em` against 24 — the two resolutions drifting apart,
+      // which is the thing #1600 was about.
+      if (declared?.trim() === 'inherit' || INHERITED_PROPERTIES.has(property)) {
+        const parent = self.parentElement
+        if (parent)
+          return this._inheritedValue(parent, property)
+      }
+
       return computedDefaults(property, self.tagName)
     }
 

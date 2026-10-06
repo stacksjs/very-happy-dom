@@ -340,7 +340,10 @@ input.blur()    // fires blur + bubbling focusout
 
   Modelled: `box-sizing`, margins, padding, borders, min/max sizes, percentages against the containing
   block, `position: relative`, and `absolute`/`fixed` taken out of flow against the nearest positioned
-  ancestor. Lengths in `px`, `%`, `vh`/`vw`/`vmin`/`vmax`, `rem` and the absolute units.
+  ancestor. Lengths in `px`, `%`, `em`, `rem`, `vh`/`vw`/`vmin`/`vmax` and the absolute units
+  (`pt`/`pc`/`in`/`cm`/`mm`/`q`), plus `calc()`, `min()`, `max()` and `clamp()`. `font-size` and
+  `line-height` inherit, so `em` measures against the size an element actually has, and
+  `getComputedStyle` reports the inherited value rather than the initial one.
 
   **Margin collapsing** is implemented: adjoining vertical margins collapse to the largest positive plus the
   most negative, a first or last child's margin escapes a parent that has nothing in the way, a box with
@@ -369,13 +372,13 @@ input.blur()    // fires blur + bubbling focusout
   | **Baseline alignment** | `align-items: baseline` falls back to `flex-start`, and an inline-level box (`inline-block`, `inline-flex`, `inline-grid`) sits at the top of its line rather than on the text baseline — Chrome puts a 10px one 5px lower at the default font. Both need the font's ascent. |
   | **Flex `auto` margins** | An `auto` margin does not absorb free space, so `margin-left: auto` will not push an item to the end — use `justify-content` or a `flex: 1` spacer. |
   | **Dense grid packing** | `grid-auto-flow: row dense` places sparsely: auto-placement does not go back to fill a hole it has passed. |
+  | **`ex` and `ch`** | Approximated at half the font size. `ex` is the font's x-height and `ch` the width of its zero, so both need the font. |
   | **Grid refinements** | An item spanning several tracks does not contribute its content to their sizes; named grid lines (`[name]`) are parsed away rather than resolved; `auto-fit` behaves as `auto-fill` without collapsing empty tracks; an `fr` track can shrink below its content. |
   | **Text metrics** | No font engine, so a line count is estimated from the character count at `font-size x 0.5` per glyph. A height that comes only from wrapped text is approximate. |
   | **User-agent stylesheet** | An element has only the margins and padding the page declares. `body` starts at `(0, 0)`, not a browser's 8px inset, and a `<p>` has no margins of its own. |
   | **Floats** | Not implemented; a floated box stays in flow. |
   | **`transform`** | Does not move or resize a box. |
   | **Intrinsic sizes** | Nothing is decoded or measured, so an `<img>` with no declared size has no size. |
-  | **`em`** | Needs the inherited `font-size` chain; falls back to automatic sizing rather than guessing. |
   | **`z-index`** | Hit testing uses document paint order, so a page that reorders its layers with `z-index` is tested as though it had not. |
   | **Tables** | Laid out as blocks, with no table algorithm. |
 
