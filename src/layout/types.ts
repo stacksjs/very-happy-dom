@@ -63,6 +63,32 @@ export interface FlexItemStyle {
   order: number
 }
 
+/** How a grid container defines its tracks and places what goes in them. */
+export interface GridContainerStyle {
+  templateColumns: string
+  templateRows: string
+  templateAreas: string
+  autoColumns: string
+  autoRows: string
+  autoFlow: string
+  justifyContent: string
+  alignContent: string
+  justifyItems: string
+  alignItems: string
+  rowGap: number
+  columnGap: number
+}
+
+/** Which lines one grid item asks for, and how it aligns in its area. */
+export interface GridItemStyle {
+  columnStart: string
+  columnEnd: string
+  rowStart: string
+  rowEnd: string
+  justifySelf: string
+  alignSelf: string
+}
+
 /** The layout-relevant computed values for one element. */
 export interface LayoutStyle {
   display: string
@@ -75,6 +101,8 @@ export interface LayoutStyle {
   lineHeight: number | null
   flexContainer: FlexContainerStyle
   flexItem: FlexItemStyle
+  gridContainer: GridContainerStyle
+  gridItem: GridItemStyle
   width: string
   height: string
   minWidth: string

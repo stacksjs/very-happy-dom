@@ -9,7 +9,7 @@
 
 import { initialValue } from '../css/initial-values'
 import { type LengthBasis, resolveLength, resolveLengthOrZero } from './length'
-import { type FlexContainerStyle, type FlexItemStyle, type Insets, type LayoutStyle } from './types'
+import { type FlexContainerStyle, type FlexItemStyle, type GridContainerStyle, type GridItemStyle, type Insets, type LayoutStyle } from './types'
 
 /** The parts of an element this module needs, kept structural to avoid a cycle. */
 export interface StyledElement {
@@ -128,6 +128,36 @@ function readFlexItem(declared: (property: string) => string): FlexItemStyle {
   }
 }
 
+function readGridContainer(declared: (property: string) => string, basis: LengthBasis): GridContainerStyle {
+  return {
+    // Track lists are kept as text: parsing one needs the container's own size,
+    // for `repeat(auto-fill, ...)`, which is not known here.
+    templateColumns: declared('grid-template-columns'),
+    templateRows: declared('grid-template-rows'),
+    templateAreas: declared('grid-template-areas'),
+    autoColumns: declared('grid-auto-columns'),
+    autoRows: declared('grid-auto-rows'),
+    autoFlow: declared('grid-auto-flow').trim().toLowerCase(),
+    justifyContent: declared('justify-content').trim().toLowerCase(),
+    alignContent: declared('align-content').trim().toLowerCase(),
+    justifyItems: declared('justify-items').trim().toLowerCase(),
+    alignItems: declared('align-items').trim().toLowerCase(),
+    rowGap: readGap(declared('row-gap'), basis),
+    columnGap: readGap(declared('column-gap'), basis),
+  }
+}
+
+function readGridItem(declared: (property: string) => string): GridItemStyle {
+  return {
+    columnStart: declared('grid-column-start'),
+    columnEnd: declared('grid-column-end'),
+    rowStart: declared('grid-row-start'),
+    rowEnd: declared('grid-row-end'),
+    justifySelf: declared('justify-self').trim().toLowerCase(),
+    alignSelf: declared('align-self').trim().toLowerCase(),
+  }
+}
+
 /**
  * Resolve everything layout needs for one element.
  *
@@ -165,6 +195,8 @@ export function resolveLayoutStyle(element: StyledElement, basis: LengthBasis): 
     lineHeight: readLineHeight(declared('line-height'), fontSize, basis),
     flexContainer: readFlexContainer(declared, basis),
     flexItem: readFlexItem(declared),
+    gridContainer: readGridContainer(declared, basis),
+    gridItem: readGridItem(declared),
     width: size('width'),
     height: size('height'),
     minWidth: read('min-width'),

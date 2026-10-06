@@ -347,6 +347,15 @@ input.blur()    // fires blur + bubbling focusout
   nothing in it collapses through entirely, and a border, padding, a definite height, `overflow` other than
   `visible`, a line box or a flex container each stop it.
 
+  **Grid** is implemented: `grid-template-columns`/`rows` with lengths, percentages, `fr`, `auto`,
+  `min-content`/`max-content`, `minmax()`, `fit-content()`, `repeat()` and `repeat(auto-fill, …)`;
+  `grid-template-areas` with named areas that span; implicit tracks via `grid-auto-rows`/`columns`;
+  `grid-auto-flow: row | column`; placement by line number, negative line number or `span`, with an
+  auto-placement cursor that an explicitly-placed item moves; `gap`; `justify-content`/`align-content` to
+  distribute the tracks, and `justify-items`/`align-items`/`justify-self`/`align-self` to place an item in
+  its area. `auto` tracks share leftover space when no `fr` track is there to take it. The `grid-area`,
+  `grid-row`, `grid-column` and `grid-template` shorthands expand.
+
   **Flexbox** is implemented: `flex-direction` including both reverses, `flex-wrap` including
   `wrap-reverse`, `justify-content`, `align-items`, `align-content`, `align-self`, `flex-grow`,
   `flex-shrink`, `flex-basis`, the `flex` and `flex-flow` shorthands, `gap`/`row-gap`/`column-gap`, and
@@ -357,8 +366,10 @@ input.blur()    // fires blur + bubbling focusout
 
   | | |
   | --- | --- |
-  | **Grid** | A grid container lays its children out as blocks, so they stack instead of being placed in cells. |
-  | **Flex `baseline` and `auto` margins** | `align-items: baseline` falls back to `flex-start`, for want of font baselines. An `auto` margin does not absorb free space, so `margin-left: auto` will not push an item to the end — use `justify-content` or a `flex: 1` spacer. |
+  | **Baseline alignment** | `align-items: baseline` falls back to `flex-start`, and an inline-level box (`inline-block`, `inline-flex`, `inline-grid`) sits at the top of its line rather than on the text baseline — Chrome puts a 10px one 5px lower at the default font. Both need the font's ascent. |
+  | **Flex `auto` margins** | An `auto` margin does not absorb free space, so `margin-left: auto` will not push an item to the end — use `justify-content` or a `flex: 1` spacer. |
+  | **Dense grid packing** | `grid-auto-flow: row dense` places sparsely: auto-placement does not go back to fill a hole it has passed. |
+  | **Grid refinements** | An item spanning several tracks does not contribute its content to their sizes; named grid lines (`[name]`) are parsed away rather than resolved; `auto-fit` behaves as `auto-fill` without collapsing empty tracks; an `fr` track can shrink below its content. |
   | **Text metrics** | No font engine, so a line count is estimated from the character count at `font-size x 0.5` per glyph. A height that comes only from wrapped text is approximate. |
   | **User-agent stylesheet** | An element has only the margins and padding the page declares. `body` starts at `(0, 0)`, not a browser's 8px inset, and a `<p>` has no margins of its own. |
   | **Floats** | Not implemented; a floated box stays in flow. |
@@ -418,7 +429,7 @@ Use this when deciding if a given test suite will migrate cleanly:
 
       hit testing, is-it-above-the-fold)? — Supported for normal flow.
 
-- [ ] Does it rely on grid placement, collapsed margins, flex `baseline` alignment,
+- [ ] Does it rely on dense grid packing, baseline alignment, flex `auto` margins,
 
       or a height measured from wrapped text? — See the layout note above; these are approximated.
 

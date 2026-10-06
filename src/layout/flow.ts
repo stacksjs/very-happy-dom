@@ -9,11 +9,17 @@
  *
  * What it does not model, and reports plainly rather than approximating badly:
  *
- * - **Grid.** A grid container lays its children out as blocks, so they stack
- *   instead of being placed in cells. Flex is implemented, in `flex.ts`.
- * - **Baseline alignment and auto margins in a flex container.** `baseline`
- *   falls back to `flex-start` for want of font baselines, and an `auto` margin
- *   does not absorb free space.
+ * - **Baseline alignment.** `align-items: baseline` falls back to `flex-start`,
+ *   and an inline-level box sits at the top of its line rather than on the text
+ *   baseline. Both need the font's ascent, which there is no way to know here.
+ * - **`auto` margins in a flex container.** They do not absorb free space, so
+ *   `margin-left: auto` will not push an item to the end.
+ * - **Dense grid packing.** `grid-auto-flow: row dense` places sparsely: once
+ *   auto-placement has passed a hole it does not go back to fill it.
+ * - **Grid refinements.** An item spanning several tracks does not contribute
+ *   its content to their sizes, named grid lines are parsed away rather than
+ *   resolved, `auto-fit` behaves as `auto-fill` without collapsing the empty
+ *   tracks it implies, and an `fr` track can shrink below its content.
  * - **Floats.** Not implemented. A floated box stays in flow.
  * - **Text metrics.** There is no font engine, so a line count is estimated
  *   from the character count. An element whose height comes only from wrapped
@@ -27,6 +33,7 @@
  */
 
 import { type FlexItemInput, solveFlex } from './flex'
+import { AUTO_TRACK, type GridItemLines, type GridPlacement, parseAreas, parseTrackList, placeItems, sizeTracks, type Track, trackOffsets } from './grid'
 import { clampSize, type LengthBasis, resolveLength } from './length'
 import { isEmptyMargin, joinMargins, type Margin, marginOf, marginValue, NO_MARGIN } from './margins'
 import { resolveLayoutStyle, type StyledElement } from './style'
@@ -166,9 +173,9 @@ function intrinsicFlexWidth(context: Context, node: FlowNode, style: LayoutStyle
     const margins = childStyle.margin.left + childStyle.margin.right
     const declared = resolveLength(childStyle.width, basisFor(context, available))
 
-    const outer = declared !== null
-      ? (childStyle.boxSizing === 'border-box' ? declared : declared + surrounds) + margins
-      : intrinsicWidth(context, child, Math.max(0, available - surrounds - margins)) + surrounds + margins
+    const outer = (declared !== null
+      ? (childStyle.boxSizing === 'border-box' ? declared : declared + surrounds)
+      : intrinsicWidth(context, child, Math.max(0, available - surrounds - margins)) + surrounds) + margins
 
     total += outer
     widest = Math.max(widest, outer)
@@ -200,6 +207,74 @@ function establishesBlockContext(style: LayoutStyle): boolean {
     || style.display === 'inline-block'
     || style.display === 'flow-root'
     || style.display.startsWith('table')
+}
+
+/**
+ * A grid container's max-content width: its columns, side by side.
+ *
+ * Measured the way a block is measured, this gives the widest child, so an
+ * `inline-grid` of a 60px and a 40px column would report 60 and squeeze both
+ * into it.
+ *
+ * Tracks with a definite size are summed. One without a definite size takes the
+ * widest child that could land in it, which is approximated by walking the
+ * children in document order rather than placing them properly — placement
+ * needs the track count, which is what is being worked out.
+ */
+function intrinsicGridWidth(context: Context, node: FlowNode, style: LayoutStyle, available: number): number {
+  const grid = style.gridContainer
+  const basis = basisFor(context, available)
+
+  const tracks = parseTrackList(grid.templateColumns, {
+    resolve: text => resolveLength(text, basis),
+    available: null,
+    gap: grid.columnGap,
+  })
+
+  const children: FlowNode[] = []
+  for (const child of node.childNodes) {
+    if (!isElement(child))
+      continue
+    const childStyle = styleFor(context, child, available)
+    if (childStyle.display === 'none' || NOT_RENDERED.has(child.tagName ?? ''))
+      continue
+    if (childStyle.position === 'absolute' || childStyle.position === 'fixed')
+      continue
+    children.push(child)
+  }
+
+  const columns = Math.max(tracks.length, parseAreas(grid.templateAreas).columns, 1)
+
+  const widthOf = (child: FlowNode): number => {
+    const childStyle = styleFor(context, child, available)
+    const surrounds = horizontalSurrounds(childStyle) + childStyle.margin.left + childStyle.margin.right
+    const declared = resolveLength(childStyle.width, basis)
+    if (declared !== null)
+      return (childStyle.boxSizing === 'border-box' ? declared : declared + horizontalSurrounds(childStyle)) + childStyle.margin.left + childStyle.margin.right
+    return intrinsicWidth(context, child, Math.max(0, available - surrounds)) + surrounds
+  }
+
+  let total = 0
+  for (let index = 0; index < columns; index++) {
+    const track = tracks[index]
+    const definite = track
+      ? (track.max.kind === 'length' ? track.max.px : track.max.kind === 'percent' ? track.max.fraction * available : null)
+      : null
+
+    if (definite !== null) {
+      total += definite
+      continue
+    }
+
+    // Every child that could sit in this column, under row flow.
+    let widest = 0
+    for (let position = index; position < children.length; position += columns)
+      widest = Math.max(widest, widthOf(children[position]))
+
+    total += widest
+  }
+
+  return Math.min(available, total + Math.max(0, columns - 1) * grid.columnGap)
 }
 
 /**
@@ -246,6 +321,8 @@ function intrinsicWidth(context: Context, node: FlowNode, available: number): nu
   const own = isElement(node) ? styleFor(context, node, available) : null
   if (own && (own.display === 'flex' || own.display === 'inline-flex'))
     return intrinsicFlexWidth(context, node, own, available)
+  if (own && (own.display === 'grid' || own.display === 'inline-grid'))
+    return intrinsicGridWidth(context, node, own, available)
 
   let widest = 0
   let lineWidth = 0
@@ -274,13 +351,13 @@ function intrinsicWidth(context: Context, node: FlowNode, available: number): nu
     const surrounds = horizontalSurrounds(childStyle) + childStyle.margin.left + childStyle.margin.right
     const declared = resolveLength(childStyle.width, basisFor(context, available))
 
+    // A block child with no declared width contributes its own content's width,
+    // not the room it would fill. Reporting the room made an `fr` grid track
+    // claim the whole container as its base size, and an `inline-block` as wide
+    // as its parent rather than as its contents.
     const own = declared !== null
       ? (childStyle.boxSizing === 'border-box' ? declared : declared + surrounds)
-      : INLINE_LEVEL.has(childStyle.display)
-        ? intrinsicWidth(context, child, Math.max(0, available - surrounds)) + surrounds
-        // A block child of a shrink-to-fit box takes all the room there is,
-        // which is what makes the box itself take it.
-        : available
+      : intrinsicWidth(context, child, Math.max(0, available - surrounds)) + surrounds
 
     if (INLINE_LEVEL.has(childStyle.display)) {
       lineWidth += own
@@ -576,6 +653,9 @@ function layoutChildren(
   const ownStyle = styleFor(context, node, contentWidth)
   if (ownStyle.display === 'flex' || ownStyle.display === 'inline-flex') {
     return layoutFlexChildren(context, node, ownStyle, contentWidth, contentHeight, contentX, contentY, invisible, ancestors)
+  }
+  if (ownStyle.display === 'grid' || ownStyle.display === 'inline-grid') {
+    return layoutGridChildren(context, node, ownStyle, contentWidth, contentHeight, contentX, contentY, invisible, ancestors)
   }
 
   let cursorY = contentY
@@ -1012,6 +1092,279 @@ function layoutFlexChildren(
   // container's, or with anything outside it — so nothing escapes here.
   return {
     height: Math.max(0, height),
+    scrollWidth: Math.max(0, maxRight - contentX),
+    scrollHeight: Math.max(0, maxBottom - contentY),
+    escapedTop: NO_MARGIN,
+    escapedBottom: NO_MARGIN,
+    empty: false,
+  }
+}
+
+/**
+ * Lay a grid container's children out.
+ *
+ * Columns are sized before rows, because a row's height depends on how its
+ * items wrap, which depends on how wide their column is. Each item is measured
+ * for its column contribution, then again for its height once the column is
+ * known, then laid out at its final size — the same measure-then-place shape the
+ * flex path uses, for the same reason.
+ */
+function layoutGridChildren(
+  context: Context,
+  node: FlowNode,
+  style: LayoutStyle,
+  contentWidth: number,
+  contentHeight: number | null,
+  contentX: number,
+  contentY: number,
+  invisible: boolean,
+  ancestors: FlowNode[],
+): ChildrenResult {
+  const grid = style.gridContainer
+  const childAncestors = [node, ...ancestors]
+  const basis = basisFor(context, contentWidth)
+
+  const items: FlowNode[] = []
+  for (const child of node.childNodes) {
+    if (!isElement(child))
+      continue
+
+    const childStyle = styleFor(context, child, contentWidth)
+
+    if (childStyle.display === 'none' || NOT_RENDERED.has(child.tagName ?? '')) {
+      markSubtreeEmpty(context, child, childStyle)
+      continue
+    }
+
+    // Absolutely positioned children are not grid items, as in a browser.
+    if (childStyle.position === 'absolute' || childStyle.position === 'fixed') {
+      context.deferred.push({ node: child, style: childStyle, ancestors: childAncestors, staticX: contentX, staticY: contentY })
+      continue
+    }
+
+    items.push(child)
+  }
+
+  const areas = parseAreas(grid.templateAreas)
+
+  const columns = parseTrackList(grid.templateColumns, {
+    resolve: text => resolveLength(text, basis),
+    available: contentWidth,
+    gap: grid.columnGap,
+  })
+  const rows = parseTrackList(grid.templateRows, {
+    resolve: text => resolveLength(text, contentHeight === null ? basis : basisFor(context, contentHeight)),
+    available: contentHeight,
+    gap: grid.rowGap,
+  })
+
+  // `grid-template-areas` defines an explicit grid of its own when the track
+  // lists do not.
+  const explicitColumns = Math.max(columns.length, areas.columns)
+  const explicitRows = Math.max(rows.length, areas.rows)
+
+  if (items.length === 0)
+    return { height: 0, scrollWidth: 0, scrollHeight: 0, escapedTop: NO_MARGIN, escapedBottom: NO_MARGIN, empty: true }
+
+  // `order` reorders grid items for auto-placement, as it does flex items.
+  const ordered = items
+    .map((child, index) => ({ child, index, order: styleFor(context, child, contentWidth).flexItem.order }))
+    .sort((a, b) => (a.order - b.order) || (a.index - b.index))
+    .map(entry => entry.child)
+
+  const lines: GridItemLines[] = ordered.map((child) => {
+    const item = styleFor(context, child, contentWidth).gridItem
+    return {
+      columnStart: item.columnStart,
+      columnEnd: item.columnEnd,
+      rowStart: item.rowStart,
+      rowEnd: item.rowEnd,
+    }
+  })
+
+  const placements = placeItems(lines, {
+    columnCount: explicitColumns,
+    rowCount: explicitRows,
+    flow: grid.autoFlow,
+    areas: areas.areas,
+  })
+
+  // Implicit tracks: anything an item reached past the explicit grid.
+  const columnCount = Math.max(explicitColumns, ...placements.map(p => p.columnEnd), 1)
+  const rowCount = Math.max(explicitRows, ...placements.map(p => p.rowEnd), 1)
+
+  const autoColumn = parseTrackList(grid.autoColumns, { resolve: text => resolveLength(text, basis), available: contentWidth, gap: 0 })
+  const autoRow = parseTrackList(grid.autoRows, { resolve: text => resolveLength(text, basis), available: contentHeight, gap: 0 })
+
+  const columnTracks: Track[] = Array.from({ length: columnCount }, (_, index) =>
+    columns[index] ?? autoColumn[(index - columns.length) % Math.max(1, autoColumn.length)] ?? AUTO_TRACK)
+  const rowTracks: Track[] = Array.from({ length: rowCount }, (_, index) =>
+    rows[index] ?? autoRow[(index - rows.length) % Math.max(1, autoRow.length)] ?? AUTO_TRACK)
+
+  // --- columns ------------------------------------------------------------
+  // An item spanning one column contributes its intrinsic width to that
+  // column. One spanning several is left out: distributing a contribution
+  // across tracks is a refinement this does not model.
+  const columnContributions = new Array<number>(columnCount).fill(0)
+  ordered.forEach((child, index) => {
+    const placement = placements[index]
+    if (placement.columnEnd - placement.columnStart !== 1)
+      return
+
+    const childStyle = styleFor(context, child, contentWidth)
+    const declared = resolveLength(childStyle.width, basis)
+    const outer = (declared !== null
+      ? (childStyle.boxSizing === 'border-box' ? declared : declared + horizontalSurrounds(childStyle))
+      : intrinsicWidth(context, child, contentWidth) + horizontalSurrounds(childStyle))
+      + childStyle.margin.left + childStyle.margin.right
+
+    columnContributions[placement.columnStart] = Math.max(columnContributions[placement.columnStart], outer)
+  })
+
+  const stretches = (mode: string): boolean => mode === '' || mode === 'normal' || mode === 'stretch'
+
+  const columnSizes = sizeTracks(columnTracks, {
+    available: contentWidth,
+    gap: grid.columnGap,
+    contributions: columnContributions,
+    stretchAuto: stretches(grid.justifyContent),
+  })
+
+  const columnLayout = trackOffsets(columnSizes, grid.columnGap, contentWidth, grid.justifyContent)
+
+  /** The content box an item occupies, before its own alignment. */
+  const areaOf = (placement: GridPlacement, sizes: number[], offsets: number[], gap: number, axisStart: number, axisEnd: number): { start: number, size: number } => {
+    const start = offsets[axisStart] ?? 0
+    const last = Math.max(axisStart, axisEnd - 1)
+    const end = (offsets[last] ?? start) + (sizes[last] ?? 0)
+    return { start, size: Math.max(0, end - start) }
+  }
+
+  // --- rows ---------------------------------------------------------------
+  const rowContributions = new Array<number>(rowCount).fill(0)
+  ordered.forEach((child, index) => {
+    const placement = placements[index]
+    if (placement.rowEnd - placement.rowStart !== 1)
+      return
+
+    const childStyle = styleFor(context, child, contentWidth)
+    const column = areaOf(placement, columnSizes, columnLayout.offsets, grid.columnGap, placement.columnStart, placement.columnEnd)
+    const inner = Math.max(0, column.size - childStyle.margin.left - childStyle.margin.right)
+
+    const declaredHeight = contentHeight === null
+      ? absoluteOnly(childStyle.height, basis)
+      : resolveLength(childStyle.height, basisFor(context, contentHeight))
+
+    const outer = (declaredHeight !== null
+      ? (childStyle.boxSizing === 'border-box' ? declaredHeight : declaredHeight + verticalSurrounds(childStyle))
+      : trialLayout(context, child, contentWidth, contentHeight, childAncestors, {
+          contentWidth: Math.max(0, inner - horizontalSurrounds(childStyle)),
+        }).height)
+      + childStyle.margin.top + childStyle.margin.bottom
+
+    rowContributions[placement.rowStart] = Math.max(rowContributions[placement.rowStart], outer)
+  })
+
+  const rowSizes = sizeTracks(rowTracks, {
+    available: contentHeight,
+    gap: grid.rowGap,
+    contributions: rowContributions,
+    stretchAuto: stretches(grid.alignContent),
+  })
+
+  const rowLayout = trackOffsets(rowSizes, grid.rowGap, contentHeight, grid.alignContent)
+
+  // --- placement ----------------------------------------------------------
+  let maxRight = contentX
+  let maxBottom = contentY
+
+  ordered.forEach((child, index) => {
+    const placement = placements[index]
+    const childStyle = styleFor(context, child, contentWidth)
+
+    const column = areaOf(placement, columnSizes, columnLayout.offsets, grid.columnGap, placement.columnStart, placement.columnEnd)
+    const row = areaOf(placement, rowSizes, rowLayout.offsets, grid.rowGap, placement.rowStart, placement.rowEnd)
+
+    const justify = childStyle.gridItem.justifySelf === 'auto' || childStyle.gridItem.justifySelf === ''
+      ? grid.justifyItems
+      : childStyle.gridItem.justifySelf
+    const align = childStyle.gridItem.alignSelf === 'auto' || childStyle.gridItem.alignSelf === ''
+      ? grid.alignItems
+      : childStyle.gridItem.alignSelf
+
+    const declaredWidth = resolveLength(childStyle.width, basis)
+    const declaredHeight = contentHeight === null
+      ? absoluteOnly(childStyle.height, basis)
+      : resolveLength(childStyle.height, basisFor(context, contentHeight))
+
+    const axis = (
+      mode: string,
+      area: { start: number, size: number },
+      declared: number | null,
+      surrounds: number,
+      marginStart: number,
+      marginEnd: number,
+      intrinsic: () => number,
+    ): { offset: number, content: number } => {
+      const room = Math.max(0, area.size - marginStart - marginEnd)
+      const stretch = mode === 'stretch' || mode === 'normal' || mode === 'legacy' || mode === ''
+
+      if (declared === null && stretch)
+        return { offset: area.start + marginStart, content: Math.max(0, room - surrounds) }
+
+      const border = declared !== null
+        ? (childStyle.boxSizing === 'border-box' ? declared : declared + surrounds)
+        : Math.min(room, intrinsic())
+      const slack = Math.max(0, room - border)
+
+      const shift = mode === 'end' || mode === 'flex-end' || mode === 'self-end' || mode === 'right'
+        ? slack
+        : mode === 'center'
+          ? slack / 2
+          : 0
+
+      return { offset: area.start + marginStart + shift, content: Math.max(0, border - surrounds) }
+    }
+
+    const horizontal = axis(
+      justify,
+      column,
+      declaredWidth,
+      horizontalSurrounds(childStyle),
+      childStyle.margin.left,
+      childStyle.margin.right,
+      () => intrinsicWidth(context, child, contentWidth) + horizontalSurrounds(childStyle),
+    )
+
+    const vertical = axis(
+      align,
+      row,
+      declaredHeight,
+      verticalSurrounds(childStyle),
+      childStyle.margin.top,
+      childStyle.margin.bottom,
+      () => trialLayout(context, child, contentWidth, contentHeight, childAncestors, { contentWidth: horizontal.content }).height,
+    )
+
+    const box = layoutBox(
+      context,
+      child,
+      contentWidth,
+      contentHeight,
+      contentX + horizontal.offset,
+      contentY + vertical.offset,
+      invisible,
+      childAncestors,
+      { contentWidth: horizontal.content, contentHeight: vertical.content },
+    )
+
+    maxRight = Math.max(maxRight, box.x + box.width + childStyle.margin.right)
+    maxBottom = Math.max(maxBottom, box.y + box.height + childStyle.margin.bottom)
+  })
+
+  // A grid item's margins never collapse, so nothing escapes here either.
+  return {
+    height: Math.max(0, contentHeight ?? rowLayout.total),
     scrollWidth: Math.max(0, maxRight - contentX),
     scrollHeight: Math.max(0, maxBottom - contentY),
     escapedTop: NO_MARGIN,

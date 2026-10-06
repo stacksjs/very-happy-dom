@@ -66,6 +66,19 @@ export function initialValue(prop: string, tagName: string): string {
     case 'justify-self': return 'auto'
     case 'justify-items': return 'legacy'
     case 'order': return '0'
+    case 'grid-template-columns':
+    case 'grid-template-rows':
+    case 'grid-template-areas':
+      return 'none'
+    case 'grid-auto-columns':
+    case 'grid-auto-rows':
+      return 'auto'
+    case 'grid-auto-flow': return 'row'
+    case 'grid-row-start':
+    case 'grid-row-end':
+    case 'grid-column-start':
+    case 'grid-column-end':
+      return 'auto'
     case 'row-gap':
     case 'column-gap':
       return 'normal'

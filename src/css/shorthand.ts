@@ -153,6 +153,105 @@ function boxValues(values: string[]): [string, string, string, string] | null {
   }
 }
 
+/**
+ * Expand a `grid-row`/`grid-column` pair, split on `/`.
+ *
+ * With no `/`, the one value is the start line; the end stays `auto`, except
+ * for a bare custom-ident, which the spec makes the end as well.
+ */
+function expandGridLine(property: 'grid-row' | 'grid-column', value: string): Array<[string, string]> {
+  const [start, end] = value.split('/').map(part => part.trim())
+
+  if (end !== undefined && end !== '')
+    return [[`${property}-start`, start], [`${property}-end`, end]]
+
+  const isIdent = /^[a-z_-][\w-]*$/i.test(start) && !/^(?:auto|span)$/i.test(start)
+  return [[`${property}-start`, start], [`${property}-end`, isIdent ? start : 'auto']]
+}
+
+/**
+ * Expand `grid-area`, whose values run row-start / column-start / row-end /
+ * column-end — the two axes interleaved rather than one then the other.
+ */
+function expandGridArea(value: string): Array<[string, string]> | null {
+  const parts = value.split('/').map(part => part.trim()).filter(part => part !== '')
+  if (parts.length === 0 || parts.length > 4)
+    return null
+
+  const isName = (value: string | undefined): boolean =>
+    value !== undefined && /^[a-z_-][\w-]*$/i.test(value) && !/^(?:auto|span)$/i.test(value)
+
+  // An omitted component mirrors the one it pairs with when that is a name, and
+  // is `auto` otherwise. A lone name therefore fills all four, which is what
+  // makes `grid-area: header` select the named area.
+  const [rowStart, column, rowEnd, columnEnd] = parts
+  const columnStart = column ?? (isName(rowStart) ? rowStart : 'auto')
+
+  return [
+    ['grid-row-start', rowStart],
+    ['grid-column-start', columnStart],
+    ['grid-row-end', rowEnd ?? (isName(rowStart) ? rowStart : 'auto')],
+    ['grid-column-end', columnEnd ?? (isName(columnStart) ? columnStart : 'auto')],
+  ]
+}
+
+/**
+ * Expand the `grid-template: <rows> / <columns>` form.
+ *
+ * The form that writes `grid-template-areas` inline is not expanded here; use
+ * the longhand for that.
+ */
+function expandGridTemplate(value: string): Array<[string, string]> | null {
+  if (value.includes('"') || value.includes('\''))
+    return null
+
+  const slash = splitTopLevel(value, '/')
+  if (slash.length !== 2)
+    return null
+
+  return [
+    ['grid-template-rows', slash[0].trim()],
+    ['grid-template-columns', slash[1].trim()],
+    ['grid-template-areas', 'none'],
+  ]
+}
+
+/** Split on a separator that is not inside brackets or a string. */
+function splitTopLevel(value: string, separator: string): string[] {
+  const parts: string[] = []
+  let current = ''
+  let depth = 0
+  let quote: string | null = null
+
+  for (const char of value) {
+    if (quote) {
+      current += char
+      if (char === quote)
+        quote = null
+      continue
+    }
+    if (char === '"' || char === '\'') {
+      quote = char
+      current += char
+      continue
+    }
+    if (char === '(' || char === '[')
+      depth++
+    else if (char === ')' || char === ']')
+      depth = Math.max(0, depth - 1)
+
+    if (depth === 0 && char === separator) {
+      parts.push(current)
+      current = ''
+      continue
+    }
+    current += char
+  }
+
+  parts.push(current)
+  return parts
+}
+
 /** Is this a bare number, as `flex-grow` and `flex-shrink` take? */
 function isNumber(value: string): boolean {
   return /^[+-]?(?:\d*\.)?\d+$/.test(value)
@@ -278,6 +377,10 @@ const SHORTHAND_NAMES: ReadonlySet<string> = new Set([
   'border',
   'flex',
   'flex-flow',
+  'grid-row',
+  'grid-column',
+  'grid-area',
+  'grid-template',
   ...SIDE_BORDERS.map(side => `border-${side}`),
 ])
 
@@ -297,6 +400,15 @@ function longhandsOf(property: string): readonly string[] | null {
 
   if (PAIR_SHORTHANDS[property])
     return PAIR_SHORTHANDS[property]
+
+  if (property === 'grid-row' || property === 'grid-column')
+    return [`${property}-start`, `${property}-end`]
+
+  if (property === 'grid-area')
+    return ['grid-row-start', 'grid-column-start', 'grid-row-end', 'grid-column-end']
+
+  if (property === 'grid-template')
+    return ['grid-template-rows', 'grid-template-columns', 'grid-template-areas']
 
   if (property === 'flex')
     return ['flex-grow', 'flex-shrink', 'flex-basis']
@@ -376,6 +488,17 @@ export function expandShorthand(property: string, value: string): Array<[string,
       [pair[1], values[1] ?? values[0]],
     ]
   }
+
+  // The grid shorthands split on `/` rather than on whitespace, so they are
+  // handled before the value is tokenised.
+  if (name === 'grid-row' || name === 'grid-column')
+    return expandGridLine(name, trimmed)
+
+  if (name === 'grid-area')
+    return expandGridArea(trimmed)
+
+  if (name === 'grid-template')
+    return expandGridTemplate(trimmed)
 
   if (name === 'flex')
     return expandFlex(values)

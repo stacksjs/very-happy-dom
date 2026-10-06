@@ -295,9 +295,16 @@ escaping its parent and an empty box collapsing through entirely; a border,
 padding, a definite height, `overflow` other than `visible`, a line box or a flex
 container each stop it.
 
-What is not: **grid containers lay their children out as blocks**. In a flex
-container, `align-items: baseline` falls back to `flex-start` and an `auto`
-margin does not absorb free space. There is no font
+**Grid works** too: track lists with `fr`, `auto`, `minmax()` and
+`repeat(auto-fill, …)`, named areas, implicit tracks, `grid-auto-flow`,
+placement by line number or `span` including negative lines, `gap`, and the
+`justify-*`/`align-*` family for both the tracks and the items in them.
+
+What is not: dense grid packing places sparsely, an item spanning several tracks
+does not contribute to their sizes, and named grid lines are not resolved. In a
+flex container, `align-items: baseline` falls back to `flex-start` and an `auto`
+margin does not absorb free space. An inline-level box sits at the top of its
+line rather than on the text baseline. There is no font
 engine, so a height measured from wrapped text is estimated. There is no
 user-agent stylesheet, so `body` starts at `(0, 0)` rather than a browser's 8px
 inset. Floats, `transform`, `z-index` ordering and intrinsic image sizes are
