@@ -739,10 +739,11 @@ export class Locator {
    * through the cascade now, so the numbers are real — and nothing exposed them
    * at the locator level (#1609).
    *
-   * `x` and `y` are always `0`. There is no layout pass, so position is not
-   * computed, and the origin is the only honest answer. That is the half people
-   * reach for `boundingBox()` to get — overlap, ordering, is-this-above-the-fold —
-   * and it is not available here. The width and height are.
+   * `x` and `y` are real too, since there is a layout pass. Overlap, ordering
+   * and is-this-above-the-fold are answerable, which is what people reach for
+   * this to get. What the positions do not account for is listed on
+   * `layout/flow.ts`: no flex or grid, no margin collapsing, no floats, no
+   * user-agent stylesheet, and a height driven by wrapped text is estimated.
    */
   async boundingBox(options: ActionOptions = {}): Promise<{ x: number, y: number, width: number, height: number } | null> {
     const element = await this._waitForOne('attached', { timeout: options.timeout })
@@ -763,9 +764,10 @@ export class Locator {
    * Scroll the element into view, as far as that means anything here.
    *
    * `VirtualElement.scrollIntoView` resets the scroll offsets and fires a
-   * `scroll` event, which is all that is meaningful without layout. Exposed as a
-   * resolving no-op rather than left missing, because in Playwright this is a
-   * step before an action rather than an assertion — a missing method throws
+   * `scroll` event. There is a layout pass now, but nothing scrolls on its own
+   * and no overflow is clipped, so there is no position to scroll *to*. Exposed
+   * as a resolving no-op rather than left missing, because in Playwright this is
+   * a step before an action rather than an assertion — a missing method throws
    * where a no-op would have let the spec through.
    */
   async scrollIntoViewIfNeeded(options: ActionOptions = {}): Promise<void> {

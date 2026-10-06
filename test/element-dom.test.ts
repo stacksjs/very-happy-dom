@@ -165,12 +165,17 @@ describe('Element: layout properties (offset, scroll, clientRects)', () => {
     expect(el.offsetLeft).toBe(0)
   })
 
-  test('offsetParent returns parentElement', () => {
+  test('offsetParent is the nearest positioned ancestor', () => {
+    // It used to answer `parentElement`, which is only right when nothing in
+    // between is positioned. An unpositioned parent is skipped for the body.
     const doc = new VirtualDocument()
     const parent = doc.createElement('div')
     const child = doc.createElement('span')
     parent.appendChild(child)
     doc.body!.appendChild(parent)
+    expect(child.offsetParent).toBe(doc.body)
+
+    parent.style.position = 'relative'
     expect(child.offsetParent).toBe(parent)
   })
 

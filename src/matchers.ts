@@ -307,6 +307,53 @@ export const matchers = {
     })
   },
 
+  /**
+   * Is any part of the element inside the viewport?
+   *
+   * Withheld until there was a layout pass. Every box sat at the origin then,
+   * so this could only ever answer "yes" — a silent pass wearing an
+   * assertion's clothes. Positions are computed now, so the question has an
+   * answer.
+   *
+   * `ratio` asks for a minimum fraction of the element's area to be visible,
+   * as Playwright's does.
+   */
+  async toBeInViewport(this: MatcherContext, received: unknown, options: AssertionOptions & { ratio?: number } = {}): Promise<MatcherResult> {
+    const locator = asLocator(received, 'toBeInViewport')
+    const page = pageOf(locator)
+    const wanted = options.ratio ?? 0
+
+    return assertThat(this, locator, 'in viewport', timeoutOf(locator, options.timeout), onElement(
+      locator,
+      (element) => {
+        if (!page._isRendered(element))
+          return state(false, '', 'not rendered')
+
+        const box = element.getBoundingClientRect()
+        const view = element.ownerDocument?.defaultView
+        const width = typeof view?.innerWidth === 'number' ? view.innerWidth : 1024
+        const height = typeof view?.innerHeight === 'number' ? view.innerHeight : 768
+
+        const overlapWidth = Math.min(box.right, width) - Math.max(box.left, 0)
+        const overlapHeight = Math.min(box.bottom, height) - Math.max(box.top, 0)
+
+        if (overlapWidth <= 0 || overlapHeight <= 0)
+          return state(false, '', `outside the ${width}x${height} viewport`)
+
+        const area = box.width * box.height
+        // A zero-area box that overlaps at all counts as in view; there is no
+        // fraction of nothing to compare against a ratio.
+        const ratio = area === 0 ? 1 : (overlapWidth * overlapHeight) / area
+
+        return state(
+          ratio > 0 && ratio >= wanted,
+          `in viewport (${Math.round(ratio * 100)}% visible)`,
+          `only ${Math.round(ratio * 100)}% visible, wanted ${Math.round(wanted * 100)}%`,
+        )
+      },
+    ))
+  },
+
   async toHaveCount(this: MatcherContext, received: unknown, expected: number, options: AssertionOptions = {}): Promise<MatcherResult> {
     // Deliberately not strict: the count is the question.
     const locator = asLocator(received, 'toHaveCount')
@@ -613,6 +660,7 @@ declare module 'bun:test' {
     toBeAttached: (options?: AssertionOptions) => Promise<void>
     /** The element is painted: no `display: none`, `visibility: hidden` or `hidden`. */
     toBeVisible: (options?: AssertionOptions) => Promise<void>
+    toBeInViewport: (options?: AssertionOptions & { ratio?: number }) => Promise<void>
     /** The element is not painted, or is not there at all. */
     toBeHidden: (options?: AssertionOptions) => Promise<void>
     /** How many elements the locator resolves to. Not strict. */

@@ -4,6 +4,7 @@ import { DOMRect } from '../dom/DOMClasses'
 import { hidesItself } from '../aria/visibility'
 import { collectCascade, resolveProperty } from '../css/cascade'
 import { expandShorthand } from '../css/shorthand'
+import { boxFor, offsetParentFor, scrollOffsetFor } from '../layout'
 import { VirtualEvent } from '../events/VirtualEvent'
 import { parseHTML } from '../parsers/html-parser'
 import { escapeHtmlAttribute, escapeHtmlText } from '../parsers/html-utils'
@@ -2424,7 +2425,8 @@ export class VirtualElement extends VirtualNodeBase {
    * returned a rect at all.
    */
   getClientRects(): DOMRect[] {
-    if (!this.isConnected || this._isDisplayNone())
+    const box = boxFor(this)
+    if (!box?.rendered)
       return []
     return [this.getBoundingClientRect()]
   }
@@ -2660,45 +2662,73 @@ export class VirtualElement extends VirtualNodeBase {
     }
   }
 
-  // Layout properties. There is no layout pass, so position stays at the
-  // origin — but the box a declared size implies is real, and the four
-  // measurements below are each a different part of it.
+  // Layout properties. Each reports a different part of the same box: the
+  // border box, the padding box, and the border widths between them.
   get clientLeft(): number {
-    return this._box().border.left
+    return this._metrics().border.left
   }
 
   get clientTop(): number {
-    return this._box().border.top
+    return this._metrics().border.top
   }
 
   /** The padding box: content plus padding, inside the border. */
   get clientWidth(): number {
-    const box = this._box()
+    const box = this._metrics()
     return box.content.width + box.padding.left + box.padding.right
   }
 
   get clientHeight(): number {
-    const box = this._box()
+    const box = this._metrics()
     return box.content.height + box.padding.top + box.padding.bottom
   }
 
   /** The border box: content, padding and border together. */
   get offsetWidth(): number {
-    const box = this._box()
+    const box = this._metrics()
     return box.content.width + box.padding.left + box.padding.right + box.border.left + box.border.right
   }
 
   get offsetHeight(): number {
-    const box = this._box()
+    const box = this._metrics()
     return box.content.height + box.padding.top + box.padding.bottom + box.border.top + box.border.bottom
   }
 
+  /**
+   * Distance from `offsetParent`'s padding edge to this element's border box.
+   *
+   * Zero before the layout pass existed, because no position was computed.
+   */
   get offsetTop(): number {
-    return 0
+    const box = boxFor(this)
+    if (!box?.rendered)
+      return 0
+
+    const parent = offsetParentFor(this) as VirtualElement | null
+    const parentBox = parent ? boxFor(parent) : null
+    return box.y - (parentBox ? parentBox.y + parentBox.border.top : 0)
   }
 
   get offsetLeft(): number {
-    return 0
+    const box = boxFor(this)
+    if (!box?.rendered)
+      return 0
+
+    const parent = offsetParentFor(this) as VirtualElement | null
+    const parentBox = parent ? boxFor(parent) : null
+    return box.x - (parentBox ? parentBox.x + parentBox.border.left : 0)
+  }
+
+  /**
+   * The box this element's measurements come from.
+   *
+   * The layout pass answers for anything in a document. An element outside one
+   * takes part in no flow, so its declared size is reported at the origin —
+   * the contract that predates layout, which tests measuring elements they
+   * never append rely on.
+   */
+  private _metrics(): { content: { width: number, height: number }, padding: Insets, border: Insets } {
+    return boxFor(this) ?? this._box()
   }
 
   /**
@@ -2746,6 +2776,23 @@ export class VirtualElement extends VirtualNodeBase {
     }
 
     return { content: { width: resolve('width'), height: resolve('height') }, padding, border }
+  }
+
+  /**
+   * A reader for this element's declared values, with the cascade matched once.
+   *
+   * Resolving a property means matching every rule against the element, so the
+   * layout pass — which needs two dozen properties per element — must not pay
+   * for that per property. The cascade is built here and closed over.
+   *
+   * Returns the declared value, or `''` when nothing declares the property.
+   * Initial values are the caller's to apply, from `css/initial-values`.
+   *
+   * @internal
+   */
+  _styleReader(): (property: string) => string {
+    const cascade = this._buildCascade()
+    return (property: string) => this._cascadedStyleValue(property, cascade)
   }
 
   /**
@@ -2959,16 +3006,26 @@ export class VirtualElement extends VirtualNodeBase {
     return null
   }
 
+  /**
+   * The element positions are measured against: the nearest positioned
+   * ancestor, or the body.
+   *
+   * It used to answer `parentElement`, which is only right when nothing in
+   * between is positioned.
+   */
   get offsetParent(): VirtualElement | null {
-    return this.parentElement
+    if (!this.isConnected)
+      return this.parentElement
+    return offsetParentFor(this) as VirtualElement | null
   }
 
+  /** The content's extent, which is at least the padding box. */
   get scrollWidth(): number {
-    return 0
+    return Math.round(boxFor(this)?.scrollWidth ?? 0)
   }
 
   get scrollHeight(): number {
-    return 0
+    return Math.round(boxFor(this)?.scrollHeight ?? 0)
   }
 
   private _scrollTop = 0
@@ -2990,11 +3047,27 @@ export class VirtualElement extends VirtualNodeBase {
     this._scrollLeft = value
   }
 
+  /**
+   * The element's border box in viewport coordinates.
+   *
+   * The position used to be (0, 0) for everything, because no flow was
+   * computed. It is real now, with the scroll offsets of the ancestors and the
+   * window taken off, since this is measured from the viewport rather than
+   * from the document.
+   *
+   * An element outside a document still reports its declared size at the
+   * origin: it takes part in no flow, so there is no position to report.
+   */
   getBoundingClientRect(): DOMRect {
-    // A border-box measurement, like `offsetWidth` — the rect a browser hands
-    // back covers the padding and border, not just the content. Position stays
-    // at (0, 0) since we don't run an actual layout pass.
-    return new DOMRect(0, 0, this.offsetWidth, this.offsetHeight)
+    const box = boxFor(this)
+    if (!box)
+      return new DOMRect(0, 0, this.offsetWidth, this.offsetHeight)
+
+    if (!box.rendered)
+      return new DOMRect(0, 0, 0, 0)
+
+    const scroll = scrollOffsetFor(this)
+    return new DOMRect(box.x - scroll.x, box.y - scroll.y, box.width, box.height)
   }
 
   // Pointer capture API — no-op book-keeping so libraries that capture

@@ -103,18 +103,30 @@ describe('a declared zero collapses the element', () => {
 describe('what must stay visible', () => {
   test('an element nobody sized is still visible', async () => {
     // The guard against the naive fix, and the most important test in this file.
-    // Without layout this button's bounding box is empty, so a rule based on the
-    // box would hide it — and with it, most of the suite.
     await render('', '<button>Save</button>')
 
     expect(await page.getByRole('button').count()).toBe(1)
     expect(await page.getByRole('button').isVisible()).toBe(true)
 
-    // And its box really is empty, which is the whole reason the declaration is
-    // consulted instead of the box. Asserted rather than described, so anyone
-    // tempted to switch to the box measurement sees what it would cost.
+    // This button's box used to be empty, which was the original reason for
+    // consulting the declaration rather than the box. It has a real one now.
+    // The reason still stands, and the next case is what it rests on: an
+    // element whose box is empty for want of a declared size must not be
+    // treated as hidden, because the box is an estimate and the declaration is
+    // not.
     const box = (await page.getByRole('button').elementHandle()).getBoundingClientRect()
+    expect(box.width).toBeGreaterThan(0)
+  })
+
+  test('an empty box is not enough to call something hidden', async () => {
+    // An empty <span> has nothing to give it a size, so its box is 0 x 0 — and
+    // a browser agrees. Visibility still comes from the declaration, so this
+    // counts as visible, where a box-based rule would hide it.
+    await render('', '<span data-testid="empty"></span>')
+
+    const box = (await page.getByTestId('empty').elementHandle()).getBoundingClientRect()
     expect({ width: box.width, height: box.height }).toEqual({ width: 0, height: 0 })
+    expect(await page.getByTestId('empty').isVisible()).toBe(true)
   })
 
   test('height: auto is not zero', async () => {

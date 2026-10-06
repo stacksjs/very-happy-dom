@@ -12,10 +12,10 @@ import '../src/matchers'
 // element actually have, and what name does it compute? — had to be asked through
 // a plain expect, losing the retry.
 //
-// toBeInViewport is deliberately absent. There is no layout, so x and y are always
-// the origin, and it could only ever answer "yes" — the silent-pass failure #1602
-// was about. A test at the bottom records that, so nobody adds it later from
-// Playwright's list.
+// toBeInViewport is registered now. It was withheld while every box sat at the
+// origin, when it could only ever answer "yes" — the silent-pass failure #1602
+// was about. The layout pass gave positions, so the tests at the bottom check it
+// can answer no.
 // =============================================================================
 
 let page: any
@@ -212,21 +212,40 @@ describe('toHaveValues', () => {
   })
 })
 
-describe('toBeInViewport is deliberately absent', () => {
-  test('it is not registered, and this records why', async () => {
-    // There is no layout pass, so a bounding box has no position: x and y are
-    // always the origin, asserted in test/locator-geometry.test.ts. The matcher
-    // could only ever answer "yes", which is a silent pass wearing an assertion's
-    // clothes. Recorded here so it is not added from Playwright's list later.
-    expect('toBeInViewport' in matchers).toBe(false)
+describe('toBeInViewport', () => {
+  // Withheld while there was no layout pass: every box sat at the origin, so
+  // the matcher could only ever answer "yes" — a silent pass wearing an
+  // assertion's clothes. Positions are computed now, and these check it can
+  // say no, which is the only thing that made it worth adding.
+  test('an element on screen passes', async () => {
+    await page.setContent('<body><div id="a" style="width: 10px; height: 10px"></div></body>')
 
-    await page.setContent('<head><style>div { width: 10px; height: 10px }</style></head>'
-      + '<body><div id="a"></div><div id="b"></div></body>')
-    const first = await page.locator('#a').boundingBox()
-    const second = await page.locator('#b').boundingBox()
+    await expect(verdict('toBeInViewport', page.locator('#a'))).resolves.toMatchObject({ pass: true })
+  })
 
-    // Two different elements, indistinguishable positions — which is what makes
-    // the question unanswerable.
-    expect(first).toEqual(second)
+  test('an element pushed past the bottom of the viewport fails', async () => {
+    // The viewport is 768 tall by default.
+    await page.setContent('<body><div style="height: 2000px"></div>'
+      + '<div id="below" style="width: 10px; height: 10px"></div></body>')
+
+    const box = await page.locator('#below').boundingBox()
+    expect(box!.y).toBeGreaterThan(768)
+
+    await expect(verdict('toBeInViewport', page.locator('#below'))).resolves.toMatchObject({ pass: false })
+  })
+
+  test('a ratio asks for more than a sliver', async () => {
+    // Starts 8px above the fold, so a tenth of its height is visible.
+    await page.setContent('<body><div style="height: 758px"></div>'
+      + '<div id="edge" style="width: 10px; height: 100px"></div></body>')
+
+    await expect(verdict('toBeInViewport', page.locator('#edge'))).resolves.toMatchObject({ pass: true })
+    await expect(verdict('toBeInViewport', page.locator('#edge'), { ratio: 0.5 })).resolves.toMatchObject({ pass: false })
+  })
+
+  test('a hidden element is not in the viewport', async () => {
+    await page.setContent('<body><div id="a" style="display: none; width: 10px; height: 10px"></div></body>')
+
+    await expect(verdict('toBeInViewport', page.locator('#a'))).resolves.toMatchObject({ pass: false })
   })
 })

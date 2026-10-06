@@ -7,6 +7,18 @@
 
 import { expandShorthand } from './shorthand'
 
+/**
+ * Bumped whenever a rule or a declaration changes.
+ *
+ * The layout cache keys on it. A stylesheet edited through the CSSOM — an
+ * `insertRule`, or a property set on a rule's `style` — moves boxes without
+ * touching the DOM, so nothing else would tell layout to run again. It is one
+ * counter for the process rather than per document: over-invalidating costs a
+ * recompute, under-invalidating returns a wrong number.
+ */
+export const CSSOM_REVISION = { value: 0 }
+
+
 // ---------------------------------------------------------------------------
 // CSSStyleDeclaration (standalone, not the Proxy-based one on elements)
 // ---------------------------------------------------------------------------
@@ -34,6 +46,7 @@ export class CSSStyleDeclaration {
   }
 
   setProperty(property: string, value: string, priority?: string): void {
+    CSSOM_REVISION.value++
     this._properties.set(property, { value, priority: priority ?? '' })
     this._derived.delete(property)
 
@@ -47,6 +60,7 @@ export class CSSStyleDeclaration {
   }
 
   removeProperty(property: string): string {
+    CSSOM_REVISION.value++
     const old = this.getPropertyValue(property)
     this._properties.delete(property)
     this._derived.delete(property)
@@ -72,6 +86,7 @@ export class CSSStyleDeclaration {
   }
 
   set cssText(text: string) {
+    CSSOM_REVISION.value++
     this._properties.clear()
     this._derived.clear()
     for (const decl of text.split(';')) {
@@ -107,6 +122,7 @@ export class CSSStyleDeclaration {
    * the other three to 10px.
    */
   _applyParsed(property: string, value: string, priority: string): void {
+    CSSOM_REVISION.value++
     this._applyOne(property, value, priority, false)
 
     const expanded = expandShorthand(property, value)
@@ -331,6 +347,7 @@ export class CSSGroupingRule extends CSSRule {
   readonly cssRules: CSSRule[] = []
 
   insertRule(rule: string, index: number = 0): number {
+    CSSOM_REVISION.value++
     const cssRule = parseInsertedRule(rule, this.parentStyleSheet)
     cssRule.parentRule = this
     cssRule.parentStyleSheet = this.parentStyleSheet
@@ -339,6 +356,7 @@ export class CSSGroupingRule extends CSSRule {
   }
 
   deleteRule(index: number): void {
+    CSSOM_REVISION.value++
     this.cssRules.splice(index, 1)
   }
 }
@@ -510,6 +528,7 @@ export class CSSStyleSheet {
   readonly type: string = 'text/css'
 
   insertRule(rule: string, index: number = 0): number {
+    CSSOM_REVISION.value++
     const cssRule = parseInsertedRule(rule, this)
     cssRule.parentStyleSheet = this
     this.cssRules.splice(index, 0, cssRule)
@@ -517,6 +536,7 @@ export class CSSStyleSheet {
   }
 
   deleteRule(index: number): void {
+    CSSOM_REVISION.value++
     this.cssRules.splice(index, 1)
   }
 
@@ -526,6 +546,7 @@ export class CSSStyleSheet {
   }
 
   replaceSync(text: string): void {
+    CSSOM_REVISION.value++
     const rules = this.cssRules as CSSRule[]
     rules.length = 0
     for (const rule of parseRuleList(text, this))

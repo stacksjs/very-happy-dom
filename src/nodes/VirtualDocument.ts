@@ -3,6 +3,8 @@ import type { XPathResult } from '../xpath/XPathResult'
 import type { CSSStyleSheet } from '../css/CSSOM'
 import { CSSStyleSheet as RuntimeCSSStyleSheet } from '../css/CSSOM'
 import { collectCascade, resolveProperty } from '../css/cascade'
+import { initialValue } from '../css/initial-values'
+import { elementsFromPointIn } from '../layout'
 import type { ICookie } from '../browser/CookieContainer'
 import { CookieContainer, CookieSameSiteEnum } from '../browser/CookieContainer'
 import { CustomEvent } from '../events/CustomEvent'
@@ -216,6 +218,12 @@ export class VirtualDocument extends VirtualNodeBase {
 
   private _adoptedStyleSheets: CSSStyleSheet[] = []
   private _parsedStyleSheets = new WeakMap<object, { text: string, sheet: CSSStyleSheet }>()
+  /** The sheet list, cached against the version that would change it. */
+  private _styleSheetList: { version: number, sheets: CSSStyleSheet[] } | null = null
+  /** Bumped by any DOM mutation; read by the layout cache and the one above. */
+  _layoutVersion: number = 0
+  /** The last layout pass, if nothing has changed since. */
+  _layoutCache: { key: string, boxes: Map<object, unknown> } | null = null
 
   /**
    * One sheet per `<style>` element, in document order.
@@ -225,6 +233,19 @@ export class VirtualDocument extends VirtualNodeBase {
    * `<link rel="stylesheet">` is absent by design — nothing is fetched.
    */
   get styleSheets(): CSSStyleSheet[] {
+    // Finding the <style> elements means walking the document, and resolving a
+    // property for one element reads this list. The layout pass resolves
+    // properties for every element, so without a cache that walk happens once
+    // per element and the pass goes quadratic — 500 elements took 237ms.
+    //
+    // Keyed on the same version the layout cache uses, which bumps on any DOM
+    // mutation and therefore on any <style> added, removed or edited. A rule
+    // changed through the CSSOM does not bump it, and does not need to: the
+    // list of sheets is the same, and the sheet objects in it are shared.
+    const version = this._layoutVersion ?? 0
+    if (this._styleSheetList && this._styleSheetList.version === version)
+      return this._styleSheetList.sheets
+
     const sheets: CSSStyleSheet[] = []
 
     for (const element of this.querySelectorAll('style')) {
@@ -242,6 +263,7 @@ export class VirtualDocument extends VirtualNodeBase {
       sheets.push(sheet)
     }
 
+    this._styleSheetList = { version, sheets }
     return sheets
   }
 
@@ -856,108 +878,7 @@ export class VirtualDocument extends VirtualNodeBase {
 
   // Get computed styles
   getComputedStyle(element: VirtualElement, _pseudoElt?: string | null): any {
-    const defaultDisplay: Record<string, string> = {
-      // Block
-      ADDRESS: 'block', ARTICLE: 'block', ASIDE: 'block', BLOCKQUOTE: 'block',
-      BODY: 'block', DETAILS: 'block', DIALOG: 'block', DIV: 'block',
-      DL: 'block', DT: 'block', FIELDSET: 'block', FIGCAPTION: 'block',
-      FIGURE: 'block', FOOTER: 'block', FORM: 'block', H1: 'block',
-      H2: 'block', H3: 'block', H4: 'block', H5: 'block', H6: 'block',
-      HEADER: 'block', HR: 'block', HTML: 'block', LEGEND: 'block',
-      MAIN: 'block', NAV: 'block', OL: 'block', P: 'block',
-      PRE: 'block', SECTION: 'block', UL: 'block',
-      // List-item
-      LI: 'list-item',
-      // Table
-      TABLE: 'table', CAPTION: 'table-caption',
-      THEAD: 'table-header-group', TBODY: 'table-row-group',
-      TFOOT: 'table-footer-group', TR: 'table-row',
-      TH: 'table-cell', TD: 'table-cell', COLGROUP: 'table-column-group',
-      COL: 'table-column',
-      // Inline-block
-      BUTTON: 'inline-block', INPUT: 'inline-block', SELECT: 'inline-block',
-      TEXTAREA: 'inline-block',
-      // Inline (default for everything else) — these are explicit for clarity
-      A: 'inline', ABBR: 'inline', B: 'inline', CITE: 'inline', CODE: 'inline',
-      DFN: 'inline', EM: 'inline', I: 'inline', KBD: 'inline',
-      LABEL: 'inline', MARK: 'inline', Q: 'inline', S: 'inline',
-      SAMP: 'inline', SMALL: 'inline', SPAN: 'inline', STRONG: 'inline',
-      SUB: 'inline', SUP: 'inline', TIME: 'inline', U: 'inline',
-      VAR: 'inline', IMG: 'inline', BR: 'inline',
-      // Hidden
-      SCRIPT: 'none', STYLE: 'none', HEAD: 'none', TITLE: 'none',
-      META: 'none', LINK: 'none',
-      // Flex by default? No — keep author-specified.
-    }
-
-    const computedDefaults = (prop: string, tagName: string): string => {
-      switch (prop) {
-        case 'display': return defaultDisplay[tagName] || 'inline'
-        case 'visibility': return 'visible'
-        case 'opacity': return '1'
-        case 'position': return 'static'
-        case 'float': return 'none'
-        case 'clear': return 'none'
-        case 'overflow':
-        case 'overflow-x':
-        case 'overflow-y':
-          return 'visible'
-        case 'box-sizing': return 'content-box'
-        case 'z-index': return 'auto'
-        case 'flex-direction': return 'row'
-        case 'flex-wrap': return 'nowrap'
-        case 'justify-content': return 'normal'
-        case 'align-items': return 'normal'
-        case 'align-content': return 'normal'
-        case 'text-align': return 'start'
-        case 'text-transform': return 'none'
-        case 'text-decoration':
-        case 'text-decoration-line':
-          return 'none'
-        case 'font-size': return '16px'
-        case 'font-family': return 'serif'
-        case 'font-weight': return '400'
-        case 'font-style': return 'normal'
-        case 'line-height': return 'normal'
-        case 'color': return 'rgb(0, 0, 0)'
-        case 'background-color': return 'rgba(0, 0, 0, 0)'
-        case 'border-width':
-        case 'border-top-width':
-        case 'border-right-width':
-        case 'border-bottom-width':
-        case 'border-left-width':
-          return '0px'
-        case 'border-style':
-        case 'border-top-style':
-        case 'border-right-style':
-        case 'border-bottom-style':
-        case 'border-left-style':
-          return 'none'
-        case 'margin':
-        case 'margin-top':
-        case 'margin-right':
-        case 'margin-bottom':
-        case 'margin-left':
-        case 'padding':
-        case 'padding-top':
-        case 'padding-right':
-        case 'padding-bottom':
-        case 'padding-left':
-          return '0px'
-        case 'width':
-        case 'height':
-        case 'min-width':
-        case 'min-height':
-          return 'auto'
-        case 'max-width':
-        case 'max-height':
-          return 'none'
-        case 'cursor': return 'auto'
-        case 'pointer-events': return 'auto'
-        default: return ''
-      }
-    }
-
+    const computedDefaults = initialValue
     const self = element
 
     // The cascade is built once per getComputedStyle() call and shared by every
@@ -1134,12 +1055,34 @@ export class VirtualDocument extends VirtualNodeBase {
     return node as any
   }
 
-  elementFromPoint(_x: number, _y: number): VirtualElement | null {
-    return this.body
+  /**
+   * The topmost element at a point, or `null` outside the viewport.
+   *
+   * This answered `body` for every point before there was a layout pass, which
+   * made it useless for the thing it exists for. Hit testing is real now:
+   * boxes that contain the point, in paint order, skipping anything hidden or
+   * `pointer-events: none`.
+   *
+   * A point inside the viewport but past the end of the content answers with
+   * the root element, which is what a browser does — the root's background
+   * paints the whole canvas even where its box does not reach.
+   */
+  elementFromPoint(x: number, y: number): VirtualElement | null {
+    return this.elementsFromPoint(x, y)[0] ?? null
   }
 
-  elementsFromPoint(_x: number, _y: number): VirtualElement[] {
-    return this.body ? [this.body] : []
+  elementsFromPoint(x: number, y: number): VirtualElement[] {
+    const hits = elementsFromPointIn(this as any, x, y) as unknown as VirtualElement[]
+    if (hits.length > 0)
+      return hits
+
+    const view = (this as any).defaultView
+    const width = typeof view?.innerWidth === 'number' ? view.innerWidth : 1024
+    const height = typeof view?.innerHeight === 'number' ? view.innerHeight : 768
+    if (x < 0 || y < 0 || x > width || y > height)
+      return []
+
+    return this.documentElement ? [this.documentElement] : []
   }
 }
 

@@ -61,26 +61,38 @@ describe('the size is real', () => {
   })
 })
 
-describe('position is not computed', () => {
-  test('x and y are always the origin', async () => {
-    // Asserted so a future change cannot quietly start reporting coordinates
-    // that were never calculated.
+describe('position is computed', () => {
+  test('a margin moves the box', async () => {
     await page.setContent('<head><style>.box { width: 120px; margin-left: 50px }</style></head>'
       + '<body><div class="box" id="b"></div></body>')
 
     const box = await page.locator('#b').boundingBox()
 
-    expect({ x: box!.x, y: box!.y }).toEqual({ x: 0, y: 0 })
+    expect({ x: box!.x, y: box!.y }).toEqual({ x: 50, y: 0 })
   })
 
-  test('two elements report the same position, which is why ordering cannot be asked', async () => {
+  test('two stacked elements report different positions, so ordering can be asked', async () => {
+    // This used to assert the opposite: both boxes at the origin, which is what
+    // made overlap and ordering unanswerable and `toBeInViewport` pointless.
     await page.setContent('<head><style>div { width: 10px; height: 10px }</style></head>'
       + '<body><div id="a"></div><div id="b"></div></body>')
 
     const first = await page.locator('#a').boundingBox()
     const second = await page.locator('#b').boundingBox()
 
-    expect(first).toEqual(second)
+    expect(first!.y).toBe(0)
+    expect(second!.y).toBe(10)
+    expect(second!.y).toBeGreaterThan(first!.y)
+  })
+
+  test('a block with no declared width fills its containing block', async () => {
+    await page.setContent('<body><div id="b"></div></body>')
+
+    const box = await page.locator('#b').boundingBox()
+
+    // The viewport is 1024 wide by default, and a block-level box fills it.
+    // This reported 0 before there was a containing block to fill.
+    expect(box!.width).toBe(1024)
   })
 })
 
@@ -101,15 +113,17 @@ describe('null for an element that is not rendered', () => {
     expect(await page.locator('#b').boundingBox()).toBeNull()
   })
 
-  test('an element nobody sized still has a box, of zero', async () => {
-    // Unknown size, not collapsed — the distinction #1617 rests on. The box is
-    // empty and the element is rendered, so a box is reported rather than null.
+  test('an element nobody sized still has a box', async () => {
+    // Unknown size, not collapsed — the distinction #1617 rests on. The button
+    // is rendered, so a box is reported rather than null. It used to be 0 x 0
+    // for want of layout; now its text gives it one.
     await page.setContent('<button id="b">Save</button>')
 
     const box = await page.locator('#b').boundingBox()
 
     expect(box).not.toBeNull()
-    expect({ width: box!.width, height: box!.height }).toEqual({ width: 0, height: 0 })
+    expect(box!.width).toBeGreaterThan(0)
+    expect(box!.height).toBeGreaterThan(0)
   })
 })
 

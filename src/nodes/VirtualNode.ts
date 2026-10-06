@@ -202,7 +202,24 @@ export abstract class VirtualNodeBase extends VirtualEventTarget implements Virt
   readonly DOCUMENT_POSITION_CONTAINS: typeof DOCUMENT_POSITION_CONTAINS = DOCUMENT_POSITION_CONTAINS
   readonly DOCUMENT_POSITION_CONTAINED_BY: typeof DOCUMENT_POSITION_CONTAINED_BY = DOCUMENT_POSITION_CONTAINED_BY
   readonly DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: typeof DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC = DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC
-  nodeValue: string | null = null
+  /**
+   * Backing store for `nodeValue`.
+   *
+   * An accessor rather than a field so a subclass can override it. A field
+   * initializer here creates an own property during `super()`, which shadows
+   * any getter the subclass defines on its prototype — that is what silently
+   * disconnected `VirtualTextNode`'s own `nodeValue` from its text.
+   */
+  protected _nodeValue: string | null = null
+
+  get nodeValue(): string | null {
+    return this._nodeValue
+  }
+
+  set nodeValue(value: string | null) {
+    this._nodeValue = value
+  }
+
   attributes: Map<string, string> = new Map<string, string>()
   childNodes: VirtualNode[] = []
   parentNode: VirtualNode | null = null

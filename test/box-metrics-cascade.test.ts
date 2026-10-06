@@ -13,8 +13,9 @@ import { Window } from '../src/window/Window'
 // confirms getComputedStyle sees the class, reasonably concludes styles are
 // wired up, and writes a geometry assertion that compares 0 to 0.
 //
-// Still deliberately absent, and asserted as absent below: flow, positioning
-// and overlap. x/y stay at the origin, because none of that is computed.
+// Flow and positioning are computed now, so the cases below assert that the
+// cascade reaches them: a margin from a stylesheet moves a box, and a width of
+// `auto` resolves against the containing block rather than to zero.
 // =============================================================================
 
 let window: Window
@@ -82,11 +83,15 @@ describe('box metrics resolve through the cascade', () => {
     expect(el.getBoundingClientRect().width).toBe(400)
   })
 
-  test('an element nobody sized still reports zero', () => {
+  test('an element nobody sized fills its containing block', () => {
+    // Zero before there was a layout pass. No rule matches, so the width is
+    // `auto`, and a block-level box resolves that against its container.
     const el = styled('.other { width: 120px }', '<div class="box"></div>')
 
-    expect(el.getBoundingClientRect().width).toBe(0)
-    expect(el.offsetWidth).toBe(0)
+    expect(el.getBoundingClientRect().width).toBe(1024)
+    expect(el.offsetWidth).toBe(1024)
+    // Nothing inside it, so no height.
+    expect(el.offsetHeight).toBe(0)
   })
 
   test('a width/height attribute still works when no rule matches', () => {
@@ -107,13 +112,14 @@ describe('box metrics resolve through the cascade', () => {
     expect(inner.getBoundingClientRect().width).toBe(200)
   })
 
-  test('position is still not computed', () => {
-    // No layout pass, so the origin is the only honest answer. Asserted so a
-    // future change cannot quietly start reporting made-up coordinates.
+  test('position is computed, from the same resolution', () => {
+    // This asserted the origin for everything while there was no layout pass.
+    // A margin from the cascade now moves the box, which is the point of
+    // routing both through one resolution.
     const el = styled('.box { width: 120px; margin-left: 50px }', '<div class="box"></div>')
 
     const rect = el.getBoundingClientRect()
-    expect({ x: rect.x, y: rect.y, top: rect.top, left: rect.left }).toEqual({ x: 0, y: 0, top: 0, left: 0 })
+    expect({ x: rect.x, y: rect.y, top: rect.top, left: rect.left }).toEqual({ x: 50, y: 0, top: 0, left: 50 })
   })
 
   test('a document with no stylesheets behaves exactly as before', () => {

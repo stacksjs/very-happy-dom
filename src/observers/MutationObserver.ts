@@ -164,6 +164,15 @@ export class MutationObserver {
   }
 
   static _queueMutationRecord(record: MutationRecord): void {
+    // Every DOM change passes through here, which makes it the one place that
+    // can tell layout its boxes are stale. Done before the early return below,
+    // because whether anyone is observing has nothing to do with it. Written
+    // as a field bump rather than an import so the observers do not depend on
+    // the layout pass.
+    const document = (record.target as any)?.ownerDocument
+    if (document)
+      document._layoutVersion = (document._layoutVersion ?? 0) + 1
+
     if (MutationObserver._observers.size === 0) return
     for (const observer of MutationObserver._observers) {
       for (const [observedTarget, options] of observer._observations) {

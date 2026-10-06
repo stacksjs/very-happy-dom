@@ -5,20 +5,36 @@ export class VirtualTextNode extends VirtualNodeBase {
   nodeType: NodeType = TEXT_NODE
   nodeKind: NodeKind = 'text'
   nodeName: string = '#text'
-  nodeValue: string
 
   constructor(text: string) {
     super()
-    this.nodeValue = text
+    this._nodeValue = text
+  }
+
+  /**
+   * The text itself.
+   *
+   * Writing it reports a change, the way `textContent` does. It used to be a
+   * plain field, so `node.nodeValue = '...'` edited the text without telling
+   * anyone — a `MutationObserver` watching `characterData` missed it, and so
+   * did the layout cache, which then answered from a pass taken before the
+   * text changed.
+   */
+  get nodeValue(): string {
+    return this._nodeValue ?? ''
+  }
+
+  set nodeValue(value: string) {
+    this.textContent = value
   }
 
   get textContent(): string {
-    return this.nodeValue || ''
+    return this._nodeValue || ''
   }
 
   set textContent(value: string) {
-    const oldValue = this.nodeValue || ''
-    this.nodeValue = value
+    const oldValue = this._nodeValue || ''
+    this._nodeValue = value
     MutationObserver._queueMutationRecord({
       type: 'characterData',
       target: this,

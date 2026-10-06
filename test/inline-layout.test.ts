@@ -38,16 +38,18 @@ describe('Inline layout: clientWidth / offsetWidth / getBoundingClientRect honor
     expect(d.getBoundingClientRect().height).toBe(768)
   })
 
-  test('element without inline size still returns 0', () => {
+  test('an unsized block fills its container and has no height of its own', () => {
+    // Width used to be 0 as well. A block-level box with no declared width
+    // takes its containing block's; with nothing inside it, its height is 0.
     const w = new Window()
     const d = w.document.createElement('div')
     w.document.body!.appendChild(d)
 
-    expect(d.clientWidth).toBe(0)
+    expect(d.clientWidth).toBe(1024)
     expect(d.clientHeight).toBe(0)
-    expect(d.offsetWidth).toBe(0)
+    expect(d.offsetWidth).toBe(1024)
     expect(d.offsetHeight).toBe(0)
-    expect(d.getBoundingClientRect().width).toBe(0)
+    expect(d.getBoundingClientRect().width).toBe(1024)
     expect(d.getBoundingClientRect().height).toBe(0)
   })
 
@@ -114,15 +116,18 @@ describe('Inline layout: clientWidth / offsetWidth / getBoundingClientRect honor
     expect(d.clientWidth).toBe(300)
   })
 
-  test('auto / invalid style values return 0', () => {
+  test('auto / invalid style values fall back to filling the container', () => {
+    // Both reported 0 before there was a containing block to fill. A block-level
+    // box with no usable width takes its container's, which for a child of
+    // <body> is the 1024px viewport.
     const w = new Window()
     const d = w.document.createElement('div')
     w.document.body!.appendChild(d)
     d.style.width = 'auto'
-    expect(d.clientWidth).toBe(0)
+    expect(d.clientWidth).toBe(1024)
 
     d.style.width = 'bogus'
-    expect(d.clientWidth).toBe(0)
+    expect(d.clientWidth).toBe(1024)
   })
 })
 

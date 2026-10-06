@@ -10,8 +10,9 @@
  * `display: none` is handled here too. A declared size used to be reported for
  * an element that generates no box at all.
  *
- * Still deliberately absent: position. `x` and `y` stay at the origin, because
- * no flow is computed.
+ * Position is computed too, as of the layout pass. The cases at the bottom
+ * check the two stay separate: a margin moves a box without being counted in
+ * any of its measurements.
  */
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { Window } from '../src/window/Window'
@@ -259,14 +260,14 @@ describe('getClientRects', () => {
   })
 })
 
-describe('what is still not computed', () => {
-  test('position stays at the origin', () => {
+describe('position', () => {
+  test('a margin moves the box without being part of it', () => {
     const el = styled('.b { width: 100px; margin-left: 50px; padding: 10px }', '<div class="b"></div>')
 
     const rect = el.getBoundingClientRect()
-    expect({ x: rect.x, y: rect.y, top: rect.top, left: rect.left }).toEqual({ x: 0, y: 0, top: 0, left: 0 })
+    expect({ x: rect.x, y: rect.y }).toEqual({ x: 50, y: 0 })
+    expect(el.offsetLeft).toBe(50)
     expect(el.offsetTop).toBe(0)
-    expect(el.offsetLeft).toBe(0)
   })
 
   test('margin is not part of any of these measurements', () => {

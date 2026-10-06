@@ -99,31 +99,85 @@ export class IntersectionObserver {
 
   private _createEntry(target: VirtualElement, isIntersecting: boolean): IntersectionObserverEntry {
     const rect = this._getBoundingClientRect(target)
+    const rootBounds = this._rootRect(target)
+    const overlap = this._intersectionOf(rect, rootBounds)
 
     return {
       boundingClientRect: rect,
-      intersectionRatio: isIntersecting ? 1 : 0,
-      intersectionRect: isIntersecting ? rect : this._createEmptyRect(),
+      // The caller's flag still decides whether this counts as an
+      // intersection — that is the observer's own bookkeeping — but the
+      // geometry describing it is measured rather than assumed.
+      intersectionRatio: isIntersecting ? overlap.ratio : 0,
+      intersectionRect: isIntersecting ? overlap.rect : this._createEmptyRect(),
       isIntersecting,
-      rootBounds: this.root ? this._getBoundingClientRect(this.root) : null,
+      rootBounds: this.root ? rootBounds : null,
       target,
       time: Date.now(),
     }
   }
 
-  private _getBoundingClientRect(_element: VirtualElement): DOMRectReadOnly {
-    // In a virtual DOM, we simulate a basic rect
-    // In a real implementation, this would calculate actual positions
+  /**
+   * The target's real box.
+   *
+   * This used to invent a 100x100 rect at the origin for every element, so an
+   * entry's geometry said nothing about the element it described. The layout
+   * pass answers it now; an element with no box reports an empty rect.
+   */
+  private _getBoundingClientRect(element: VirtualElement): DOMRectReadOnly {
+    const rect = element?.getBoundingClientRect?.()
+    if (!rect)
+      return this._createEmptyRect()
+
     return {
-      x: 0,
-      y: 0,
-      width: 100,
-      height: 100,
-      top: 0,
-      right: 100,
-      bottom: 100,
-      left: 0,
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      left: rect.left,
     }
+  }
+
+  /**
+   * How much of the target's box lies inside the root's.
+   *
+   * Reported as 0 or 1 before, from the flag the caller passed in, because
+   * there was no geometry to compare. The root is the viewport when none was
+   * given.
+   */
+  private _intersectionOf(target: DOMRectReadOnly, root: DOMRectReadOnly | null): { ratio: number, rect: DOMRectReadOnly } {
+    if (!root || target.width === 0 || target.height === 0)
+      return { ratio: 0, rect: this._createEmptyRect() }
+
+    const left = Math.max(target.left, root.left)
+    const right = Math.min(target.right, root.right)
+    const top = Math.max(target.top, root.top)
+    const bottom = Math.min(target.bottom, root.bottom)
+
+    if (right <= left || bottom <= top)
+      return { ratio: 0, rect: this._createEmptyRect() }
+
+    const width = right - left
+    const height = bottom - top
+
+    return {
+      ratio: (width * height) / (target.width * target.height),
+      rect: { x: left, y: top, width, height, top, right, bottom, left },
+    }
+  }
+
+  /** The root's box, or the viewport's when the root is the document. */
+  private _rootRect(target: VirtualElement): DOMRectReadOnly | null {
+    if (this.root)
+      return this._getBoundingClientRect(this.root)
+
+    const view = (target as any)?.ownerDocument?.defaultView
+    const width = typeof view?.innerWidth === 'number' ? view.innerWidth : 1024
+    const height = typeof view?.innerHeight === 'number' ? view.innerHeight : 768
+
+    return { x: 0, y: 0, width, height, top: 0, right: width, bottom: height, left: 0 }
   }
 
   private _createEmptyRect(): DOMRectReadOnly {

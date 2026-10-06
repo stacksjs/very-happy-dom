@@ -4,10 +4,11 @@ export class VirtualCommentNode extends VirtualNodeBase {
   nodeType: NodeType = COMMENT_NODE
   nodeKind: NodeKind = 'comment'
   nodeName: string = '#comment'
-  nodeValue: string
 
   constructor(text: string) {
     super()
+    // Through the base accessor, not an own field: a field here would shadow
+    // it, which is the trap `VirtualTextNode` was caught in.
     this.nodeValue = text
   }
 
@@ -70,6 +71,6 @@ export class VirtualCommentNode extends VirtualNodeBase {
   }
 
   cloneNode(): VirtualCommentNode {
-    return new VirtualCommentNode(this.nodeValue)
+    return new VirtualCommentNode(this.nodeValue ?? '')
   }
 }
