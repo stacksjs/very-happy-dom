@@ -3,6 +3,7 @@ import type { ShadowRootInit } from '../webcomponents/ShadowRoot'
 import { DOMRect } from '../dom/DOMClasses'
 import { hidesItself } from '../aria/visibility'
 import { collectCascade, resolveProperty } from '../css/cascade'
+import { expandShorthand } from '../css/shorthand'
 import { VirtualEvent } from '../events/VirtualEvent'
 import { parseHTML } from '../parsers/html-parser'
 import { escapeHtmlAttribute, escapeHtmlText } from '../parsers/html-utils'
@@ -49,6 +50,13 @@ export class VirtualElement extends VirtualNodeBase {
   private _customValidity: string = ''
   private _internalStyles: Map<string, string> | null = null
   private _stylePriorities: Map<string, string> | null = null
+  /**
+   * Longhands written by a shorthand rather than declared. They answer reads
+   * but are left out of `cssText`, `item()`, `length` and the serialized
+   * `style` attribute, so expanding a shorthand does not change the markup an
+   * element reports.
+   */
+  private _derivedStyles: Set<string> | null = null
   private _styleProxy: any = null
   private _datasetProxy: any = null
   private _valueState: string | null = null
@@ -153,6 +161,7 @@ export class VirtualElement extends VirtualNodeBase {
     if (normalizedName === 'style') {
       this._internalStyles = null
       this._stylePriorities = null
+      this._derivedStyles = null
     }
 
     invokeAttributeChangedCallback(this, normalizedName, oldValue, null)
@@ -583,6 +592,7 @@ export class VirtualElement extends VirtualNodeBase {
     const priorities = this._stylePriorities ?? (this._stylePriorities = new Map())
     styles.clear()
     priorities.clear()
+    this._derivedStyles?.clear()
 
     for (const declaration of styleText.split(';')) {
       const trimmed = declaration.trim()
@@ -601,11 +611,81 @@ export class VirtualElement extends VirtualNodeBase {
         priority = 'important'
       }
 
-      styles.set(property, value)
+      this._writeStyleProperty(property, value, priority, true)
+    }
+  }
+
+  /**
+   * Record one inline declaration, expanding it when it is a shorthand.
+   *
+   * Every write path lands here — `setProperty`, a camelCase assignment and the
+   * `style` attribute parser — so a shorthand behaves the same however it was
+   * set. The expansion runs after the shorthand itself is stored, which is what
+   * makes `margin: 10px; margin-top: 5px` resolve to 5px: the longhand written
+   * later simply overwrites the derived entry and sheds its derived mark.
+   *
+   * `respectImportant` is for the `style` attribute, which is parsed CSS: there
+   * importance beats declaration order, so a normal value cannot displace an
+   * `!important` one. A `setProperty()` call leaves it off and overwrites, which
+   * is what a browser does.
+   */
+  private _writeStyleProperty(property: string, value: string, priority: string, respectImportant = false): void {
+    const styles = this._internalStyles ?? (this._internalStyles = new Map())
+
+    const write = (name: string, newValue: string, derived: boolean): void => {
+      if (respectImportant && !priority && this._stylePriorities?.get(name) === 'important')
+        return
+
+      styles.set(name, newValue)
+
       if (priority) {
-        priorities.set(property, priority)
+        const priorities = this._stylePriorities ?? (this._stylePriorities = new Map())
+        priorities.set(name, priority)
+      }
+      else {
+        this._stylePriorities?.delete(name)
+      }
+
+      if (derived)
+        (this._derivedStyles ?? (this._derivedStyles = new Set())).add(name)
+      else
+        this._derivedStyles?.delete(name)
+    }
+
+    write(property, value, false)
+    for (const [longhand, longhandValue] of expandShorthand(property, value) ?? [])
+      write(longhand, longhandValue, true)
+  }
+
+  /**
+   * Drop an inline declaration, along with any longhand it alone put there.
+   *
+   * A longhand the author also declared outlives its shorthand, so only derived
+   * entries are removed.
+   */
+  private _deleteStyleProperty(property: string): void {
+    const previous = this._internalStyles?.get(property) ?? ''
+    this._internalStyles?.delete(property)
+    this._stylePriorities?.delete(property)
+    this._derivedStyles?.delete(property)
+
+    for (const [longhand] of expandShorthand(property, previous) ?? []) {
+      if (this._derivedStyles?.has(longhand)) {
+        this._internalStyles?.delete(longhand)
+        this._stylePriorities?.delete(longhand)
+        this._derivedStyles.delete(longhand)
       }
     }
+  }
+
+  /** The declarations the author wrote, in order, with derived longhands left out. */
+  private _declaredStyleEntries(): Array<[string, string]> {
+    if (!this._internalStyles)
+      return []
+    const derived = this._derivedStyles
+    if (!derived || derived.size === 0)
+      return Array.from(this._internalStyles.entries())
+    return Array.from(this._internalStyles.entries()).filter(([prop]) => !derived.has(prop))
   }
 
   get innerHTML(): string {
@@ -884,35 +964,23 @@ export class VirtualElement extends VirtualNodeBase {
             return
           }
 
-          const styles = element._internalStyles ?? (element._internalStyles = new Map())
-          styles.set(property, stringValue)
-          if (priority) {
-            const priorities = element._stylePriorities ?? (element._stylePriorities = new Map())
-            priorities.set(property, priority)
-          }
-          else {
-            element._stylePriorities?.delete(property)
-          }
+          element._writeStyleProperty(property, stringValue, priority)
           element._updateStyleAttribute()
         },
         removeProperty(property: string): string {
           const previous = element._internalStyles?.get(property) || ''
-          element._internalStyles?.delete(property)
-          element._stylePriorities?.delete(property)
+          element._deleteStyleProperty(property)
           element._updateStyleAttribute()
           return previous
         },
         item(index: number): string {
-          if (!element._internalStyles) return ''
-          const keys = Array.from(element._internalStyles.keys())
-          return keys[index] || ''
+          return element._declaredStyleEntries()[index]?.[0] ?? ''
         },
         get length(): number {
-          return element._internalStyles?.size ?? 0
+          return element._declaredStyleEntries().length
         },
         get cssText(): string {
-          if (!element._internalStyles) return ''
-          return Array.from(element._internalStyles.entries())
+          return element._declaredStyleEntries()
             .map(([prop, value]) => {
               const priority = element._stylePriorities?.get(prop)
               return priority ? `${prop}: ${value} !${priority}` : `${prop}: ${value}`
@@ -922,6 +990,7 @@ export class VirtualElement extends VirtualNodeBase {
         set cssText(value: string) {
           element._internalStyles = null
           element._stylePriorities = null
+          element._derivedStyles = null
           if (value) {
             element._setStylesFromAttribute(value)
           }
@@ -945,9 +1014,7 @@ export class VirtualElement extends VirtualNodeBase {
           }
           // Convert camelCase to kebab-case
           const kebabProp = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)
-          const styles = element._internalStyles ?? (element._internalStyles = new Map())
-          styles.set(kebabProp, `${value}`)
-          element._stylePriorities?.delete(kebabProp)
+          element._writeStyleProperty(kebabProp, `${value}`, '')
           element._updateStyleAttribute()
           return true
         },
@@ -958,7 +1025,8 @@ export class VirtualElement extends VirtualNodeBase {
   }
 
   private _updateStyleAttribute(): void {
-    if (!this._internalStyles || this._internalStyles.size === 0) {
+    const declared = this._declaredStyleEntries()
+    if (declared.length === 0) {
       if (this.attributes.has('style')) {
         this.removeAttribute('style')
       }
@@ -966,7 +1034,7 @@ export class VirtualElement extends VirtualNodeBase {
     }
 
     let styleString = ''
-    for (const [prop, value] of this._internalStyles) {
+    for (const [prop, value] of declared) {
       if (styleString) styleString += '; '
       const priority = this._stylePriorities?.get(prop)
       styleString += priority ? `${prop}: ${value} !${priority}` : `${prop}: ${value}`

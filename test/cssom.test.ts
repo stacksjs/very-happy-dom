@@ -183,6 +183,38 @@ describe('CSSStyleSheet', () => {
     expect(sheet.cssRules[0].cssText).toBe('b { color: green }')
   })
 
+  test('insertRule parses the rule it is given', () => {
+    // It used to store the text verbatim and parse nothing, so an inserted rule
+    // had no selector and no declarations — it could never match an element,
+    // which is how CSS-in-JS writes styles at runtime.
+    const sheet = new CSSStyleSheet()
+    sheet.insertRule('.a { color: red; margin: 4px }', 0)
+    const rule = sheet.cssRules[0] as CSSStyleRule
+    expect(rule.selectorText).toBe('.a')
+    expect(rule.style.getPropertyValue('color')).toBe('red')
+    // Reached through the cascade, so the shorthand's longhands are there too.
+    expect(rule.style.getPropertyValue('margin-top')).toBe('4px')
+  })
+
+  test('an inserted rule takes effect on a document', () => {
+    const w = new Window()
+    w.document.head!.innerHTML = '<style></style>'
+    w.document.body!.innerHTML = '<div id="a"></div>'
+    w.document.styleSheets[0].insertRule('#a { padding: 6px }', 0)
+    const computed = w.getComputedStyle(w.document.getElementById('a')!)
+    expect(computed.getPropertyValue('padding-left')).toBe('6px')
+  })
+
+  test('cssText serializes what the rule holds', () => {
+    const sheet = new CSSStyleSheet()
+    sheet.insertRule('.a { color: red }', 0)
+    const rule = sheet.cssRules[0] as CSSStyleRule
+    rule.style.setProperty('color', 'blue')
+    // Serialized from the rule's own state rather than echoing the text it was
+    // built from, so an edit through `style` is visible here.
+    expect(rule.cssText).toBe('.a { color: blue }')
+  })
+
   test('replaceSync clears all rules', () => {
     const sheet = new CSSStyleSheet()
     sheet.insertRule('a { color: blue }', 0)

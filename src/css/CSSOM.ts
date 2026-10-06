@@ -5,15 +5,28 @@
  * Classes store data, support basic operations, and pass instanceof checks.
  */
 
+import { expandShorthand } from './shorthand'
+
 // ---------------------------------------------------------------------------
 // CSSStyleDeclaration (standalone, not the Proxy-based one on elements)
 // ---------------------------------------------------------------------------
 
 export class CSSStyleDeclaration {
   private _properties: Map<string, { value: string, priority: string }> = new Map()
+  /**
+   * Longhands written by a shorthand rather than by the author. They answer
+   * reads but stay out of `cssText`, `item()` and `length`, so expanding a
+   * shorthand does not change how a declaration serializes.
+   */
+  private _derived: Set<string> = new Set()
+
+  /** The author's own declarations, in the order they were set. */
+  private _declared(): Array<[string, { value: string, priority: string }]> {
+    return Array.from(this._properties.entries()).filter(([prop]) => !this._derived.has(prop))
+  }
 
   get length(): number {
-    return this._properties.size
+    return this._properties.size - this._derived.size
   }
 
   getPropertyValue(property: string): string {
@@ -22,11 +35,29 @@ export class CSSStyleDeclaration {
 
   setProperty(property: string, value: string, priority?: string): void {
     this._properties.set(property, { value, priority: priority ?? '' })
+    this._derived.delete(property)
+
+    // A longhand set on its own replaces whatever a shorthand put there; one
+    // set by a shorthand is recorded as derived so it stays out of the
+    // serialized text.
+    for (const [longhand, longhandValue] of expandShorthand(property, value) ?? []) {
+      this._properties.set(longhand, { value: longhandValue, priority: priority ?? '' })
+      this._derived.add(longhand)
+    }
   }
 
   removeProperty(property: string): string {
     const old = this.getPropertyValue(property)
     this._properties.delete(property)
+    this._derived.delete(property)
+
+    for (const [longhand] of expandShorthand(property, old) ?? []) {
+      if (this._derived.has(longhand)) {
+        this._properties.delete(longhand)
+        this._derived.delete(longhand)
+      }
+    }
+
     return old
   }
 
@@ -35,13 +66,14 @@ export class CSSStyleDeclaration {
   }
 
   get cssText(): string {
-    return Array.from(this._properties.entries())
+    return this._declared()
       .map(([prop, { value, priority }]) => `${prop}: ${value}${priority ? ' !important' : ''}`)
       .join('; ')
   }
 
   set cssText(text: string) {
     this._properties.clear()
+    this._derived.clear()
     for (const decl of text.split(';')) {
       const [prop, ...rest] = decl.split(':')
       if (prop && rest.length) {
@@ -57,11 +89,54 @@ export class CSSStyleDeclaration {
   }
 
   item(index: number): string {
-    return Array.from(this._properties.keys())[index] ?? ''
+    return this._declared()[index]?.[0] ?? ''
   }
 
-  [Symbol.iterator](): MapIterator<string> {
-    return this._properties.keys()
+  /**
+   * Apply one parsed declaration, letting an `!important` value already in
+   * place stand.
+   *
+   * Within a block importance beats order, so `margin: 10px !important;
+   * margin-top: 5px` keeps a 10px top margin. `setProperty()` cannot do this —
+   * a direct call is expected to overwrite, the way a browser's does — so the
+   * rule lives on the path the CSS parsers use.
+   *
+   * The test is per property rather than per declaration, because a normal
+   * shorthand still sets the sides that are not individually important:
+   * `margin-top: 5px !important; margin: 10px` leaves the top at 5px and moves
+   * the other three to 10px.
+   */
+  _applyParsed(property: string, value: string, priority: string): void {
+    const write = (name: string, newValue: string, derived: boolean): void => {
+      if (!priority && this._properties.get(name)?.priority === 'important')
+        return
+
+      this._properties.set(name, { value: newValue, priority })
+      if (derived)
+        this._derived.add(name)
+      else
+        this._derived.delete(name)
+    }
+
+    write(property, value, false)
+    for (const [longhand, longhandValue] of expandShorthand(property, value) ?? [])
+      write(longhand, longhandValue, true)
+  }
+
+  /**
+   * Every property that can be read off this declaration, derived longhands
+   * included.
+   *
+   * The cascade needs these — a longhand is the only form `resolveProperty()`
+   * looks up — but iteration is a public API that reports what the author
+   * wrote, so the two views are kept apart rather than overloading one.
+   */
+  _allProperties(): string[] {
+    return Array.from(this._properties.keys())
+  }
+
+  [Symbol.iterator](): IterableIterator<string> {
+    return this._declared().map(([prop]) => prop)[Symbol.iterator]()
   }
 }
 
@@ -122,12 +197,20 @@ export class CSSRule {
   static readonly CONTAINER_RULE = 17
 
   readonly type: number
-  cssText: string = ''
+  protected _cssText: string = ''
   parentRule: CSSRule | null = null
   parentStyleSheet: CSSStyleSheet | null = null
 
   constructor(type: number) {
     this.type = type
+  }
+
+  get cssText(): string {
+    return this._cssText
+  }
+
+  set cssText(text: string) {
+    this._cssText = text
   }
 }
 
@@ -155,7 +238,7 @@ function readDeclarations(body: string, target: CSSStyleRule): void {
     const important = /!\s*important$/i.test(raw)
     const value = important ? raw.replace(/\s*!\s*important$/i, '').trim() : raw
     if (value)
-      target.style.setProperty(property, value, important ? 'important' : '')
+      target.style._applyParsed(property, value, important ? 'important' : '')
   }
 }
 
@@ -216,12 +299,32 @@ function parseRuleList(text: string, sheet: CSSStyleSheet | null): CSSRule[] {
   return parsed
 }
 
+/**
+ * Parse one rule's text, as `insertRule()` is handed it.
+ *
+ * It used to store the text on `cssText` and stop there, leaving the rule with
+ * no `selectorText` and an empty `style` — so a rule inserted at runtime, which
+ * is how CSS-in-JS writes styles, could never match anything in the cascade.
+ *
+ * `parseRuleList` already knows how to read a rule, including `@media`, so the
+ * text goes through it and the first rule it yields is the one asked for.
+ */
+function parseInsertedRule(rule: string, sheet: CSSStyleSheet | null): CSSRule {
+  const parsed = parseRuleList(rule, sheet)[0]
+  if (parsed)
+    return parsed
+
+  // Nothing parsed — keep the old behaviour so the text is not simply lost.
+  const fallback = new CSSStyleRule()
+  fallback.cssText = rule
+  return fallback
+}
+
 export class CSSGroupingRule extends CSSRule {
   readonly cssRules: CSSRule[] = []
 
   insertRule(rule: string, index: number = 0): number {
-    const cssRule = new CSSStyleRule()
-    cssRule.cssText = rule
+    const cssRule = parseInsertedRule(rule, this.parentStyleSheet)
     cssRule.parentRule = this
     cssRule.parentStyleSheet = this.parentStyleSheet
     this.cssRules.splice(index, 0, cssRule)
@@ -251,6 +354,24 @@ export class CSSStyleRule extends CSSRule {
 
   constructor() {
     super(CSSRule.STYLE_RULE)
+  }
+
+  /**
+   * The rule as text, serialized from what it actually holds.
+   *
+   * It used to be whatever string the rule was built from, which `insertRule()`
+   * stored without parsing — so the text and the rule's own `selectorText` and
+   * `style` could disagree, and for an inserted rule they always did.
+   */
+  get cssText(): string {
+    const declarations = this.style.cssText
+    if (!this.selectorText)
+      return this._cssText
+    return declarations ? `${this.selectorText} { ${declarations} }` : `${this.selectorText} { }`
+  }
+
+  set cssText(text: string) {
+    this._cssText = text
   }
 }
 
@@ -382,8 +503,7 @@ export class CSSStyleSheet {
   readonly type: string = 'text/css'
 
   insertRule(rule: string, index: number = 0): number {
-    const cssRule = new CSSStyleRule()
-    cssRule.cssText = rule
+    const cssRule = parseInsertedRule(rule, this)
     cssRule.parentStyleSheet = this
     this.cssRules.splice(index, 0, cssRule)
     return index

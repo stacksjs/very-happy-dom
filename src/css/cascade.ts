@@ -23,6 +23,13 @@ interface StyleDeclarationLike {
   getPropertyValue: (property: string) => string
   getPropertyPriority: (property: string) => string
   [Symbol.iterator]: () => Iterator<string>
+  /**
+   * Declared properties plus the longhands a shorthand expanded into. Iterating
+   * reports only what the author wrote, which is the right answer for a public
+   * API and the wrong one here: `margin: 10px` has to reach the cascade as four
+   * longhands, because that is the only form `resolveProperty` looks up.
+   */
+  _allProperties?: () => string[]
 }
 
 interface StyleRuleLike {
@@ -201,7 +208,7 @@ export function collectCascade(
       if (spec < 0)
         continue
 
-      for (const property of rule.style) {
+      for (const property of rule.style._allProperties?.() ?? rule.style) {
         const value = rule.style.getPropertyValue(property)
         if (!value)
           continue
