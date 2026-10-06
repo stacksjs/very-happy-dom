@@ -644,31 +644,41 @@ export class VirtualElement extends VirtualNodeBase {
    * is what a browser does.
    */
   private _writeStyleProperty(property: string, value: string, priority: string, respectImportant = false): void {
+    this._writeOneStyle(property, value, priority, respectImportant, false)
+
+    const expanded = expandShorthand(property, value)
+    if (!expanded)
+      return
+
+    for (let i = 0; i < expanded.length; i++)
+      this._writeOneStyle(expanded[i][0], expanded[i][1], priority, respectImportant, true)
+  }
+
+  /**
+   * Store one resolved declaration.
+   *
+   * A method rather than a closure inside `_writeStyleProperty`, because that
+   * runs on every style write and allocated one per call.
+   */
+  private _writeOneStyle(name: string, value: string, priority: string, respectImportant: boolean, derived: boolean): void {
+    if (respectImportant && !priority && this._stylePriorities?.get(name) === 'important')
+      return
+
     const styles = this._internalStyles ?? (this._internalStyles = new Map())
+    styles.set(name, value)
 
-    const write = (name: string, newValue: string, derived: boolean): void => {
-      if (respectImportant && !priority && this._stylePriorities?.get(name) === 'important')
-        return
-
-      styles.set(name, newValue)
-
-      if (priority) {
-        const priorities = this._stylePriorities ?? (this._stylePriorities = new Map())
-        priorities.set(name, priority)
-      }
-      else {
-        this._stylePriorities?.delete(name)
-      }
-
-      if (derived)
-        (this._derivedStyles ?? (this._derivedStyles = new Set())).add(name)
-      else
-        this._derivedStyles?.delete(name)
+    if (priority) {
+      const priorities = this._stylePriorities ?? (this._stylePriorities = new Map())
+      priorities.set(name, priority)
+    }
+    else if (this._stylePriorities !== null) {
+      this._stylePriorities.delete(name)
     }
 
-    write(property, value, false)
-    for (const [longhand, longhandValue] of expandShorthand(property, value) ?? [])
-      write(longhand, longhandValue, true)
+    if (derived)
+      (this._derivedStyles ?? (this._derivedStyles = new Set())).add(name)
+    else if (this._derivedStyles !== null)
+      this._derivedStyles.delete(name)
   }
 
   /**
@@ -690,6 +700,30 @@ export class VirtualElement extends VirtualNodeBase {
         this._derivedStyles.delete(longhand)
       }
     }
+  }
+
+  /**
+   * The author's declarations as `style` attribute text.
+   *
+   * Walked in place rather than collected first: this runs on every style
+   * write, where building an array to serialize it cost more than the
+   * expansion it was supporting.
+   */
+  private _serializeDeclaredStyles(): string {
+    if (!this._internalStyles)
+      return ''
+
+    const derived = this._derivedStyles
+    let text = ''
+    for (const [prop, value] of this._internalStyles) {
+      if (derived !== null && derived.has(prop))
+        continue
+      if (text)
+        text += '; '
+      const priority = this._stylePriorities?.get(prop)
+      text += priority ? `${prop}: ${value} !${priority}` : `${prop}: ${value}`
+    }
+    return text
   }
 
   /** The declarations the author wrote, in order, with derived longhands left out. */
@@ -994,12 +1028,7 @@ export class VirtualElement extends VirtualNodeBase {
           return element._declaredStyleEntries().length
         },
         get cssText(): string {
-          return element._declaredStyleEntries()
-            .map(([prop, value]) => {
-              const priority = element._stylePriorities?.get(prop)
-              return priority ? `${prop}: ${value} !${priority}` : `${prop}: ${value}`
-            })
-            .join('; ')
+          return element._serializeDeclaredStyles()
         },
         set cssText(value: string) {
           element._internalStyles = null
@@ -1039,40 +1068,28 @@ export class VirtualElement extends VirtualNodeBase {
   }
 
   private _updateStyleAttribute(): void {
-    const declared = this._declaredStyleEntries()
-    if (declared.length === 0) {
+    const styleString = this._serializeDeclaredStyles()
+    if (!styleString) {
       if (this.attributes.has('style')) {
         this.removeAttribute('style')
       }
       return
     }
 
-    let styleString = ''
-    for (const [prop, value] of declared) {
-      if (styleString) styleString += '; '
-      const priority = this._stylePriorities?.get(prop)
-      styleString += priority ? `${prop}: ${value} !${priority}` : `${prop}: ${value}`
-    }
+    const oldValue = this.attributes.get('style') ?? null
+    this.attributes.set('style', styleString)
 
-    if (styleString) {
-      const oldValue = this.attributes.get('style') ?? null
-      this.attributes.set('style', styleString)
-
-      MutationObserver._queueMutationRecord({
-        type: 'attributes',
-        target: this,
-        addedNodes: [],
-        removedNodes: [],
-        previousSibling: null,
-        nextSibling: null,
-        attributeName: 'style',
-        attributeNamespace: null,
-        oldValue,
-      })
-    }
-    else {
-      this.removeAttribute('style')
-    }
+    MutationObserver._queueMutationRecord({
+      type: 'attributes',
+      target: this,
+      addedNodes: [],
+      removedNodes: [],
+      previousSibling: null,
+      nextSibling: null,
+      attributeName: 'style',
+      attributeNamespace: null,
+      oldValue,
+    })
   }
 
   // Dataset property for data-* attributes

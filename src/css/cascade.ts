@@ -29,7 +29,7 @@ interface StyleDeclarationLike {
    * API and the wrong one here: `margin: 10px` has to reach the cascade as four
    * longhands, because that is the only form `resolveProperty` looks up.
    */
-  _allProperties?: () => string[]
+  _allProperties?: () => IterableIterator<string>
 }
 
 interface StyleRuleLike {

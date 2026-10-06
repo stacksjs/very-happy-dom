@@ -200,8 +200,8 @@ describe('CSSStyleDeclaration', () => {
   test('the cascade still sees the longhands', () => {
     const style = new CSSStyleDeclaration()
     style.setProperty('margin', '10px')
-    expect(style._allProperties()).toContain('margin-top')
-    expect(style._allProperties()).toContain('margin')
+    expect([...style._allProperties()]).toContain('margin-top')
+    expect([...style._allProperties()]).toContain('margin')
   })
 
   test('a longhand set afterwards wins and becomes the author\'s own', () => {

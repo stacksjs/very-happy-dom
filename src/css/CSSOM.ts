@@ -107,20 +107,25 @@ export class CSSStyleDeclaration {
    * the other three to 10px.
    */
   _applyParsed(property: string, value: string, priority: string): void {
-    const write = (name: string, newValue: string, derived: boolean): void => {
-      if (!priority && this._properties.get(name)?.priority === 'important')
-        return
+    this._applyOne(property, value, priority, false)
 
-      this._properties.set(name, { value: newValue, priority })
-      if (derived)
-        this._derived.add(name)
-      else
-        this._derived.delete(name)
-    }
+    const expanded = expandShorthand(property, value)
+    if (!expanded)
+      return
 
-    write(property, value, false)
-    for (const [longhand, longhandValue] of expandShorthand(property, value) ?? [])
-      write(longhand, longhandValue, true)
+    for (let i = 0; i < expanded.length; i++)
+      this._applyOne(expanded[i][0], expanded[i][1], priority, true)
+  }
+
+  private _applyOne(name: string, value: string, priority: string, derived: boolean): void {
+    if (!priority && this._properties.get(name)?.priority === 'important')
+      return
+
+    this._properties.set(name, { value, priority })
+    if (derived)
+      this._derived.add(name)
+    else
+      this._derived.delete(name)
   }
 
   /**
@@ -131,8 +136,10 @@ export class CSSStyleDeclaration {
    * looks up — but iteration is a public API that reports what the author
    * wrote, so the two views are kept apart rather than overloading one.
    */
-  _allProperties(): string[] {
-    return Array.from(this._properties.keys())
+  _allProperties(): IterableIterator<string> {
+    // The map's own iterator, not a copy: the cascade reads this once per
+    // matching rule, so a copy here is a per-rule allocation.
+    return this._properties.keys()
   }
 
   [Symbol.iterator](): IterableIterator<string> {

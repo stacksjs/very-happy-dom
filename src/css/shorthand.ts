@@ -178,6 +178,28 @@ function borderComponents(values: string[]): { width: string, style: string, col
   }
 }
 
+/**
+ * Every name that expands, for rejecting the rest in one lookup.
+ *
+ * `expandShorthand` runs on every style write and almost none of them are
+ * shorthands, so the miss has to be cheap.
+ */
+const SHORTHAND_NAMES: ReadonlySet<string> = new Set([
+  ...Object.keys(BOX_SHORTHANDS),
+  ...Object.keys(PAIR_SHORTHANDS),
+  'border',
+  ...SIDE_BORDERS.map(side => `border-${side}`),
+])
+
+/**
+ * First letters of those names, so a property that cannot be a shorthand is
+ * rejected without normalizing a string it is about to discard. `color`,
+ * `width` and `display` never reach a second lookup.
+ */
+const SHORTHAND_INITIALS: ReadonlySet<number> = new Set(
+  Array.from(SHORTHAND_NAMES, name => name.charCodeAt(0)),
+)
+
 /** Every longhand a shorthand owns, for resetting them all to a keyword. */
 function longhandsOf(property: string): readonly string[] | null {
   if (BOX_SHORTHANDS[property])
@@ -203,7 +225,7 @@ function longhandsOf(property: string): readonly string[] | null {
 
 /** Does this property name expand into longhands? */
 export function isShorthand(property: string): boolean {
-  return longhandsOf(property.toLowerCase()) !== null
+  return SHORTHAND_NAMES.has(property) || SHORTHAND_NAMES.has(property.toLowerCase().trim())
 }
 
 /**
@@ -215,7 +237,16 @@ export function isShorthand(property: string): boolean {
  * yields a `currentcolor` border color, the way a browser reports it.
  */
 export function expandShorthand(property: string, value: string): Array<[string, string]> | null {
-  const name = property.toLowerCase().trim()
+  let name = property
+  if (!SHORTHAND_NAMES.has(name)) {
+    if (!SHORTHAND_INITIALS.has(property.charCodeAt(0) | 0x20))
+      return null
+
+    name = property.toLowerCase().trim()
+    if (!SHORTHAND_NAMES.has(name))
+      return null
+  }
+
   const longhands = longhandsOf(name)
   if (!longhands)
     return null
