@@ -14,9 +14,6 @@
  * - **Baseline alignment and auto margins in a flex container.** `baseline`
  *   falls back to `flex-start` for want of font baselines, and an `auto` margin
  *   does not absorb free space.
- * - **Margin collapsing.** Adjacent vertical margins add up here; a browser
- *   collapses them to the larger. Every vertical position below two stacked
- *   siblings with margins is therefore further down than a browser would say.
  * - **Floats.** Not implemented. A floated box stays in flow.
  * - **Text metrics.** There is no font engine, so a line count is estimated
  *   from the character count. An element whose height comes only from wrapped
@@ -31,6 +28,7 @@
 
 import { type FlexItemInput, solveFlex } from './flex'
 import { clampSize, type LengthBasis, resolveLength } from './length'
+import { isEmptyMargin, joinMargins, type Margin, marginOf, marginValue, NO_MARGIN } from './margins'
 import { resolveLayoutStyle, type StyledElement } from './style'
 import { EMPTY_INSETS, type Insets, type LayoutBox, type LayoutResult, type LayoutStyle } from './types'
 
@@ -76,6 +74,14 @@ interface Context {
   order: number
   /** Out-of-flow boxes to place once their containing block is known. */
   deferred: Array<{ node: FlowNode, style: LayoutStyle, ancestors: FlowNode[], staticX: number, staticY: number }>
+  /**
+   * What each box contributes to its parent's collapsing context.
+   *
+   * Recorded on the side rather than returned, so the one public shape of a
+   * layout result stays a box. A parent reads its child's entry right after
+   * laying it out, to decide how far down to put it.
+   */
+  margins: Map<FlowNode, { top: Margin, bottom: Margin, collapsesThrough: boolean }>
   /**
    * The last resolved style per element, for this pass.
    *
@@ -171,6 +177,29 @@ function intrinsicFlexWidth(context: Context, node: FlowNode, style: LayoutStyle
 
   const gaps = Math.max(0, count - 1) * style.flexContainer.columnGap
   return Math.min(available, horizontal ? total + gaps : widest)
+}
+
+/**
+ * Does this box establish a block formatting context?
+ *
+ * Margins do not collapse across the edges of one, which is the standard way to
+ * stop a child's margin escaping its parent: `overflow: hidden` on the parent.
+ * A flex or grid container, an inline-block and an out-of-flow box are all their
+ * own context too, and a flex item's margins never collapse with anything.
+ */
+function establishesBlockContext(style: LayoutStyle): boolean {
+  if (style.overflow !== '' && style.overflow !== 'visible')
+    return true
+  if (style.position === 'absolute' || style.position === 'fixed')
+    return true
+
+  return style.display === 'flex'
+    || style.display === 'inline-flex'
+    || style.display === 'grid'
+    || style.display === 'inline-grid'
+    || style.display === 'inline-block'
+    || style.display === 'flow-root'
+    || style.display.startsWith('table')
 }
 
 /**
@@ -388,9 +417,21 @@ function layoutBox(
     : declaredHeight === null ? null : contentHeightFrom(declaredHeight, style)
 
   // --- children ----------------------------------------------------------
+  // Whether a child's margin can cross this box's edges. A border or padding
+  // sits between them and stops it; so does a block formatting context; and at
+  // the bottom, a declared height means the box's size no longer depends on
+  // where its last child's margin ends up.
+  const blockContext = establishesBlockContext(style)
+  const isRoot = ancestors.length === 0
+  const collapseThrough = {
+    top: !blockContext && !isRoot && style.border.top === 0 && style.padding.top === 0,
+    bottom: !blockContext && !isRoot && style.border.bottom === 0 && style.padding.bottom === 0
+      && definiteContentHeight === null && resolveLength(style.minHeight, basis) === null,
+  }
+
   const contentX = x + style.border.left + style.padding.left
   const contentY = y + style.border.top + style.padding.top
-  const children = layoutChildren(context, node, contentWidth, definiteContentHeight, contentX, contentY, invisible, ancestors)
+  const children = layoutChildren(context, node, contentWidth, definiteContentHeight, contentX, contentY, invisible, ancestors, collapseThrough)
 
   let contentHeight = definiteContentHeight ?? children.height
 
@@ -445,6 +486,31 @@ function layoutBox(
 
   context.boxes.set(node as object, box)
 
+  // --- what this box contributes to its parent's collapsing ---------------
+  // Its own margins, plus whatever came up through its edges from its children.
+  let marginTop = marginOf(style.margin.top)
+  if (collapseThrough.top)
+    marginTop = joinMargins(marginTop, children.escapedTop)
+
+  let marginBottom = marginOf(style.margin.bottom)
+  if (collapseThrough.bottom)
+    marginBottom = joinMargins(marginBottom, children.escapedBottom)
+
+  // A box with nothing to separate its top margin from its bottom one collapses
+  // through: the two join, and it occupies no height at all. An empty `<div>`
+  // between two siblings is the usual case, and a browser leaves no trace of it.
+  const collapsesThrough = collapseThrough.top
+    && collapseThrough.bottom
+    && height === 0
+    && children.empty
+
+  // The two are recorded separately even when they collapse through each other.
+  // A parent needs the top one on its own to position the box — the box's top
+  // edge sits after the margins *before* it — and then folds both into the run
+  // that continues past it. Joining them here put the bottom margin into the
+  // position as well, which moved the box down by the larger of the two.
+  context.margins.set(node, { top: marginTop, bottom: marginBottom, collapsesThrough })
+
   // A relative shift moves the subtree with it, which the children were laid
   // out before knowing about.
   if (offsetX !== 0 || offsetY !== 0)
@@ -473,6 +539,15 @@ interface ChildrenResult {
   height: number
   scrollWidth: number
   scrollHeight: number
+  /**
+   * The first child's top margin, when it collapsed through the parent's top
+   * edge instead of taking space inside it. The parent adds it to its own.
+   */
+  escapedTop: Margin
+  /** The same at the bottom edge. */
+  escapedBottom: Margin
+  /** True when no in-flow content separated the two edges. */
+  empty: boolean
 }
 
 /**
@@ -490,6 +565,13 @@ function layoutChildren(
   contentY: number,
   invisible: boolean,
   ancestors: FlowNode[],
+  /**
+   * Whether a child's margin may collapse through this box's top and bottom
+   * edges. False when a border, padding, a definite height or a block
+   * formatting context sits in the way, in which case the margin takes space
+   * inside the box instead of escaping it.
+   */
+  collapseThrough: { top: boolean, bottom: boolean } = { top: false, bottom: false },
 ): ChildrenResult {
   const ownStyle = styleFor(context, node, contentWidth)
   if (ownStyle.display === 'flex' || ownStyle.display === 'inline-flex') {
@@ -499,6 +581,25 @@ function layoutChildren(
   let cursorY = contentY
   let maxRight = contentX
   let maxBottom = contentY
+
+  // The margin waiting at the cursor, not yet turned into space: it may still
+  // collapse with the next thing that comes along.
+  let pending: Margin = NO_MARGIN
+  let escapedTop: Margin = NO_MARGIN
+  let sawInFlow = false
+
+  /**
+   * Turn the waiting margin into real space.
+   *
+   * A line box, or anything that cannot collapse, ends the run of adjoining
+   * margins, so whatever has accumulated becomes a gap at that point.
+   */
+  const settlePending = (): void => {
+    if (isEmptyMargin(pending))
+      return
+    cursorY += marginValue(pending)
+    pending = NO_MARGIN
+  }
 
   // The line currently being filled: where it starts, how much it has used,
   // and how tall the tallest thing on it is.
@@ -519,6 +620,11 @@ function layoutChildren(
       const text = renderedText(child)
       if (text.trim() === '')
         continue
+
+      // A line box separates the margins on either side of it, so nothing
+      // further can collapse with what is waiting.
+      settlePending()
+      sawInFlow = true
 
       // Text takes its font from the element containing it.
       const style = styleFor(context, node, contentWidth)
@@ -573,6 +679,8 @@ function layoutChildren(
     }
 
     if (INLINE_LEVEL.has(childStyle.display)) {
+      settlePending()
+      sawInFlow = true
       const probe = layoutBox(context, child, contentWidth, contentHeight, contentX, cursorY, invisible, [node, ...ancestors])
       const outerWidth = probe.width + childStyle.margin.left + childStyle.margin.right
 
@@ -603,21 +711,73 @@ function layoutChildren(
     // Block level: ends any line in progress and takes one of its own.
     endLine()
 
-    const childY = cursorY + childStyle.margin.top
+    // Laid out at the cursor first, because how far down it really goes depends
+    // on the margin it reports once its own children are known — a margin can
+    // come up from a first descendant. Shifting afterwards is exact: nothing
+    // inside a block depends on where the block sits.
     const childX = contentX + childStyle.margin.left
-    const box = layoutBox(context, child, contentWidth, contentHeight, childX, childY, invisible, [node, ...ancestors])
+    const runStart = cursorY
+    const box = layoutBox(context, child, contentWidth, contentHeight, childX, cursorY, invisible, [node, ...ancestors])
+    const reported = context.margins.get(child)
+      ?? { top: marginOf(childStyle.margin.top), bottom: marginOf(childStyle.margin.bottom), collapsesThrough: false }
 
-    cursorY = childY + box.height + childStyle.margin.bottom
+    let childY: number
+    if (!sawInFlow && collapseThrough.top) {
+      // The first in-flow child's top margin leaves the box rather than taking
+      // space in it. The parent adds it to its own, and its own parent decides
+      // what it collapses with.
+      escapedTop = reported.top
+      childY = cursorY
+    }
+    else {
+      childY = cursorY + marginValue(joinMargins(pending, reported.top))
+    }
+
+    // Shifted relative to where it was laid out, not to where its box ended up:
+    // a `position: relative` offset has already moved the box away from its flow
+    // position, and measuring against that would cancel the offset out.
+    const shift = childY - cursorY
+    if (shift !== 0) {
+      box.y += shift
+      shiftSubtree(context, child, 0, shift)
+    }
+
+    if (reported.collapsesThrough) {
+      // Nothing separates this box's own margins, so both join the run that
+      // carries on past it and it takes up no height at all. The run is measured
+      // from where it started, not from where the box was placed.
+      pending = joinMargins(pending, joinMargins(reported.top, reported.bottom))
+      cursorY = runStart
+    }
+    else {
+      pending = reported.bottom
+      // From the flow position: a relative offset moves the box without moving
+      // anything after it.
+      cursorY = childY + box.height
+    }
+
+    sawInFlow = true
     maxRight = Math.max(maxRight, box.x + box.width)
     maxBottom = Math.max(maxBottom, box.y + box.height)
   }
 
   endLine()
 
+  // What is left waiting either leaves through the bottom edge or becomes the
+  // last of the box's own height.
+  let escapedBottom: Margin = NO_MARGIN
+  if (collapseThrough.bottom && !isEmptyMargin(pending))
+    escapedBottom = pending
+  else
+    settlePending()
+
   return {
     height: Math.max(0, Math.max(cursorY, maxBottom) - contentY),
     scrollWidth: Math.max(0, maxRight - contentX),
     scrollHeight: Math.max(0, maxBottom - contentY),
+    escapedTop,
+    escapedBottom,
+    empty: !sawInFlow,
   }
 }
 
@@ -682,7 +842,7 @@ function layoutFlexChildren(
   }
 
   if (children.length === 0)
-    return { height: 0, scrollWidth: 0, scrollHeight: 0 }
+    return { height: 0, scrollWidth: 0, scrollHeight: 0, escapedTop: NO_MARGIN, escapedBottom: NO_MARGIN, empty: true }
 
   // `order` reorders the items without touching the DOM. Sorted stably, so
   // items sharing an order keep document order between them.
@@ -848,10 +1008,15 @@ function layoutFlexChildren(
 
   const height = horizontal ? solved.contentCross : solved.contentMain
 
+  // A flex item's margins never collapse — with each other, with the
+  // container's, or with anything outside it — so nothing escapes here.
   return {
     height: Math.max(0, height),
     scrollWidth: Math.max(0, maxRight - contentX),
     scrollHeight: Math.max(0, maxBottom - contentY),
+    escapedTop: NO_MARGIN,
+    escapedBottom: NO_MARGIN,
+    empty: false,
   }
 }
 
@@ -1027,6 +1192,7 @@ export function layoutTree(
     order: 0,
     deferred: [],
     styles: new Map(),
+    margins: new Map(),
   }
 
   if (isElement(root))

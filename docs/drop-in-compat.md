@@ -342,6 +342,11 @@ input.blur()    // fires blur + bubbling focusout
   block, `position: relative`, and `absolute`/`fixed` taken out of flow against the nearest positioned
   ancestor. Lengths in `px`, `%`, `vh`/`vw`/`vmin`/`vmax`, `rem` and the absolute units.
 
+  **Margin collapsing** is implemented: adjoining vertical margins collapse to the largest positive plus the
+  most negative, a first or last child's margin escapes a parent that has nothing in the way, a box with
+  nothing in it collapses through entirely, and a border, padding, a definite height, `overflow` other than
+  `visible`, a line box or a flex container each stop it.
+
   **Flexbox** is implemented: `flex-direction` including both reverses, `flex-wrap` including
   `wrap-reverse`, `justify-content`, `align-items`, `align-content`, `align-self`, `flex-grow`,
   `flex-shrink`, `flex-basis`, the `flex` and `flex-flow` shorthands, `gap`/`row-gap`/`column-gap`, and
@@ -354,7 +359,6 @@ input.blur()    // fires blur + bubbling focusout
   | --- | --- |
   | **Grid** | A grid container lays its children out as blocks, so they stack instead of being placed in cells. |
   | **Flex `baseline` and `auto` margins** | `align-items: baseline` falls back to `flex-start`, for want of font baselines. An `auto` margin does not absorb free space, so `margin-left: auto` will not push an item to the end — use `justify-content` or a `flex: 1` spacer. |
-  | **Margin collapsing** | Adjacent vertical margins add up; a browser collapses them to the larger. Anything below two stacked siblings with margins sits further down than a browser would say. |
   | **Text metrics** | No font engine, so a line count is estimated from the character count at `font-size x 0.5` per glyph. A height that comes only from wrapped text is approximate. |
   | **User-agent stylesheet** | An element has only the margins and padding the page declares. `body` starts at `(0, 0)`, not a browser's 8px inset, and a `<p>` has no margins of its own. |
   | **Floats** | Not implemented; a floated box stays in flow. |

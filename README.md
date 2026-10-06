@@ -290,9 +290,14 @@ ancestor are all modelled, as are lengths in `px`, `%`, `vh`/`vw`/`vmin`/`vmax`,
 and `order`. Growing and shrinking respect `min-*` and `max-*`, including the
 automatic minimum that keeps an item from shrinking below its content.
 
-What is not: **grid containers lay their children out as blocks**. Vertical
-margins do not collapse. In a flex container, `align-items: baseline` falls back
-to `flex-start` and an `auto` margin does not absorb free space. There is no font
+Adjoining vertical **margins collapse**, including a first or last child's
+escaping its parent and an empty box collapsing through entirely; a border,
+padding, a definite height, `overflow` other than `visible`, a line box or a flex
+container each stop it.
+
+What is not: **grid containers lay their children out as blocks**. In a flex
+container, `align-items: baseline` falls back to `flex-start` and an `auto`
+margin does not absorb free space. There is no font
 engine, so a height measured from wrapped text is estimated. There is no
 user-agent stylesheet, so `body` starts at `(0, 0)` rather than a browser's 8px
 inset. Floats, `transform`, `z-index` ordering and intrinsic image sizes are

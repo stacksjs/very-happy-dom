@@ -78,14 +78,12 @@ describe('block flow', () => {
     expect(box('b').y).toBe(40)
   })
 
-  test('vertical margins do not collapse, which a browser does', () => {
+  test('adjoining vertical margins collapse to the larger', () => {
     const box = render('<div style="margin-bottom: 30px; height: 10px"></div>'
       + '<div id="b" style="margin-top: 20px; height: 10px"></div>')
 
-    // A browser collapses these to the larger of the two and reports y = 40.
-    // Not implemented, so they add up. Asserted so the gap is visible rather
-    // than surprising.
-    expect(box('b').y).toBe(60)
+    // They used to add up to 60. test/layout-margins.test.ts covers the rest.
+    expect(box('b').y).toBe(40)
   })
 
   test('a declared height wins over the content\'s', () => {
