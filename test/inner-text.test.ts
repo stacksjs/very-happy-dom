@@ -202,32 +202,108 @@ describe('the walk stays linear', () => {
     // is quadratic. A 2000-element table took 6.3ms where the chunk form takes
     // 0.4ms. A ratio rather than a wall-clock budget, because the shape is what
     // matters and absolute numbers depend on the machine.
-    const render = async (rows: number): Promise<number> => {
-      const markup = Array.from({ length: rows }, (_, i) =>
+    const rows = (count: number, id: string): string => {
+      const markup = Array.from({ length: count }, (_, i) =>
         `<tr><td>Trail ${i}</td><td><span>  ${i} km  </span></td></tr>`).join('')
-      await page.setContent(`<table id="t"><tbody>${markup}</tbody></table>`)
-      const element = document.querySelector('#t')
-
-      for (let i = 0; i < 5; i++)
-        void element.innerText
-
-      // The minimum of several samples, not one. A single reading is dominated by
-      // whatever else the machine is doing — this failed once in a full-suite run
-      // and passed every time in isolation, which is a flaky test rather than a
-      // slow implementation. The fastest sample is the one least polluted by load.
-      let best = Number.POSITIVE_INFINITY
-      for (let i = 0; i < 7; i++) {
-        const started = Bun.nanoseconds()
-        void element.innerText
-        best = Math.min(best, Bun.nanoseconds() - started)
-      }
-      return best
+      return `<table id="${id}"><tbody>${markup}</tbody></table>`
     }
 
-    const small = await render(200)
-    const large = await render(800)
+    // Both sizes in one document, so the two can be measured alternately.
+    await page.setContent(rows(200, 'small') + rows(800, 'large'))
+    const small = document.querySelector('#small')
+    const large = document.querySelector('#large')
 
-    // Four times the rows. Linear is about 4x; quadratic would be about 16x.
-    expect(large / small).toBeLessThan(8)
+    const ratio = growthRatio(() => void small.innerText, () => void large.innerText)
+
+    // Four times the rows. Linear is about 4x; quadratic would be about 16x, so
+    // the threshold sits between the two. `measures the shape and not the
+    // machine` below is what shows 8 is low enough to catch quadratic.
+    expect(ratio, `ratio was ${ratio.toFixed(2)}`).toBeLessThan(8)
+  })
+
+  test('the measurement measures the shape and not the machine', () => {
+    // Calibration, so the test above cannot quietly stop meaning anything. The
+    // same harness is pointed at two functions whose shape is known: it has to
+    // clear the linear one and catch the quadratic one. If `growthRatio` were
+    // ever loosened enough to stop detecting quadratic growth, this fails.
+    const linear = (count: number): void => {
+      const chunks: string[] = []
+      for (let i = 0; i < count; i++)
+        chunks.push(`Trail ${i}  `)
+      void chunks.join('\n').trim()
+    }
+
+    // The shape of the original bug: normalising the whole accumulated string
+    // once per row. The regex is global and scans forward, so every row pays
+    // for every row before it.
+    //
+    // An end-anchored `/\s+$/` was tried here first and is not quadratic — it
+    // scans backwards from the end, so it costs the same whatever has piled up
+    // in front of it. It measured between 6.7 and 9.4, straddling the
+    // threshold, which would have made this calibration flakier than the test
+    // it is meant to protect.
+    const quadratic = (count: number): void => {
+      let text = ''
+      for (let i = 0; i < count; i++) {
+        text += `Trail ${i}  \n`
+        text = text.replace(/[ \t]+\n/g, '\n')
+      }
+      void text
+    }
+
+    const linearRatio = growthRatio(() => linear(200), () => linear(800))
+    const quadraticRatio = growthRatio(() => quadratic(200), () => quadratic(800))
+
+    expect(linearRatio, `linear ratio was ${linearRatio.toFixed(2)}`).toBeLessThan(8)
+    expect(quadraticRatio, `quadratic ratio was ${quadraticRatio.toFixed(2)}`).toBeGreaterThan(8)
   })
 })
+
+/**
+ * How much slower an operation gets when its input grows four times.
+ *
+ * About 4 for a linear operation and about 16 for a quadratic one. Timing in a
+ * test is the obvious way to write this and the obvious way to get a flaky
+ * test, so two things are done about it:
+ *
+ * The two sizes are sampled **alternately** rather than one size and then the
+ * other. Sampling in phases means a garbage collection or a busy moment during
+ * the second phase inflates one arm of the ratio and nothing cancels it — which
+ * is how the earlier version of this failed occasionally in a full-suite run
+ * while passing every time on its own. Alternating puts any such interruption
+ * on both arms.
+ *
+ * And the ratio is the **best of several rounds**, each round being a minimum
+ * per size. Both are the right estimator for an asymptotic property: the
+ * fastest sample is the one least polluted by whatever else is running, and a
+ * single bad round cannot decide the result.
+ */
+function growthRatio(small: () => void, large: () => void, rounds = 3, samples = 7): number {
+  // Warm up both, so neither pays for a first-call compile inside a sample.
+  for (let i = 0; i < 5; i++) {
+    small()
+    large()
+  }
+
+  let best = Number.POSITIVE_INFINITY
+
+  for (let round = 0; round < rounds; round++) {
+    let bestSmall = Number.POSITIVE_INFINITY
+    let bestLarge = Number.POSITIVE_INFINITY
+
+    for (let i = 0; i < samples; i++) {
+      let started = Bun.nanoseconds()
+      small()
+      bestSmall = Math.min(bestSmall, Bun.nanoseconds() - started)
+
+      started = Bun.nanoseconds()
+      large()
+      bestLarge = Math.min(bestLarge, Bun.nanoseconds() - started)
+    }
+
+    if (bestSmall > 0)
+      best = Math.min(best, bestLarge / bestSmall)
+  }
+
+  return best
+}
