@@ -40,6 +40,20 @@ import {
 import { appendNode, getNodeTextContent, insertNodeBefore, nodeContains, removeIdFromIndex as removeIdFromIndexExported, removeNode, replaceNode, setOwnerDocumentRecursive } from './tree-operations'
 import { VirtualTextNode } from './VirtualTextNode'
 
+/** The four sides of a box's padding or border, in pixels. */
+interface Insets {
+  top: number
+  right: number
+  bottom: number
+  left: number
+}
+
+/**
+ * The pixel widths browsers give the `border-width` keywords. `medium` is also
+ * the initial value, so it stands in for a width that will not parse.
+ */
+const BORDER_WIDTH_KEYWORDS: Record<string, number> = { thin: 1, medium: 3, thick: 5 }
+
 export class VirtualElement extends VirtualNodeBase {
   nodeType: NodeType = ELEMENT_NODE
   nodeKind: NodeKind = 'element'
@@ -2379,9 +2393,23 @@ export class VirtualElement extends VirtualNodeBase {
     return animation
   }
 
-  // Client rects
+  /**
+   * The boxes this element generates.
+   *
+   * Without a layout pass there is no line splitting, so a rendered element has
+   * the one box `getBoundingClientRect()` reports, and an element that
+   * generates none has an empty list — which is the distinction a caller
+   * checking `length` is usually after.
+   *
+   * This is where being outside a document counts, unlike the measurements
+   * above: an element that was never appended is the case a caller uses this
+   * list to detect, and it was already answered with `[]` before any of them
+   * returned a rect at all.
+   */
   getClientRects(): DOMRect[] {
-    return []
+    if (!this.isConnected || this._isDisplayNone())
+      return []
+    return [this.getBoundingClientRect()]
   }
 
   private _validateInsertAdjacentPosition(position: string): string {
@@ -2615,29 +2643,37 @@ export class VirtualElement extends VirtualNodeBase {
     }
   }
 
-  // Layout properties (virtual DOM returns 0 as no layout engine)
+  // Layout properties. There is no layout pass, so position stays at the
+  // origin — but the box a declared size implies is real, and the four
+  // measurements below are each a different part of it.
   get clientLeft(): number {
-    return 0
+    return this._box().border.left
   }
 
   get clientTop(): number {
-    return 0
+    return this._box().border.top
   }
 
+  /** The padding box: content plus padding, inside the border. */
   get clientWidth(): number {
-    return this._resolveInlineSize('width')
+    const box = this._box()
+    return box.content.width + box.padding.left + box.padding.right
   }
 
   get clientHeight(): number {
-    return this._resolveInlineSize('height')
+    const box = this._box()
+    return box.content.height + box.padding.top + box.padding.bottom
   }
 
+  /** The border box: content, padding and border together. */
   get offsetWidth(): number {
-    return this._resolveInlineSize('width')
+    const box = this._box()
+    return box.content.width + box.padding.left + box.padding.right + box.border.left + box.border.right
   }
 
   get offsetHeight(): number {
-    return this._resolveInlineSize('height')
+    const box = this._box()
+    return box.content.height + box.padding.top + box.padding.bottom + box.border.top + box.border.bottom
   }
 
   get offsetTop(): number {
@@ -2646,6 +2682,157 @@ export class VirtualElement extends VirtualNodeBase {
 
   get offsetLeft(): number {
     return 0
+  }
+
+  /**
+   * The element's box, split into the parts each layout property reports.
+   *
+   * `offsetWidth` is a border-box measurement and `clientWidth` a padding-box
+   * one, so both need the padding and border separately from the content —
+   * they used to return the content width and the element's own padding went
+   * unreported. `box-sizing` decides which way the declared `width` is read.
+   *
+   * An element in a `display: none` subtree generates no box, so every part is
+   * zero however it was sized.
+   *
+   * Being detached is not treated the same way. A browser gives an element
+   * outside a document no box at all, but a declared size is reported here
+   * whether or not the element was ever appended — tests measure elements they
+   * never attach, and that contract predates this.
+   */
+  private _box(): { content: { width: number, height: number }, padding: Insets, border: Insets } {
+    const empty = { width: 0, height: 0 }
+    const zero: Insets = { top: 0, right: 0, bottom: 0, left: 0 }
+
+    const cascade = this._buildCascade()
+
+    if (this._isDisplayNone(cascade))
+      return { content: empty, padding: zero, border: zero }
+
+    const padding = this._insets('padding', cascade)
+    const border = this._borderInsets(cascade)
+
+    // `content-box` is the initial value, so anything other than an explicit
+    // `border-box` is read as a content size.
+    const borderBox = this._cascadedStyleValue('box-sizing', cascade).trim() === 'border-box'
+
+    const resolve = (dimension: 'width' | 'height'): number => {
+      const declared = this._resolveInlineSize(dimension, cascade)
+      if (!borderBox)
+        return declared
+
+      const surrounds = dimension === 'width'
+        ? padding.left + padding.right + border.left + border.right
+        : padding.top + padding.bottom + border.top + border.bottom
+
+      return Math.max(0, declared - surrounds)
+    }
+
+    return { content: { width: resolve('width'), height: resolve('height') }, padding, border }
+  }
+
+  /**
+   * Is this element, or anything it sits inside, `display: none`?
+   *
+   * Only `display` is consulted. `visibility: hidden` and `opacity: 0` still
+   * occupy their space, so their boxes are real and their measurements are not
+   * zero.
+   *
+   * The walk is the expensive part of a box read, because resolving a property
+   * through the cascade means matching every rule against that element — once
+   * per ancestor. So the sheets are asked first whether any rule declares
+   * `display` at all, which costs one map lookup per rule and no selector
+   * matching. When none does, and that is the common case, only the inline
+   * styles can hide anything and the walk is a map lookup per ancestor.
+   */
+  private _isDisplayNone(ownCascade?: ReturnType<typeof collectCascade> | null): boolean {
+    if (this._cascadedStyleValue('display', ownCascade).trim() === 'none')
+      return true
+
+    const parent = this.parentElement
+    if (!parent)
+      return false
+
+    const fromSheets = this._sheetsDeclareDisplay()
+
+    // eslint-disable-next-line ts/no-this-alias
+    let current: VirtualElement | null = parent
+    while (current) {
+      const inline = current._internalStyles?.get('display')
+      if (inline !== undefined && inline.trim() === 'none')
+        return true
+
+      if (fromSheets && current._cascadedStyleValue('display').trim() === 'none')
+        return true
+
+      current = current.parentElement
+    }
+
+    return false
+  }
+
+  /** Does any rule in the document declare `display`? */
+  private _sheetsDeclareDisplay(): boolean {
+    const document = this.ownerDocument as any
+    if (!document)
+      return false
+
+    const sheets = [...(document.styleSheets ?? []), ...(document._adoptedStyleSheets ?? [])]
+
+    const declaresDisplay = (rules: ArrayLike<any>): boolean => {
+      for (let i = 0; i < rules.length; i++) {
+        const rule = rules[i]
+        if (rule?.cssRules && declaresDisplay(rule.cssRules))
+          return true
+        if (rule?.style?.getPropertyValue('display'))
+          return true
+      }
+      return false
+    }
+
+    for (const sheet of sheets) {
+      if (sheet?.cssRules && declaresDisplay(sheet.cssRules))
+        return true
+    }
+
+    return false
+  }
+
+  /** The four sides of `margin` or `padding`, resolved through the cascade. */
+  private _insets(property: 'margin' | 'padding', cascade?: ReturnType<typeof collectCascade> | null): Insets {
+    const side = (name: 'top' | 'right' | 'bottom' | 'left'): number => {
+      const dimension = name === 'top' || name === 'bottom' ? 'height' : 'width'
+      const value = this._cascadedStyleValue(`${property}-${name}`, cascade)
+      return Math.max(0, this._parseCssSize(value, dimension) ?? 0)
+    }
+
+    return { top: side('top'), right: side('right'), bottom: side('bottom'), left: side('left') }
+  }
+
+  /**
+   * The four border widths, as used rather than as declared.
+   *
+   * `border-style: none` or `hidden` forces the used width to zero whatever
+   * `border-width` says, and the width keywords resolve to the pixel values
+   * browsers use for them.
+   */
+  private _borderInsets(cascade?: ReturnType<typeof collectCascade> | null): Insets {
+    const side = (name: 'top' | 'right' | 'bottom' | 'left'): number => {
+      const style = this._cascadedStyleValue(`border-${name}-style`, cascade).trim().toLowerCase()
+      if (style === '' || style === 'none' || style === 'hidden')
+        return 0
+
+      const declared = this._cascadedStyleValue(`border-${name}-width`, cascade).trim().toLowerCase()
+      const keyword = BORDER_WIDTH_KEYWORDS[declared]
+      if (keyword !== undefined)
+        return keyword
+
+      const dimension = name === 'top' || name === 'bottom' ? 'height' : 'width'
+      // An unparseable width with a real style is `medium`, the initial value.
+      return Math.max(0, this._parseCssSize(declared, dimension) ?? BORDER_WIDTH_KEYWORDS.medium)
+    }
+
+    return { top: side('top'), right: side('right'), bottom: side('bottom'), left: side('left') }
   }
 
   /**
@@ -2787,13 +2974,10 @@ export class VirtualElement extends VirtualNodeBase {
   }
 
   getBoundingClientRect(): DOMRect {
-    // Align the rect's width/height with the inline layout. Position stays
+    // A border-box measurement, like `offsetWidth` — the rect a browser hands
+    // back covers the padding and border, not just the content. Position stays
     // at (0, 0) since we don't run an actual layout pass.
-    // One match pass for both dimensions rather than one each.
-    const cascade = this._buildCascade()
-    const width = this._resolveInlineSize('width', cascade)
-    const height = this._resolveInlineSize('height', cascade)
-    return new DOMRect(0, 0, width, height)
+    return new DOMRect(0, 0, this.offsetWidth, this.offsetHeight)
   }
 
   // Pointer capture API — no-op book-keeping so libraries that capture

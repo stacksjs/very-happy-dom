@@ -332,7 +332,12 @@ input.blur()    // fires blur + bubbling focusout
 
 - **`document.parentWindow`** is an alias for `defaultView` (same identity).
 - **Timers:** `waitUntilComplete()` drains timers; it does not wait for arbitrary pending promises from fetch body consumption.
-- **Layout:** `getBoundingClientRect()` returns the element's inline-style-derived size at position (0, 0) — there is no real layout engine.
+- **Layout:** sizes are real, positions are not. `getBoundingClientRect()`, `offsetWidth`/`offsetHeight`,
+  `clientWidth`/`clientHeight` and `clientTop`/`clientLeft` each report their own part of the box, resolved
+  through the cascade and honouring `box-sizing`, and `display: none` reports no box. But `x` and `y` are
+  always `0`, and nothing is laid out: a size has to be declared somewhere to be reported, a block does not
+  fill its container, and no element is positioned relative to another. Anything about overlap, ordering or
+  above-the-fold is unavailable.
 
 ---
 
@@ -373,9 +378,13 @@ Use this when deciding if a given test suite will migrate cleanly:
 
       `window.**proto**` from untrusted content)? — Out of scope.
 
-- [ ] Does it rely on pixel-accurate layout measurement (`getBoundingClientRect`
+- [ ] Does it measure a declared size (`offsetWidth`, `clientHeight`,
 
-      returning measured geometry)? — Best-effort only.
+      `getBoundingClientRect().width`)? — Supported, including padding, border and `box-sizing`.
+
+- [ ] Does it depend on where an element is (`x`/`y`, `offsetTop`, overlap,
+
+      hit testing, is-it-above-the-fold)? — Not computed; every position is the origin.
 
 - [ ] Does it depend on node source locations? — Not tracked.
 - [ ] Does it depend on Service Workers / Web Workers? — Not implemented.
