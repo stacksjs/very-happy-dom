@@ -167,22 +167,24 @@ is how a failing role query becomes diagnosable. `toHaveCSS` compares values **a
 the engine reports them**, so `'red'` will not match a computed `'rgb(255, 0, 0)'`
 — use a RegExp. `toHaveJSProperty` takes a path, so `validity.valueMissing` works.
 
-`toBeInViewport` is deliberately absent: with no layout pass a bounding box has no
-position, so it could only ever answer "yes".
+`toBeInViewport` takes an optional `ratio`, and can answer "no" — the layout pass
+gives a box a real position, which is what it was waiting on.
 
 An element is hidden by `display: none`, `visibility: hidden`, the `hidden`
 attribute, or a **declared** zero size — `height: 0`, `max-height: 0` and the
 like, which is how a closed accordion or drawer is built when the author wants a
-transition. Declared is the operative word: with no layout pass an element nobody
-sized also measures `0 x 0`, so a zero box means *unknown* rather than
-*collapsed*, and only a declaration is trusted. That is narrower than
-Playwright's non-empty-bounding-box rule, deliberately.
+transition. Declared is the operative word: an empty box can also mean the layout
+pass had nothing to give the element a size, and a text-driven height is an
+estimate, so a zero box means *unknown* rather than *collapsed* and only a
+declaration is trusted. That is narrower than Playwright's
+non-empty-bounding-box rule, deliberately.
 
 Locator actions auto-wait on the same terms — present, rendered and not
 disabled — and `locator.waitFor({ state })` covers `attached`, `detached`,
 `visible` and `hidden`. Two conditions Playwright checks are not checked here:
-stable (not mid-animation) and receives-events (not covered by another element).
-Both need a layout pass.
+stable (not mid-animation), which needs an animation clock, and receives-events
+(not covered by another element), which the layout pass now has the geometry for
+but which nothing asserts yet.
 
 ### Rendered Text
 
@@ -270,12 +272,28 @@ query false, as an unrecognised feature does in a browser.
 const box = await page.locator('.card').boundingBox()   // { x, y, width, height } | null
 ```
 
-Width and height are real — the rect resolves through the cascade, so a size from
-a stylesheet is reported. **`x` and `y` are always `0`**: there is no layout pass,
-so position is not computed, and overlap, ordering and is-this-above-the-fold
-cannot be asked here. `null` is returned for an element that is not rendered.
-`scrollIntoViewIfNeeded()` resolves and fires a `scroll` event, which is as much
-as is meaningful without layout.
+All four are real. The rect resolves through the cascade, so a size from a
+stylesheet is reported, and there is a layout pass, so `x` and `y` are where the
+box actually sits — overlap, ordering, hit testing and is-this-above-the-fold can
+all be asked. `null` is returned for an element that is not rendered.
+
+Block-level boxes stack down their containing block and fill its width unless
+they declare one; inline and inline-block boxes flow along a line, shrink to fit
+and wrap. `box-sizing`, margins, padding, borders, min/max sizes, percentages,
+`position: relative`, and `absolute`/`fixed` against the nearest positioned
+ancestor are all modelled, as are lengths in `px`, `%`, `vh`/`vw`/`vmin`/`vmax`,
+`rem` and the absolute units.
+
+What is not: **flex and grid containers lay their children out as blocks**, so
+they stack rather than sitting in a row — the biggest difference from a browser,
+and most app markup is flex. Vertical margins do not collapse. There is no font
+engine, so a height measured from wrapped text is estimated. There is no
+user-agent stylesheet, so `body` starts at `(0, 0)` rather than a browser's 8px
+inset. Floats, `transform`, `z-index` ordering and intrinsic image sizes are
+absent. [The compatibility guide][compat-guide] has the full table.
+
+`scrollIntoViewIfNeeded()` resolves and fires a `scroll` event; nothing scrolls on
+its own and no overflow is clipped, so there is no position to scroll to.
 
 ### Setting Page Content
 
@@ -785,6 +803,7 @@ The MIT License (MIT). Please see [LICENSE][license-href] for more information.
 Made with 💙
 
 <!-- Badges -->
+[compat-guide]: ./docs/drop-in-compat.md
 [npm-version-src]: https://img.shields.io/npm/v/very-happy-dom?style=flat-square
 [npm-version-href]: https://npmjs.com/package/very-happy-dom
 [github-actions-src]: https://img.shields.io/github/actions/workflow/status/stacksjs/very-happy-dom/ci.yml?style=flat-square&branch=main

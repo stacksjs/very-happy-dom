@@ -332,12 +332,33 @@ input.blur()    // fires blur + bubbling focusout
 
 - **`document.parentWindow`** is an alias for `defaultView` (same identity).
 - **Timers:** `waitUntilComplete()` drains timers; it does not wait for arbitrary pending promises from fetch body consumption.
-- **Layout:** sizes are real, positions are not. `getBoundingClientRect()`, `offsetWidth`/`offsetHeight`,
-  `clientWidth`/`clientHeight` and `clientTop`/`clientLeft` each report their own part of the box, resolved
-  through the cascade and honouring `box-sizing`, and `display: none` reports no box. But `x` and `y` are
-  always `0`, and nothing is laid out: a size has to be declared somewhere to be reported, a block does not
-  fill its container, and no element is positioned relative to another. Anything about overlap, ordering or
-  above-the-fold is unavailable.
+- **Layout:** there is a layout pass. Block-level boxes stack down their containing block and fill its
+  width unless they declare one; inline and inline-block boxes flow along a line, shrink to fit, and wrap.
+  `getBoundingClientRect()` reports a real viewport-relative position, and so do `offsetTop`/`offsetLeft`,
+  `offsetParent`, `scrollWidth`/`scrollHeight`, `getClientRects()`, `elementFromPoint()` and
+  `IntersectionObserver`. Overlap, ordering, hit testing and is-this-above-the-fold are all answerable.
+
+  Modelled: `box-sizing`, margins, padding, borders, min/max sizes, percentages against the containing
+  block, `position: relative`, and `absolute`/`fixed` taken out of flow against the nearest positioned
+  ancestor. Lengths in `px`, `%`, `vh`/`vw`/`vmin`/`vmax`, `rem` and the absolute units.
+
+  **Not** modelled, and these are the differences from a browser worth knowing before you assert a number:
+
+  | | |
+  | --- | --- |
+  | **Flex and grid** | A flex or grid container lays its children out as blocks, so they stack instead of sitting in a row. The biggest gap, and most app markup is flex. |
+  | **Margin collapsing** | Adjacent vertical margins add up; a browser collapses them to the larger. Anything below two stacked siblings with margins sits further down than a browser would say. |
+  | **Text metrics** | No font engine, so a line count is estimated from the character count at `font-size x 0.5` per glyph. A height that comes only from wrapped text is approximate. |
+  | **User-agent stylesheet** | An element has only the margins and padding the page declares. `body` starts at `(0, 0)`, not a browser's 8px inset, and a `<p>` has no margins of its own. |
+  | **Floats** | Not implemented; a floated box stays in flow. |
+  | **`transform`** | Does not move or resize a box. |
+  | **Intrinsic sizes** | Nothing is decoded or measured, so an `<img>` with no declared size has no size. |
+  | **`em`** | Needs the inherited `font-size` chain; falls back to automatic sizing rather than guessing. |
+  | **`z-index`** | Hit testing uses document paint order, so a page that reorders its layers with `z-index` is tested as though it had not. |
+  | **Tables** | Laid out as blocks, with no table algorithm. |
+
+  An element outside a document reports its declared size at the origin: it takes part in no flow, so there
+  is no position to report, but the size is still useful to a test that never appends it.
 
 ---
 
@@ -384,7 +405,11 @@ Use this when deciding if a given test suite will migrate cleanly:
 
 - [ ] Does it depend on where an element is (`x`/`y`, `offsetTop`, overlap,
 
-      hit testing, is-it-above-the-fold)? — Not computed; every position is the origin.
+      hit testing, is-it-above-the-fold)? — Supported for normal flow.
+
+- [ ] Does it rely on flexbox or grid placement, collapsed margins, or a height
+
+      measured from wrapped text? — See the layout note above; these are approximated.
 
 - [ ] Does it depend on node source locations? — Not tracked.
 - [ ] Does it depend on Service Workers / Web Workers? — Not implemented.
