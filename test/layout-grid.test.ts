@@ -374,21 +374,51 @@ describe('the pieces on their own', () => {
   })
 })
 
-describe('what grid does not model', () => {
-  test('dense packing does not go back to fill a hole', () => {
-    // `grid-auto-flow: row dense` would put the 1x1 item back in the gap the
-    // wide one left. Auto-placement here only moves forward.
+describe('dense packing', () => {
+  // Sparse placement, the default, carries one cursor forward and never looks
+  // behind it, so a hole a wide item left stays empty. `dense` starts each
+  // item's search at the beginning instead. Both were sparse before.
+  test('a later item goes back into an earlier hole', () => {
     const box = grid('grid-template-columns:repeat(3,1fr);grid-auto-flow:row dense',
       '<div id="a" style="grid-column:span 2;height:10px"></div>'
       + '<div id="b" style="grid-column:span 2;height:10px"></div>'
       + '<div id="c" style="height:10px"></div>')
 
     expect(box('b').y).toBe(10)
-    // Chrome puts this at y=0 with `dense`, back in the hole beside `a`, and at
-    // y=10 without it. Sparse placement is what happens here either way, and it
-    // matches Chrome's sparse result exactly.
+    expect(box('c')).toEqual({ x: 267, y: 0, width: 133, height: 10 })
+  })
+
+  test('it finds a hole several rows back', () => {
+    const box = grid('grid-template-columns:repeat(4,1fr);grid-auto-flow:row dense',
+      '<div id="a" style="grid-column:span 3;height:10px"></div>'
+      + '<div id="b" style="grid-column:span 4;height:10px"></div>'
+      + '<div id="c" style="height:10px"></div>')
+
+    expect(box('b').y).toBe(10)
+    expect(box('c')).toEqual({ x: 300, y: 0, width: 100, height: 10 })
+  })
+
+  test('sparse placement, the default, leaves the hole alone', () => {
+    const box = grid('grid-template-columns:repeat(3,1fr)',
+      '<div id="a" style="grid-column:span 2;height:10px"></div>'
+      + '<div id="b" style="grid-column:span 2;height:10px"></div>'
+      + '<div id="c" style="height:10px"></div>')
+
     expect(box('c')).toEqual({ x: 267, y: 10, width: 133, height: 10 })
   })
+
+  test('dense works down a column too', () => {
+    const box = grid('grid-template-rows:repeat(3,20px);grid-auto-flow:column dense',
+      '<div id="a" style="grid-row:span 2"></div>'
+      + '<div id="b" style="grid-row:span 2"></div>'
+      + '<div id="c"></div>')
+
+    expect(box('b').x).toBe(200)
+    expect(box('c')).toEqual({ x: 0, y: 40, width: 200, height: 20 })
+  })
+})
+
+describe('what grid does not model', () => {
 
   test('an inline-level box sits at the top of its line, not on the baseline', () => {
     // Chrome puts all of inline-block, inline-flex and inline-grid 5px lower

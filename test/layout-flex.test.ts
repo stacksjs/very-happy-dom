@@ -462,6 +462,66 @@ describe('nesting', () => {
   })
 })
 
+describe('auto margins', () => {
+  // These used to do nothing: an `auto` margin resolved to zero like anything
+  // unresolved, so the common `margin-left: auto` push did not push.
+  test('margin-left: auto pushes an item to the end', () => {
+    const box = render('<div style="display:flex;width:400px">'
+      + '<div id="a" style="width:50px;height:10px"></div>'
+      + '<div id="b" style="margin-left:auto;width:50px;height:10px"></div></div>')
+
+    expect(box('a').x).toBe(0)
+    expect(box('b').x).toBe(350)
+  })
+
+  test('an auto margin on both sides centres the item', () => {
+    const box = render('<div style="display:flex;width:400px">'
+      + '<div id="a" style="margin:0 auto;width:50px;height:10px"></div></div>')
+
+    expect(box('a').x).toBe(175)
+  })
+
+  test('it takes the free space before justify-content can', () => {
+    const box = render('<div style="display:flex;width:400px;justify-content:center">'
+      + '<div id="a" style="width:50px;height:10px"></div>'
+      + '<div id="b" style="margin-left:auto;width:50px;height:10px"></div></div>')
+
+    // Centring would put these at 150 and 200; the auto margin wins.
+    expect(box('a').x).toBe(0)
+    expect(box('b').x).toBe(350)
+  })
+
+  test('two auto margins share the space equally', () => {
+    const box = render('<div style="display:flex;width:400px">'
+      + '<div id="a" style="width:50px;height:10px"></div>'
+      + '<div id="b" style="margin-left:auto;margin-right:auto;width:50px;height:10px"></div></div>')
+
+    expect(box('b').x).toBe(200)
+  })
+
+  test('a cross-axis auto margin centres the item', () => {
+    const box = render('<div style="display:flex;height:100px">'
+      + '<div id="a" style="margin:auto 0;width:50px;height:20px"></div></div>')
+
+    expect(box('a').y).toBe(40)
+  })
+
+  test('with no free space it does nothing', () => {
+    const box = render('<div style="display:flex;width:100px">'
+      + '<div id="a" style="width:50px;height:10px"></div>'
+      + '<div id="b" style="margin-left:auto;width:50px;height:10px"></div></div>')
+
+    expect(box('b').x).toBe(50)
+  })
+
+  test('it works down a column too', () => {
+    const box = render('<div style="display:flex;flex-direction:column;height:100px">'
+      + '<div id="a" style="height:20px;margin-top:auto"></div></div>')
+
+    expect(box('a').y).toBe(80)
+  })
+})
+
 describe('what flex does not model', () => {
   test('baseline falls back to flex-start', () => {
     // Chrome puts the shorter box at y = 20 so the two text baselines line up.
@@ -473,17 +533,6 @@ describe('what flex does not model', () => {
 
     expect(box('a').y).toBe(0)
     expect(box('b').y).toBe(0)
-  })
-
-  test('an auto margin does not absorb free space', () => {
-    // `margin-left: auto` is a common way to push one item to the end. A
-    // browser gives it the free space; here it is zero, so the item stays put.
-    // Use `justify-content` or a `flex: 1` spacer instead.
-    const box = render('<div style="display:flex;width:300px">'
-      + '<div id="a" style="width:50px;height:10px"></div>'
-      + '<div id="b" style="margin-left:auto;width:50px;height:10px"></div></div>')
-
-    expect(box('b').x).toBe(50)
   })
 
   test('an item sized by its text is only as close as the text estimate', () => {

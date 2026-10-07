@@ -12,10 +12,6 @@
  * - **Baseline alignment.** `align-items: baseline` falls back to `flex-start`,
  *   and an inline-level box sits at the top of its line rather than on the text
  *   baseline. Both need the font's ascent, which there is no way to know here.
- * - **`auto` margins in a flex container.** They do not absorb free space, so
- *   `margin-left: auto` will not push an item to the end.
- * - **Dense grid packing.** `grid-auto-flow: row dense` places sparsely: once
- *   auto-placement has passed a hole it does not go back to fill it.
  * - **Grid refinements.** An item spanning several tracks does not contribute
  *   its content to their sizes, named grid lines are parsed away rather than
  *   resolved, `auto-fit` behaves as `auto-fill` without collapsing the empty
@@ -1085,6 +1081,10 @@ function layoutFlexChildren(
       baseCross,
       crossIsAuto,
       align,
+      autoMainStart: horizontal ? childStyle.autoMargin.left : childStyle.autoMargin.top,
+      autoMainEnd: horizontal ? childStyle.autoMargin.right : childStyle.autoMargin.bottom,
+      autoCrossStart: horizontal ? childStyle.autoMargin.top : childStyle.autoMargin.left,
+      autoCrossEnd: horizontal ? childStyle.autoMargin.bottom : childStyle.autoMargin.right,
     })
   }
 

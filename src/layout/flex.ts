@@ -29,6 +29,11 @@ export interface FlexItemInput {
   marginCrossEnd: number
   /** The hypothetical cross size, border-box. */
   baseCross: number
+  /** Margins written `auto`, which take the line's free space. */
+  autoMainStart: boolean
+  autoMainEnd: boolean
+  autoCrossStart: boolean
+  autoCrossEnd: boolean
   /** True when the cross size came from content rather than a declaration. */
   crossIsAuto: boolean
   /** The item's own `align-self`, already resolved against the container's. */
@@ -230,6 +235,15 @@ function alignInLine(
 ): { offset: number, size: number } {
   const outer = outerCross(item, item.baseCross)
 
+  // An `auto` cross margin absorbs the leftover before alignment does, so one
+  // on each side centres the item and one on a single side pushes it over.
+  if (item.autoCrossStart || item.autoCrossEnd) {
+    const slack = Math.max(0, lineCross - outer)
+    const shares = (item.autoCrossStart ? 1 : 0) + (item.autoCrossEnd ? 1 : 0)
+    const before = item.autoCrossStart ? slack / shares : 0
+    return { offset: item.marginCrossStart + before, size: item.baseCross }
+  }
+
   switch (align) {
     case 'flex-end':
     case 'end':
@@ -319,7 +333,21 @@ export function solveFlex(items: FlexItemInput[], options: FlexOptions): FlexRes
     const usedMain = entry.line.reduce((total, item, i) => total + outerMain(item, entry.sizes[i]), 0) + gaps
     const mainFree = options.availableMain === null ? 0 : options.availableMain - usedMain
 
-    const main = distributeMain(options.justifyContent, mainFree, entry.line.length, options.mainGap)
+    // An `auto` margin takes the free space before `justify-content` can, so
+    // `margin-left: auto` pushes an item to the end and leaves the container's
+    // own alignment with nothing to distribute.
+    const autoCount = entry.line.reduce(
+      (count, item) => count + (item.autoMainStart ? 1 : 0) + (item.autoMainEnd ? 1 : 0),
+      0,
+    )
+    const perAutoMargin = autoCount > 0 && mainFree > 0.001 ? mainFree / autoCount : 0
+
+    const main = distributeMain(
+      options.justifyContent,
+      perAutoMargin > 0 ? 0 : mainFree,
+      entry.line.length,
+      options.mainGap,
+    )
 
     let mainCursor = main.start
     const placed: FlexItemOutput[] = []
@@ -327,6 +355,9 @@ export function solveFlex(items: FlexItemInput[], options: FlexOptions): FlexRes
     entry.line.forEach((item, i) => {
       const mainSize = entry.sizes[i]
       const aligned = alignInLine(item, item.align, lineCross)
+
+      if (item.autoMainStart)
+        mainCursor += perAutoMargin
 
       placed.push({
         index: indexOf.get(item)!,
@@ -337,6 +368,8 @@ export function solveFlex(items: FlexItemInput[], options: FlexOptions): FlexRes
       })
 
       mainCursor += outerMain(item, mainSize)
+      if (item.autoMainEnd)
+        mainCursor += perAutoMargin
       if (i < entry.line.length - 1)
         mainCursor += main.between
     })

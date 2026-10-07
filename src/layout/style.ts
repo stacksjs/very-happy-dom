@@ -9,7 +9,7 @@
 
 import { initialValue } from '../css/initial-values'
 import { type LengthBasis, resolveLength, resolveLengthOrZero } from './length'
-import { type FlexContainerStyle, type FlexItemStyle, type GridContainerStyle, type GridItemStyle, type Insets, type LayoutStyle } from './types'
+import { type AutoSides, type FlexContainerStyle, type FlexItemStyle, type GridContainerStyle, type GridItemStyle, type Insets, type LayoutStyle } from './types'
 
 /** The parts of an element this module needs, kept structural to avoid a cycle. */
 export interface StyledElement {
@@ -106,6 +106,12 @@ function readInsets(
     return allowNegative ? value : Math.max(0, value)
   }
 
+  return { top: side('top'), right: side('right'), bottom: side('bottom'), left: side('left') }
+}
+
+/** Which margins were written `auto`. */
+function readAutoSides(read: (property: string) => string): AutoSides {
+  const side = (name: typeof SIDES[number]): boolean => read(`margin-${name}`).trim().toLowerCase() === 'auto'
   return { top: side('top'), right: side('right'), bottom: side('bottom'), left: side('left') }
 }
 
@@ -258,6 +264,7 @@ export function resolveLayoutStyle(
     maxHeight: read('max-height'),
     // Margins may be negative; padding and border may not.
     margin: readInsets(read, 'margin', own, true),
+    autoMargin: readAutoSides(read),
     padding: readInsets(read, 'padding', own, false),
     border: readBorder(read, own),
     offsets: {

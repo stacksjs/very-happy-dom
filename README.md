@@ -299,14 +299,14 @@ container each stop it.
 
 **Grid works** too: track lists with `fr`, `auto`, `minmax()` and
 `repeat(auto-fill, …)`, named areas, implicit tracks, `grid-auto-flow`,
-placement by line number or `span` including negative lines, `gap`, and the
-`justify-*`/`align-*` family for both the tracks and the items in them.
+placement by line number or `span` including negative lines, `dense` packing,
+`gap`, and the `justify-*`/`align-*` family for both the tracks and the items in
+them. `auto` margins work in flex containers, so `margin-left: auto` pushes.
 
-What is not: dense grid packing places sparsely, an item spanning several tracks
-does not contribute to their sizes, and named grid lines are not resolved. In a
-flex container, `align-items: baseline` falls back to `flex-start` and an `auto`
-margin does not absorb free space. An inline-level box sits at the top of its
-line rather than on the text baseline. There is no font
+What is not: an item spanning several grid tracks does not contribute to their
+sizes, and named grid lines are not resolved. `align-items: baseline` falls back
+to `flex-start`, and an inline-level box sits at the top of its line rather than
+on the text baseline. There is no font
 engine, so a height measured from wrapped text is estimated. There is no
 user-agent stylesheet, so `body` starts at `(0, 0)` rather than a browser's 8px
 inset. Floats, `transform`, `z-index` ordering and intrinsic image sizes are

@@ -15,6 +15,14 @@ export interface Insets {
   left: number
 }
 
+/** Which sides were declared `auto`, which only a margin can be. */
+export interface AutoSides {
+  top: boolean
+  right: boolean
+  bottom: boolean
+  left: boolean
+}
+
 /** One element's computed box, in viewport coordinates before scrolling. */
 export interface LayoutBox {
   /** Border-box origin, relative to the initial containing block. */
@@ -110,6 +118,14 @@ export interface LayoutStyle {
   maxWidth: string
   maxHeight: string
   margin: Insets
+  /**
+   * The margins written as `auto`.
+   *
+   * They resolve to zero like anything unresolved, but a flex container gives
+   * them the free space on their line before `justify-content` sees it — which
+   * is what `margin-left: auto` is for.
+   */
+  autoMargin: AutoSides
   padding: Insets
   border: Insets
   offsets: { top: string, right: string, bottom: string, left: string }

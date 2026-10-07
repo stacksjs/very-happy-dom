@@ -268,7 +268,11 @@ function parseLine(value: string, explicitCount: number): { line: number | null,
 export interface PlacementOptions {
   columnCount: number
   rowCount: number
-  /** `row` fills each row before moving on; `column` fills each column. */
+  /**
+   * `row` fills each row before moving on; `column` fills each column. Adding
+   * `dense` makes each item start its search from the beginning of the grid
+   * rather than from where the last one left off.
+   */
   flow: string
   /** Areas by name, as `grid-template-areas` defined them. */
   areas: Map<string, GridPlacement>
@@ -278,11 +282,18 @@ export interface PlacementOptions {
  * Decide which cells each item occupies.
  *
  * Items with both lines given are placed first, then the rest are auto-placed
- * into the first free run of cells, in order. `dense` packing is not modelled:
- * auto-placement never goes back to fill a hole it has passed.
+ * into the first free run of cells, in order.
+ *
+ * Sparse placement, which is the default, carries one cursor forward: an item
+ * never looks behind where the last one was put, so a hole left by a wide item
+ * stays empty. `dense` starts each item's search at the beginning of the grid
+ * instead, so a later item small enough to fit an earlier hole goes back for
+ * it. Both are what the flow value asks for; neither is the other's bug.
  */
 export function placeItems(items: GridItemLines[], options: PlacementOptions): GridPlacement[] {
-  const byRow = options.flow !== 'column' && options.flow !== 'column dense'
+  const flow = options.flow.trim().toLowerCase()
+  const byRow = !/\bcolumn\b/.test(flow)
+  const dense = /\bdense\b/.test(flow)
   const placements: Array<GridPlacement | null> = items.map(() => null)
   const occupied = new Set<string>()
 
@@ -392,11 +403,18 @@ export function placeItems(items: GridItemLines[], options: PlacementOptions): G
       fill(placement)
     }
 
+    // `dense` looks from the start of the grid for every item; sparse carries
+    // the cursor forward from the last placement.
+    if (dense) {
+      cursorColumn = 0
+      cursorRow = 0
+    }
+
     if (byRow) {
       // A definite column: the cursor moves there, wrapping to the next row if
       // that means going backwards.
       if (axis.column.start !== null) {
-        if (axis.column.start < cursorColumn)
+        if (!dense && axis.column.start < cursorColumn)
           cursorRow++
         cursorColumn = axis.column.start
 
@@ -442,7 +460,7 @@ export function placeItems(items: GridItemLines[], options: PlacementOptions): G
 
     // Column flow: the same, with the axes swapped.
     if (axis.row.start !== null) {
-      if (axis.row.start < cursorRow)
+      if (!dense && axis.row.start < cursorRow)
         cursorColumn++
       cursorRow = axis.row.start
 

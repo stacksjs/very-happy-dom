@@ -353,7 +353,8 @@ input.blur()    // fires blur + bubbling focusout
   **Grid** is implemented: `grid-template-columns`/`rows` with lengths, percentages, `fr`, `auto`,
   `min-content`/`max-content`, `minmax()`, `fit-content()`, `repeat()` and `repeat(auto-fill, …)`;
   `grid-template-areas` with named areas that span; implicit tracks via `grid-auto-rows`/`columns`;
-  `grid-auto-flow: row | column`; placement by line number, negative line number or `span`, with an
+  `grid-auto-flow` in both axes and with `dense`, which sends each item back to look for an earlier hole;
+  placement by line number, negative line number or `span`, with an
   auto-placement cursor that an explicitly-placed item moves; `gap`; `justify-content`/`align-content` to
   distribute the tracks, and `justify-items`/`align-items`/`justify-self`/`align-self` to place an item in
   its area. `auto` tracks share leftover space when no `fr` track is there to take it. The `grid-area`,
@@ -363,15 +364,15 @@ input.blur()    // fires blur + bubbling focusout
   `wrap-reverse`, `justify-content`, `align-items`, `align-content`, `align-self`, `flex-grow`,
   `flex-shrink`, `flex-basis`, the `flex` and `flex-flow` shorthands, `gap`/`row-gap`/`column-gap`, and
   `order`. Growing and shrinking respect `min-*` and `max-*`, including the automatic minimum that stops
-  an item shrinking below its content. `inline-flex` shrinks to fit the sum of its items.
+  an item shrinking below its content. `inline-flex` shrinks to fit the sum of its items. An `auto` margin
+  takes the line's free space before `justify-content` sees it, so `margin-left: auto` pushes an item to
+  the end and `margin: 0 auto` centres one.
 
   **Not** modelled, and these are the differences from a browser worth knowing before you assert a number:
 
   | | |
   | --- | --- |
   | **Baseline alignment** | `align-items: baseline` falls back to `flex-start`, and an inline-level box (`inline-block`, `inline-flex`, `inline-grid`) sits at the top of its line rather than on the text baseline — Chrome puts a 10px one 5px lower at the default font. Both need the font's ascent. |
-  | **Flex `auto` margins** | An `auto` margin does not absorb free space, so `margin-left: auto` will not push an item to the end — use `justify-content` or a `flex: 1` spacer. |
-  | **Dense grid packing** | `grid-auto-flow: row dense` places sparsely: auto-placement does not go back to fill a hole it has passed. |
   | **`ex` and `ch`** | Approximated at half the font size. `ex` is the font's x-height and `ch` the width of its zero, so both need the font. |
   | **Grid refinements** | An item spanning several tracks does not contribute its content to their sizes; named grid lines (`[name]`) are parsed away rather than resolved; `auto-fit` behaves as `auto-fill` without collapsing empty tracks; an `fr` track can shrink below its content. |
   | **Text metrics** | No font engine, so a line count is estimated from the character count at `font-size x 0.5` per glyph. A height that comes only from wrapped text is approximate. |
@@ -432,9 +433,9 @@ Use this when deciding if a given test suite will migrate cleanly:
 
       hit testing, is-it-above-the-fold)? — Supported for normal flow.
 
-- [ ] Does it rely on dense grid packing, baseline alignment, flex `auto` margins,
+- [ ] Does it rely on baseline alignment, or a height measured from wrapped
 
-      or a height measured from wrapped text? — See the layout note above; these are approximated.
+      text? — See the layout note above; these are approximated.
 
 - [ ] Does it depend on node source locations? — Not tracked.
 - [ ] Does it depend on Service Workers / Web Workers? — Not implemented.
