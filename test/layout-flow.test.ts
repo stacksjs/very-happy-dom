@@ -115,20 +115,26 @@ describe('block flow', () => {
 })
 
 describe('inline flow', () => {
-  test('inline-blocks sit side by side', () => {
+  test('inline-blocks sit side by side, bottoms on the baseline', () => {
     const box = render('<span id="a" style="display:inline-block;width:100px;height:20px"></span>'
       + '<span id="b" style="display:inline-block;width:80px;height:30px"></span>')
 
-    expect(at(box('a'))).toEqual({ x: 0, y: 0, width: 100, height: 20 })
+    // Chrome: a at y=10, b at y=0 — the taller one sets the baseline and the
+    // shorter one drops to meet it. Both used to sit at the top of the line.
+    expect(box('a').x).toBe(0)
+    expect(box('a').y).toBe(10)
     expect(at(box('b'))).toEqual({ x: 100, y: 0, width: 80, height: 30 })
   })
 
-  test('a block after a line starts below the tallest thing on it', () => {
+  test('a block after a line starts below the whole line box', () => {
     const box = render('<span style="display:inline-block;width:10px;height:20px"></span>'
       + '<span style="display:inline-block;width:10px;height:35px"></span>'
       + '<div id="after" style="height:5px"></div>')
 
-    expect(box('after').y).toBe(35)
+    // Chrome: 39.7. The line is the tallest box above the baseline plus what
+    // the strut leaves below it, not just the tallest box. Within a third of a
+    // pixel, which is the estimated ascent showing through.
+    expect(Math.abs(box('after').y - 39.7)).toBeLessThan(0.3)
   })
 
   test('a line wraps when it runs out of room', () => {
@@ -138,9 +144,13 @@ describe('inline flow', () => {
       + '<span id="c" style="display:inline-block;width:100px;height:10px"></span>'
       + '</div>')
 
-    expect(at(box('a'))).toEqual({ x: 0, y: 0, width: 100, height: 10 })
-    expect(at(box('b'))).toEqual({ x: 100, y: 0, width: 100, height: 10 })
-    expect(at(box('c'))).toEqual({ x: 0, y: 10, width: 100, height: 10 })
+    // Chrome: the first two at y=4.5 on the first line's baseline, the third at
+    // y=23.7 on the second's.
+    expect(box('a').x).toBe(0)
+    expect(Math.abs(box('a').y - 4.5)).toBeLessThan(0.3)
+    expect(box('b').x).toBe(100)
+    expect(box('c').x).toBe(0)
+    expect(Math.abs(box('c').y - 23.7)).toBeLessThan(0.3)
   })
 
   test('an inline box shrinks to fit rather than filling the line', () => {

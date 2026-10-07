@@ -303,14 +303,16 @@ placement by line number or `span` including negative lines, `dense` packing,
 `gap`, and the `justify-*`/`align-*` family for both the tracks and the items in
 them. `auto` margins work in flex containers, so `margin-left: auto` pushes.
 
+`align-items: baseline` works, and inline-level boxes sit on the text baseline
+of their line rather than at the top of it.
+
 What is not: an item spanning several grid tracks does not contribute to their
-sizes, and named grid lines are not resolved. `align-items: baseline` falls back
-to `flex-start`, and an inline-level box sits at the top of its line rather than
-on the text baseline. There is no font
-engine, so a height measured from wrapped text is estimated. There is no
-user-agent stylesheet, so `body` starts at `(0, 0)` rather than a browser's 8px
-inset. Floats, `transform`, `z-index` ordering and intrinsic image sizes are
-absent. [The compatibility guide][compat-guide] has the full table.
+sizes, and named grid lines are not resolved. There is no font engine, so text
+is measured by character count and a baseline comes from an estimated ascent —
+close to Chrome's default fonts, exact for none. There is no user-agent
+stylesheet, so `body` starts at `(0, 0)` rather than a browser's 8px inset.
+Floats, `transform`, `z-index` ordering and intrinsic image sizes are absent.
+[The compatibility guide][compat-guide] has the full table.
 
 `scrollIntoViewIfNeeded()` resolves and fires a `scroll` event; nothing scrolls on
 its own and no overflow is clipped, so there is no position to scroll to.

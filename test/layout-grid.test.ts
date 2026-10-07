@@ -420,13 +420,14 @@ describe('dense packing', () => {
 
 describe('what grid does not model', () => {
 
-  test('an inline-level box sits at the top of its line, not on the baseline', () => {
-    // Chrome puts all of inline-block, inline-flex and inline-grid 5px lower
-    // here, on the text baseline of the line they sit in. That needs the font's
-    // ascent, which is the same thing missing from `align-items: baseline`.
+  test('an inline-level box sits on the text baseline of its line', () => {
+    // It used to sit at the top, 5px above where Chrome puts it. Chrome says
+    // 4.5 for this one; the font's ascent is estimated, so this is within a
+    // third of a pixel rather than exact.
     document.body.innerHTML = '<div style="width:400px">'
       + '<div id="a" style="display:inline-block;width:50px;height:10px"></div></div>'
 
-    expect(Math.round(document.getElementById('a').getBoundingClientRect().y)).toBe(0)
+    const y = document.getElementById('a').getBoundingClientRect().y
+    expect(Math.abs(y - 4.5)).toBeLessThan(0.3)
   })
 })

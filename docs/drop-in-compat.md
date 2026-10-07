@@ -345,6 +345,10 @@ input.blur()    // fires blur + bubbling focusout
   `line-height` inherit, so `em` measures against the size an element actually has, and
   `getComputedStyle` reports the inherited value rather than the initial one.
 
+  Inline-level boxes — `inline-block`, `inline-flex`, `inline-grid` — sit on the text baseline of the line
+  they are on, and a line box carries the strut its container's font and `line-height` imply, so a line
+  holding only a small box is still as tall as `line-height` says.
+
   **Margin collapsing** is implemented: adjoining vertical margins collapse to the largest positive plus the
   most negative, a first or last child's margin escapes a parent that has nothing in the way, a box with
   nothing in it collapses through entirely, and a border, padding, a definite height, `overflow` other than
@@ -363,7 +367,7 @@ input.blur()    // fires blur + bubbling focusout
   **Flexbox** is implemented: `flex-direction` including both reverses, `flex-wrap` including
   `wrap-reverse`, `justify-content`, `align-items`, `align-content`, `align-self`, `flex-grow`,
   `flex-shrink`, `flex-basis`, the `flex` and `flex-flow` shorthands, `gap`/`row-gap`/`column-gap`, and
-  `order`. Growing and shrinking respect `min-*` and `max-*`, including the automatic minimum that stops
+  `order`, and `align-items: baseline`. Growing and shrinking respect `min-*` and `max-*`, including the automatic minimum that stops
   an item shrinking below its content. `inline-flex` shrinks to fit the sum of its items. An `auto` margin
   takes the line's free space before `justify-content` sees it, so `margin-left: auto` pushes an item to
   the end and `margin: 0 auto` centres one.
@@ -372,7 +376,7 @@ input.blur()    // fires blur + bubbling focusout
 
   | | |
   | --- | --- |
-  | **Baseline alignment** | `align-items: baseline` falls back to `flex-start`, and an inline-level box (`inline-block`, `inline-flex`, `inline-grid`) sits at the top of its line rather than on the text baseline — Chrome puts a 10px one 5px lower at the default font. Both need the font's ascent. |
+  | **Font metrics** | Text is measured at `font-size x 0.5` per character, and a line's baseline sits at `font-size x 0.82` — both estimates, since there is no font to measure. Chrome's own ascent ratio runs from 0.806 to 0.838 depending on the font, so a baseline here is within about a third of a pixel at 16px and a text-driven width within a few percent. |
   | **`ex` and `ch`** | Approximated at half the font size. `ex` is the font's x-height and `ch` the width of its zero, so both need the font. |
   | **Grid refinements** | An item spanning several tracks does not contribute its content to their sizes; named grid lines (`[name]`) are parsed away rather than resolved; `auto-fit` behaves as `auto-fill` without collapsing empty tracks; an `fr` track can shrink below its content. |
   | **Text metrics** | No font engine, so a line count is estimated from the character count at `font-size x 0.5` per glyph. A height that comes only from wrapped text is approximate. |

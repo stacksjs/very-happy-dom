@@ -522,19 +522,73 @@ describe('auto margins', () => {
   })
 })
 
-describe('what flex does not model', () => {
-  test('baseline falls back to flex-start', () => {
-    // Chrome puts the shorter box at y = 20 so the two text baselines line up.
-    // There are no font baselines here, so this is the top of the box. Asserted
-    // so the difference is visible rather than discovered.
+describe('align-items: baseline', () => {
+  /**
+   * An element's unrounded y, for the cases where the font's estimated ascent
+   * puts the answer a fraction of a pixel off Chrome's.
+   */
+  const exactY = (id: string): number => {
+    const element = document.getElementById(id)
+    if (!element)
+      throw new Error(`no #${id}`)
+    return element.getBoundingClientRect().y
+  }
+
+  // This used to fall back to `flex-start`. An item with no line of its own is
+  // aligned by the bottom edge of its border box, which a browser synthesizes
+  // for it and which needs no font at all — so these are exact. An item with
+  // text needs the font's ascent, which is estimated.
+  test('two empty boxes align by their bottom edges', () => {
     const box = render('<div style="display:flex;align-items:baseline;width:300px">'
       + '<div id="a" style="width:10px;height:20px"></div>'
       + '<div id="b" style="width:10px;height:40px"></div></div>')
 
-    expect(box('a').y).toBe(0)
+    expect(box('a').y).toBe(20)
     expect(box('b').y).toBe(0)
   })
 
+  test('a bottom margin is not part of the synthesized baseline', () => {
+    const box = render('<div style="display:flex;align-items:baseline;width:300px">'
+      + '<div id="a" style="width:10px;height:20px;margin-bottom:10px"></div>'
+      + '<div id="b" style="width:10px;height:40px"></div></div>')
+
+    expect(box('a').y).toBe(20)
+  })
+
+  test('text items align by their first line, whatever their padding', () => {
+    const box = render('<div style="display:flex;align-items:baseline;width:300px">'
+      + '<div id="a" style="width:40px">x</div>'
+      + '<div id="b" style="width:40px;padding-top:20px">y</div></div>')
+
+    expect(box('a').y).toBe(20)
+    expect(box('b').y).toBe(0)
+  })
+
+  test('text beside an empty box lines up with its bottom edge', () => {
+    const box = render('<div style="display:flex;align-items:baseline;width:300px">'
+      + '<div id="a" style="width:40px">x</div>'
+      + '<div id="b" style="width:10px;height:40px"></div></div>')
+
+    // Chrome: 25.5. Within a third of a pixel, which is the font's estimated
+    // ascent showing through.
+    void box('a')
+    expect(Math.abs(exactY('a') - 25.5)).toBeLessThan(0.3)
+    expect(box('b').y).toBe(0)
+  })
+
+  test('different font sizes still line up', () => {
+    const box = render('<div style="display:flex;align-items:baseline;width:300px">'
+      + '<div id="a" style="width:40px;font-size:10px">x</div>'
+      + '<div id="b" style="width:40px;font-size:30px">y</div></div>')
+
+    // Chrome: 18.5.
+    void box('a')
+    expect(Math.abs(exactY('a') - 18.5)).toBeLessThan(0.3)
+    expect(box('b').y).toBe(0)
+  })
+})
+
+describe('what flex does not model', () => {
   test('an item sized by its text is only as close as the text estimate', () => {
     // Chrome reports 34 for "Logo" at the default 16px serif; the estimate here
     // is character count x font-size x 0.5, so 32. Everything downstream of an

@@ -9,9 +9,10 @@
  *
  * What it does not model, and reports plainly rather than approximating badly:
  *
- * - **Baseline alignment.** `align-items: baseline` falls back to `flex-start`,
- *   and an inline-level box sits at the top of its line rather than on the text
- *   baseline. Both need the font's ascent, which there is no way to know here.
+ * - **Font metrics.** Text is measured by character count, and the baseline a
+ *   line sits on comes from an estimated ascent — see `GLYPH_WIDTH_RATIO` and
+ *   `ASCENT_RATIO`. Both are within a fraction of a pixel of Chrome for its
+ *   default fonts and neither is exact for any font in particular.
  * - **Grid refinements.** An item spanning several tracks does not contribute
  *   its content to their sizes, named grid lines are parsed away rather than
  *   resolved, `auto-fit` behaves as `auto-fill` without collapsing the empty
@@ -61,6 +62,19 @@ const GLYPH_WIDTH_RATIO = 0.5
 
 /** Line height when `line-height` is `normal`, as a multiple of the font size. */
 const NORMAL_LINE_HEIGHT = 1.2
+
+/**
+ * Where the text baseline sits inside a line, as a fraction of the font size.
+ *
+ * The font's ascent, which there is no way to read without the font. Measured
+ * off Chrome for its default serif: 0.806 at 16px, 0.822 at 32px and 0.825 at
+ * 40px, and 0.838 for its monospace. One number for all of them, chosen to sit
+ * in the middle of that range rather than at the low end — at 0.81 the error
+ * reached 0.6px by a 40px font, and at 0.82 it stays under 0.25px across all of
+ * them. The same kind of estimate as the glyph width above, and the same
+ * reason: there is no font here to ask.
+ */
+const ASCENT_RATIO = 0.82
 
 /** Tags whose content is not rendered, so they take part in no flow. */
 const NOT_RENDERED = new Set(['SCRIPT', 'STYLE', 'HEAD', 'TITLE', 'META', 'LINK', 'BASE', 'TEMPLATE'])
@@ -732,18 +746,71 @@ function layoutChildren(
     pending = NO_MARGIN
   }
 
-  // The line currently being filled: where it starts, how much it has used,
-  // and how tall the tallest thing on it is.
+  // The line currently being filled: how much width it has used, and how far it
+  // reaches above and below its baseline.
+  //
+  // Two extents rather than one height, because everything on a line is placed
+  // by its baseline: text by the font's, an inline-level box by its own. A
+  // single running height cannot say where that baseline is, so inline-level
+  // boxes used to sit at the top of their line where a browser sits them on the
+  // text baseline — about 5px out for a small one at the default font.
   let lineWidth = 0
-  let lineHeight = 0
+  let lineAbove = 0
+  let lineBelow = 0
+
+  /** Inline-level boxes on the line, with how far each reaches above it. */
+  let lineItems: Array<{ node: FlowNode, box: LayoutBox, above: number }> = []
+  let lineOpen = false
+
+  /**
+   * Start a line, and give it its strut.
+   *
+   * Every line box carries an invisible inline box with the containing block's
+   * own font and `line-height`, whether or not there is any text on it. That is
+   * why a line holding nothing but a 10px `inline-block` is still as tall as
+   * `line-height`, and why the box sits on the text baseline rather than at the
+   * top. Without the strut, such a line was only as tall as the box.
+   */
+  const openLine = (): void => {
+    if (lineOpen)
+      return
+    lineOpen = true
+
+    const own = styleFor(context, node, contentWidth)
+    const height = lineHeightOf(own)
+    const above = (height - own.fontSize) / 2 + own.fontSize * ASCENT_RATIO
+    lineAbove = Math.max(lineAbove, above)
+    lineBelow = Math.max(lineBelow, height - above)
+  }
+
+  const addToLine = (above: number, below: number): void => {
+    openLine()
+    lineAbove = Math.max(lineAbove, above)
+    lineBelow = Math.max(lineBelow, below)
+  }
 
   const endLine = (): void => {
-    if (lineHeight === 0 && lineWidth === 0)
+    if (!lineOpen)
       return
-    cursorY += lineHeight
+
+    // Now that the line's baseline is known, every box on it is moved so its
+    // own baseline meets it.
+    for (const item of lineItems) {
+      const shift = (cursorY + lineAbove - item.above) - item.box.y
+      if (shift !== 0) {
+        item.box.y += shift
+        shiftSubtree(context, item.node, 0, shift)
+      }
+      maxBottom = Math.max(maxBottom, item.box.y + item.box.height)
+    }
+
+    cursorY += lineAbove + lineBelow
     maxBottom = Math.max(maxBottom, cursorY)
     lineWidth = 0
-    lineHeight = 0
+    lineAbove = 0
+    lineBelow = 0
+    lineItems = []
+    lineOpen = false
   }
 
   for (const child of node.childNodes) {
@@ -760,12 +827,18 @@ function layoutChildren(
       // Text takes its font from the element containing it.
       const style = styleFor(context, node, contentWidth)
       const perLine = lineHeightOf(style)
+      // The strut: where this element's own font puts the baseline, and what is
+      // left below it. The two add up to the line height, so a line of nothing
+      // but text is exactly as tall as `line-height` says.
+      const strutAbove = (perLine - style.fontSize) / 2 + style.fontSize * ASCENT_RATIO
+      const strutBelow = perLine - strutAbove
+
       const width = textWidth(text, style.fontSize)
       const roomOnLine = Math.max(0, contentWidth - lineWidth)
 
       if (width <= roomOnLine) {
         lineWidth += width
-        lineHeight = Math.max(lineHeight, perLine)
+        addToLine(strutAbove, strutBelow)
         maxRight = Math.max(maxRight, contentX + lineWidth)
         continue
       }
@@ -776,7 +849,7 @@ function layoutChildren(
       const lines = contentWidth > 0 ? Math.max(1, Math.ceil(width / contentWidth)) : 1
       cursorY += (lines - 1) * perLine
       lineWidth = width - (lines - 1) * contentWidth
-      lineHeight = perLine
+      addToLine(strutAbove, strutBelow)
       maxRight = Math.max(maxRight, contentX + Math.min(width, contentWidth))
       maxBottom = Math.max(maxBottom, cursorY + perLine)
       continue
@@ -832,10 +905,18 @@ function layoutChildren(
         }
       }
 
+      // Where this box's own baseline is: the baseline of its first line, or
+      // the bottom edge of its border box when it has no line — which is what
+      // a browser synthesizes, and needs no font.
+      const innerBaseline = firstBaselineOf(context, child, contentWidth) ?? probe.height
+      const above = childStyle.margin.top + innerBaseline
+      const outerHeight = probe.height + childStyle.margin.top + childStyle.margin.bottom
+
       lineWidth += outerWidth
-      lineHeight = Math.max(lineHeight, probe.height + childStyle.margin.top + childStyle.margin.bottom)
+      addToLine(above, Math.max(0, outerHeight - above))
+      // Its final position waits for the line's baseline to be settled.
+      lineItems.push({ node: child, box: probe, above })
       maxRight = Math.max(maxRight, probe.x + probe.width)
-      maxBottom = Math.max(maxBottom, probe.y + probe.height)
       continue
     }
 
@@ -938,6 +1019,8 @@ function layoutFlexChildren(
 ): ChildrenResult {
   const flex = style.flexContainer
   const horizontal = flex.direction !== 'column' && flex.direction !== 'column-reverse'
+  const isBaseline = (align: string): boolean =>
+    align === 'baseline' || align === 'first baseline' || align === 'last baseline'
   const reverseMain = flex.direction === 'row-reverse' || flex.direction === 'column-reverse'
   const reverseCross = flex.wrap === 'wrap-reverse'
 
@@ -1081,6 +1164,17 @@ function layoutFlexChildren(
       baseCross,
       crossIsAuto,
       align,
+      // An item with no line of its own is aligned by the bottom edge of its
+      // border box, which is what a browser synthesizes for it — and which
+      // needs no font at all. `baseCross` is only final for a non-stretching
+      // item, which is the only kind that takes part in baseline alignment.
+      baseline: !isBaseline(align)
+        ? null
+        : horizontal
+          ? (firstBaselineOf(context, child, contentWidth) ?? baseCross) + childStyle.margin.top
+          // Down a column the cross axis is horizontal, and there is no
+          // horizontal baseline to align to.
+          : null,
       autoMainStart: horizontal ? childStyle.autoMargin.left : childStyle.autoMargin.top,
       autoMainEnd: horizontal ? childStyle.autoMargin.right : childStyle.autoMargin.bottom,
       autoCrossStart: horizontal ? childStyle.autoMargin.top : childStyle.autoMargin.left,
@@ -1426,6 +1520,49 @@ function layoutGridChildren(
     escapedBottom: NO_MARGIN,
     empty: false,
   }
+}
+
+/**
+ * Distance from a box's border-box top to the baseline of its first line, or
+ * `null` when it has no line to take one from.
+ *
+ * Only the first in-flow child is followed. A box whose first child has no
+ * baseline of its own reports none, rather than measuring the child's height to
+ * carry on past it — which would need the layout this is called before.
+ */
+function firstBaselineOf(context: Context, node: FlowNode, containingWidth: number): number | null {
+  const style = styleFor(context, node, containingWidth)
+  const top = style.border.top + style.padding.top
+  const ownBaseline = (): number =>
+    top + (lineHeightOf(style) - style.fontSize) / 2 + style.fontSize * ASCENT_RATIO
+
+  for (const child of node.childNodes) {
+    if (child.nodeType === TEXT) {
+      if (renderedText(child).trim() === '')
+        continue
+      // The line box belongs to this element, so its own font decides.
+      return ownBaseline()
+    }
+
+    if (!isElement(child))
+      continue
+
+    const childStyle = styleFor(context, child, containingWidth)
+    if (childStyle.display === 'none' || NOT_RENDERED.has(child.tagName ?? ''))
+      continue
+    if (childStyle.position === 'absolute' || childStyle.position === 'fixed')
+      continue
+
+    // An inline-level child sits on a line of this element's, so again this
+    // element's font decides where that line's baseline is.
+    if (INLINE_LEVEL.has(childStyle.display))
+      return ownBaseline()
+
+    const inner = firstBaselineOf(context, child, containingWidth)
+    return inner === null ? null : top + childStyle.margin.top + inner
+  }
+
+  return null
 }
 
 /**

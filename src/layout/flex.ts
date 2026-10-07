@@ -29,6 +29,11 @@ export interface FlexItemInput {
   marginCrossEnd: number
   /** The hypothetical cross size, border-box. */
   baseCross: number
+  /**
+   * Distance from the item's cross-start margin edge to its baseline, or
+   * `null` when it has none to align.
+   */
+  baseline: number | null
   /** Margins written `auto`, which take the line's free space. */
   autoMainStart: boolean
   autoMainEnd: boolean
@@ -258,8 +263,8 @@ function alignInLine(
     case 'baseline':
     case 'first baseline':
     case 'last baseline':
-      // No font baselines to align to, so this is the top of the box. Noted as
-      // a limitation rather than approximated with something invented.
+      // Handled before this, where the line's own baseline is known. Reaching
+      // here means the item had none to align, so it starts at the top.
       return { offset: item.marginCrossStart, size: item.baseCross }
     default: {
       // `stretch` and `normal`. Only an item with no declared cross size
@@ -287,14 +292,27 @@ export function solveFlex(items: FlexItemInput[], options: FlexOptions): FlexRes
   const indexOf = new Map<FlexItemInput, number>()
   items.forEach((item, index) => indexOf.set(item, index))
 
+  const isBaseline = (align: string): boolean =>
+    align === 'baseline' || align === 'first baseline' || align === 'last baseline'
+
   const resolved = lines.map((line) => {
     const sizes = resolveFlexibleLengths(line, options, options.mainGap)
 
-    // The line's cross size is set by its tallest item, before any stretching:
-    // stretching is what fills the line, so it cannot also define it.
-    const crossSize = line.reduce((tallest, item) => Math.max(tallest, outerCross(item, item.baseCross)), 0)
+    // Baseline-aligned items are shifted down so their baselines coincide, and
+    // the one with the furthest baseline from its top decides how far. That
+    // shift can push a line taller than its tallest item on its own.
+    const baselineItems = line.filter(item => isBaseline(item.align) && item.baseline !== null)
+    const maxBaseline = baselineItems.reduce((furthest, item) => Math.max(furthest, item.baseline!), 0)
 
-    return { line, sizes, crossSize }
+    const crossSize = line.reduce((tallest, item) => {
+      const outer = outerCross(item, item.baseCross)
+      if (!isBaseline(item.align) || item.baseline === null)
+        return Math.max(tallest, outer)
+      // Its top sits at the shift, so its bottom is that much further down.
+      return Math.max(tallest, maxBaseline - item.baseline! + outer)
+    }, 0)
+
+    return { line, sizes, crossSize, maxBaseline }
   })
 
   // A definite cross size can leave room for `align-content` to distribute.
@@ -354,7 +372,9 @@ export function solveFlex(items: FlexItemInput[], options: FlexOptions): FlexRes
 
     entry.line.forEach((item, i) => {
       const mainSize = entry.sizes[i]
-      const aligned = alignInLine(item, item.align, lineCross)
+      const aligned = isBaseline(item.align) && item.baseline !== null
+        ? { offset: entry.maxBaseline - item.baseline, size: item.baseCross }
+        : alignInLine(item, item.align, lineCross)
 
       if (item.autoMainStart)
         mainCursor += perAutoMargin
