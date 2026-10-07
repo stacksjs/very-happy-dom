@@ -207,7 +207,13 @@ function textWidth(text: string, style: LayoutStyle): number {
   return measureText(text, style.fontSize, classifyFamily(style.fontFamily), isBoldWeight(style.fontWeight))
 }
 
-function lineHeightOf(style: LayoutStyle): number {
+/**
+ * The used `line-height`, resolving `normal`.
+ *
+ * Exported because the screenshot renderer steps between wrapped lines by this
+ * and has to step by the same amount the line boxes were built with.
+ */
+export function lineHeightOf(style: LayoutStyle): number {
   return style.lineHeight ?? style.fontSize * NORMAL_LINE_HEIGHT
 }
 

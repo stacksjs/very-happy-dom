@@ -222,8 +222,12 @@ export function resolveLayoutStyle(
   element: StyledElement,
   basis: LengthBasis,
   inherited: InheritedStyle,
+  reader?: (property: string) => string,
 ): LayoutStyle {
-  const read = element._styleReader()
+  // A caller that needs the cascade for itself as well passes its reader in,
+  // because building one matches every rule against the element and doing that
+  // twice per element is the whole cost of a second pass over the tree.
+  const read = reader ?? element._styleReader()
   const declared = (property: string): string => read(property) || initialValue(property, element.tagName)
 
   // Resolved first, and against the parent's size, because every other length

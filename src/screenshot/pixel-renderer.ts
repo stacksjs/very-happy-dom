@@ -5,7 +5,9 @@
 
 import type { RGBA } from './css-utils'
 import { blendColors } from './css-utils'
+import type { FontFamilyClass } from '../layout/font-metrics'
 import type { LayoutNode } from './layout'
+import { classifyFamily, isBoldWeight, measureText } from '../layout/font-metrics'
 
 /**
  * Pixel buffer for rendering
@@ -341,7 +343,13 @@ function drawChar(buffer: PixelBuffer, char: string, x: number, y: number, color
 }
 
 /**
- * Draw text string
+ * Draw a run of text, wrapping it where the layout pass wrapped it.
+ *
+ * The glyphs are a fixed 5x7 bitmap, but the advances are not: each character
+ * steps by its real measured width and each line steps by the used
+ * `line-height`, so a run fills the width the box was sized for. Drawing on the
+ * bitmap font's own 6px grid instead is what used to make text spill out of
+ * boxes the layout pass had measured with real metrics.
  */
 function drawText(
   buffer: PixelBuffer,
@@ -351,28 +359,46 @@ function drawText(
   color: RGBA,
   fontSize: number,
   maxWidth: number,
+  family: FontFamilyClass,
+  bold: boolean,
+  lineHeight: number,
 ): void {
-  // Calculate scale based on font size (base font is 7px high)
+  // The bitmap is 7px high, so this is how many device pixels one of its rows
+  // covers. It decides how large the glyphs look, not where they sit.
   const scale = Math.max(1, Math.round(fontSize / 7))
+  const advance = (char: string): number => measureText(char, fontSize, family, bold)
 
   let currentX = x
   let currentY = y
 
-  for (const char of text) {
-    if (char === '\n') {
-      currentX = x
-      currentY += FONT_HEIGHT * scale + 2 * scale
-      continue
+  // Wrapping is per word, as a line box breaks — the old per-character break
+  // put a word's tail on the next line.
+  for (const line of text.split('\n')) {
+    for (const word of line.split(/(\s+)/)) {
+      if (word === '')
+        continue
+
+      const width = measureText(word, fontSize, family, bold)
+
+      // Whitespace that falls at a break is consumed by it.
+      if (currentX + width > x + maxWidth && currentX > x) {
+        if (/^\s+$/.test(word)) {
+          currentX = x
+          currentY += lineHeight
+          continue
+        }
+        currentX = x
+        currentY += lineHeight
+      }
+
+      for (const char of word) {
+        drawChar(buffer, char.toUpperCase(), currentX, currentY, color, scale)
+        currentX += advance(char)
+      }
     }
 
-    // Word wrap
-    if (currentX + FONT_WIDTH * scale > x + maxWidth) {
-      currentX = x
-      currentY += FONT_HEIGHT * scale + 2 * scale
-    }
-
-    const charWidth = drawChar(buffer, char.toUpperCase(), currentX, currentY, color, scale)
-    currentX += charWidth
+    currentX = x
+    currentY += lineHeight
   }
 }
 
@@ -433,7 +459,18 @@ export function renderLayoutTree(
     const textY = box.y + styles.borderTopWidth + styles.paddingTop
     const textWidth = box.width - styles.borderLeftWidth - styles.borderRightWidth - styles.paddingLeft - styles.paddingRight
 
-    drawText(buffer, text, textX, textY, applyOpacity(styles.color), styles.fontSize, textWidth)
+    drawText(
+      buffer,
+      text,
+      textX,
+      textY,
+      applyOpacity(styles.color),
+      styles.fontSize,
+      textWidth,
+      classifyFamily(styles.fontFamily),
+      isBoldWeight(styles.fontWeight),
+      styles.lineHeight,
+    )
   }
 
   // Render children

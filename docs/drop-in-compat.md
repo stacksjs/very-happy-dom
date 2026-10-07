@@ -386,13 +386,21 @@ input.blur()    // fires blur + bubbling focusout
   | **Baseline position** | A line's baseline sits at `font-size x 0.82`, an estimate of the font's ascent. Chrome's own ratio runs from 0.806 to 0.838 depending on the font, so a baseline here is within about a third of a pixel at 16px. |
   | **`ex` and `ch`** | Approximated at half the font size. `ex` is the font's x-height and `ch` the width of its zero, so both need the font. |
   | **Grid refinements** | An item spanning several tracks does not contribute its content to their sizes; named grid lines (`[name]`) are parsed away rather than resolved; `auto-fit` behaves as `auto-fill` without collapsing empty tracks; an `fr` track can shrink below its content. |
-  | **Text metrics** | No font engine, so a line count is estimated from the character count at `font-size x 0.5` per glyph. A height that comes only from wrapped text is approximate. |
+  | **`line-height: normal`** | Taken as `font-size x 1.2`. Chrome derives it from the font and lands between 1.15 and 1.19, so a line box here is about 0.7px taller at 16px, and a long page drifts down by that much per line. Declare `line-height` where a test asserts a y-position. |
   | **User-agent stylesheet** | An element has only the margins and padding the page declares. `body` starts at `(0, 0)`, not a browser's 8px inset, and a `<p>` has no margins of its own. |
   | **Floats** | Not implemented; a floated box stays in flow. |
   | **`transform`** | Does not move or resize a box. |
   | **Intrinsic sizes** | Nothing is decoded or measured, so an `<img>` with no declared size has no size. |
   | **`z-index`** | Hit testing uses document paint order, so a page that reorders its layers with `z-index` is tested as though it had not. |
   | **Tables** | Laid out as blocks, with no table algorithm. |
+
+  **Screenshots read this same layout.** `captureHtml`, `createRenderer` and `computeLayout` from
+  `very-happy-dom/screenshot` used to run a separate engine — its own HTML and CSS parsers, its own
+  cascade, and a box algorithm that read `width` off the `style` attribute with a regex. They now build a
+  real document and walk the layout pass, so a screenshot and a `getBoundingClientRect()` of the same
+  markup agree, and the gaps above are the only ones either of them has. `parseHTML` and `parseCSS` from
+  that module are thin shapes over the real parsers, so a `@media` block and a descendant combinator mean
+  the same thing in both.
 
   An element outside a document reports its declared size at the origin: it takes part in no flow, so there
   is no position to report, but the size is still useful to a test that never appends it.

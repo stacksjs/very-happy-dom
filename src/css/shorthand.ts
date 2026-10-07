@@ -73,6 +73,37 @@ const BORDER_STYLES = new Set([
 const BORDER_WIDTH_KEYWORDS = new Set(['thin', 'medium', 'thick'])
 
 /**
+ * `background`'s longhands, and the initial value each takes when the
+ * shorthand leaves it out.
+ *
+ * The order matters for serialization only; what matters here is that every one
+ * is reset. `background: url(x.png)` has to clear a `background-color` an
+ * earlier rule set, the way a browser does, or the two paint on top of each
+ * other.
+ */
+const BACKGROUND_INITIAL: Record<string, string> = {
+  'background-image': 'none',
+  'background-position': '0% 0%',
+  'background-size': 'auto',
+  'background-repeat': 'repeat',
+  'background-attachment': 'scroll',
+  'background-origin': 'padding-box',
+  'background-clip': 'border-box',
+  'background-color': 'transparent',
+}
+
+const BACKGROUND_REPEATS = new Set(['repeat', 'repeat-x', 'repeat-y', 'no-repeat', 'space', 'round'])
+
+const BACKGROUND_ATTACHMENTS = new Set(['scroll', 'fixed', 'local'])
+
+const BACKGROUND_BOXES = new Set(['border-box', 'padding-box', 'content-box'])
+
+const POSITION_KEYWORDS = new Set(['left', 'right', 'top', 'bottom', 'center'])
+
+const BACKGROUND_SIZE_KEYWORDS = new Set(['auto', 'cover', 'contain'])
+
+
+/**
  * A value that means "defer to the cascade", which a shorthand passes through
  * to every one of its longhands untouched.
  */
@@ -365,6 +396,161 @@ function borderComponents(values: string[]): { width: string, style: string, col
   }
 }
 
+/** Is this token an `<image>`, as `background-image` takes? */
+function isImage(value: string): boolean {
+  return value === 'none' || /^(?:url|(?:repeating-)?(?:linear|radial|conic)-gradient|image-set|-webkit-[\w-]+)\(/i.test(value)
+}
+
+/** One `background` layer's components, each absent when the layer omits it. */
+interface BackgroundLayer {
+  image?: string
+  position?: string
+  size?: string
+  repeat?: string
+  attachment?: string
+  origin?: string
+  clip?: string
+  color?: string
+}
+
+/**
+ * Sort one layer's tokens by shape, as `border` does — position says nothing
+ * here either, beyond the `<position> / <size>` slash.
+ *
+ * Only the final layer may carry a colour, so `allowColor` is false for the
+ * rest: a colour there is not a layer that paints oddly, it is a parse error,
+ * and refusing it leaves the shorthand unexpanded rather than inventing a
+ * meaning for it.
+ */
+function parseBackgroundLayer(layer: string, allowColor: boolean): BackgroundLayer | null {
+  // The slash is its own token whether or not it is spaced, so `center/cover`
+  // and `center / cover` tokenise the same way. Splitting on it first also
+  // keeps a `/` inside `url(...)` out of it.
+  const tokens = splitTopLevel(layer, '/').flatMap((part, index) => {
+    const parts = splitValues(part.trim())
+    return index === 0 ? parts : ['/', ...parts]
+  })
+
+  const found: BackgroundLayer = {}
+  const position: string[] = []
+  const boxes: string[] = []
+
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index]
+    const lower = token.toLowerCase()
+
+    // `<position> / <size>`: the size is the one or two tokens that follow,
+    // and the layer carries on after them.
+    if (token === '/') {
+      if (position.length === 0 || found.size !== undefined)
+        return null
+
+      const size: string[] = []
+      while (size.length < 2 && index + 1 < tokens.length) {
+        const next = tokens[index + 1]
+        if (!BACKGROUND_SIZE_KEYWORDS.has(next.toLowerCase()) && !isLength(next))
+          break
+        size.push(next)
+        index++
+      }
+
+      if (size.length === 0)
+        return null
+      found.size = size.join(' ')
+      continue
+    }
+
+    if (isImage(lower)) {
+      if (found.image !== undefined)
+        return null
+      found.image = token
+      continue
+    }
+
+    if (BACKGROUND_REPEATS.has(lower)) {
+      if (found.repeat !== undefined)
+        return null
+      found.repeat = token
+      continue
+    }
+
+    if (BACKGROUND_ATTACHMENTS.has(lower)) {
+      if (found.attachment !== undefined)
+        return null
+      found.attachment = token
+      continue
+    }
+
+    // The first box is the origin and the second the clip; one box sets both.
+    if (BACKGROUND_BOXES.has(lower)) {
+      if (boxes.length === 2)
+        return null
+      boxes.push(token)
+      continue
+    }
+
+    // A position component only counts before the size; after it, a length is
+    // something we cannot place, so it falls through to the colour check.
+    if ((POSITION_KEYWORDS.has(lower) || isLength(token)) && found.size === undefined) {
+      if (position.length === 4)
+        return null
+      position.push(token)
+      continue
+    }
+
+    // Nothing else matched, so it is the colour — or a value we cannot place.
+    if (!allowColor || found.color !== undefined)
+      return null
+    found.color = token
+  }
+
+  if (position.length > 0)
+    found.position = position.join(' ')
+  if (boxes.length > 0) {
+    found.origin = boxes[0]
+    found.clip = boxes[1] ?? boxes[0]
+  }
+
+  return found
+}
+
+/**
+ * Expand `background`.
+ *
+ * Worth having for `background-color` alone: `resolveProperty` is an exact-name
+ * lookup, so `background: red` left `background-color` at its initial
+ * `transparent` and anything painting from the computed value drew nothing.
+ */
+function expandBackground(value: string): Array<[string, string]> | null {
+  const layers = splitTopLevel(value, ',').map(layer => layer.trim())
+  if (layers.some(layer => layer === ''))
+    return null
+
+  const parsed: BackgroundLayer[] = []
+  for (let index = 0; index < layers.length; index++) {
+    const layer = parseBackgroundLayer(layers[index], index === layers.length - 1)
+    if (!layer)
+      return null
+    parsed.push(layer)
+  }
+
+  // Every layer contributes to every longhand but the colour, which the last
+  // layer owns on its own.
+  const perLayer = (part: keyof BackgroundLayer, longhand: string): string =>
+    parsed.map(layer => layer[part] ?? BACKGROUND_INITIAL[longhand]).join(', ')
+
+  return [
+    ['background-image', perLayer('image', 'background-image')],
+    ['background-position', perLayer('position', 'background-position')],
+    ['background-size', perLayer('size', 'background-size')],
+    ['background-repeat', perLayer('repeat', 'background-repeat')],
+    ['background-attachment', perLayer('attachment', 'background-attachment')],
+    ['background-origin', perLayer('origin', 'background-origin')],
+    ['background-clip', perLayer('clip', 'background-clip')],
+    ['background-color', parsed[parsed.length - 1].color ?? BACKGROUND_INITIAL['background-color']],
+  ]
+}
+
 /**
  * Every name that expands, for rejecting the rest in one lookup.
  *
@@ -374,6 +560,7 @@ function borderComponents(values: string[]): { width: string, style: string, col
 const SHORTHAND_NAMES: ReadonlySet<string> = new Set([
   ...Object.keys(BOX_SHORTHANDS),
   ...Object.keys(PAIR_SHORTHANDS),
+  'background',
   'border',
   'flex',
   'flex-flow',
@@ -409,6 +596,9 @@ function longhandsOf(property: string): readonly string[] | null {
 
   if (property === 'grid-template')
     return ['grid-template-rows', 'grid-template-columns', 'grid-template-areas']
+
+  if (property === 'background')
+    return Object.keys(BACKGROUND_INITIAL)
 
   if (property === 'flex')
     return ['flex-grow', 'flex-shrink', 'flex-basis']
@@ -499,6 +689,10 @@ export function expandShorthand(property: string, value: string): Array<[string,
 
   if (name === 'grid-template')
     return expandGridTemplate(trimmed)
+
+  // Layers split on top-level commas, so this runs before tokenisation too.
+  if (name === 'background')
+    return expandBackground(trimmed)
 
   if (name === 'flex')
     return expandFlex(values)

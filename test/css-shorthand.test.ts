@@ -399,3 +399,89 @@ describe('an element\'s inline style', () => {
     expect(rule.style.getPropertyValue('margin-top')).toBe('3px')
   })
 })
+
+describe('background', () => {
+  test('a colour sets background-color and resets the rest', () => {
+    expect(expandShorthand('background', 'red')).toEqual([
+      ['background-image', 'none'],
+      ['background-position', '0% 0%'],
+      ['background-size', 'auto'],
+      ['background-repeat', 'repeat'],
+      ['background-attachment', 'scroll'],
+      ['background-origin', 'padding-box'],
+      ['background-clip', 'border-box'],
+      ['background-color', 'red'],
+    ])
+  })
+
+  test('an image with no colour leaves the colour transparent', () => {
+    const longhands = new Map(expandShorthand('background', 'url(a.png)')!)
+    expect(longhands.get('background-image')).toBe('url(a.png)')
+    expect(longhands.get('background-color')).toBe('transparent')
+  })
+
+  test('components are told apart by shape, not position', () => {
+    const longhands = new Map(expandShorthand(
+      'background',
+      'left top / 50% 50% no-repeat border-box content-box url(x.png) fixed blue',
+    )!)
+    expect(longhands.get('background-position')).toBe('left top')
+    expect(longhands.get('background-size')).toBe('50% 50%')
+    expect(longhands.get('background-repeat')).toBe('no-repeat')
+    expect(longhands.get('background-origin')).toBe('border-box')
+    expect(longhands.get('background-clip')).toBe('content-box')
+    expect(longhands.get('background-image')).toBe('url(x.png)')
+    expect(longhands.get('background-attachment')).toBe('fixed')
+    expect(longhands.get('background-color')).toBe('blue')
+  })
+
+  test('an unspaced slash separates position from size', () => {
+    const longhands = new Map(expandShorthand('background', 'center/cover no-repeat url(a.png)')!)
+    expect(longhands.get('background-position')).toBe('center')
+    expect(longhands.get('background-size')).toBe('cover')
+  })
+
+  test('one box sets both origin and clip', () => {
+    const longhands = new Map(expandShorthand('background', 'url(a.png) content-box')!)
+    expect(longhands.get('background-origin')).toBe('content-box')
+    expect(longhands.get('background-clip')).toBe('content-box')
+  })
+
+  test('a gradient is an image, commas and all', () => {
+    const longhands = new Map(expandShorthand('background', 'linear-gradient(to right, red, blue)')!)
+    expect(longhands.get('background-image')).toBe('linear-gradient(to right, red, blue)')
+  })
+
+  test('layers stack, and only the last carries the colour', () => {
+    const longhands = new Map(expandShorthand('background', 'url(a.png), url(b.png) red')!)
+    expect(longhands.get('background-image')).toBe('url(a.png), url(b.png)')
+    expect(longhands.get('background-repeat')).toBe('repeat, repeat')
+    expect(longhands.get('background-color')).toBe('red')
+  })
+
+  test('a colour on a layer that is not the last does not parse', () => {
+    expect(expandShorthand('background', 'red, url(b.png)')).toBeNull()
+  })
+
+  test('getComputedStyle reads the colour out of the shorthand', () => {
+    const { at } = styled('.a { background: #0f0 }', '<div id="x" class="a"></div>')
+    expect(at('x')('background-color')).toBe('#0f0')
+  })
+
+  test('a later background-color still wins inside the block', () => {
+    const { at } = styled(
+      '.a { background: red; background-color: blue }',
+      '<div id="x" class="a"></div>',
+    )
+    expect(at('x')('background-color')).toBe('blue')
+  })
+
+  test('the shorthand is what reads back, and what serializes', () => {
+    const w = new Window()
+    const d = w.document.createElement('div')
+    d.style.cssText = 'background: red'
+    expect(d.style.getPropertyValue('background')).toBe('red')
+    expect(d.style.getPropertyValue('background-color')).toBe('red')
+    expect(d.style.cssText).toBe('background: red')
+  })
+})

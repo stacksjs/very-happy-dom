@@ -47,8 +47,14 @@ function viewportOf(document: LayoutDocument): { width: number, height: number }
   }
 }
 
-/** The root font size, for `rem`. */
-function rootFontSize(document: LayoutDocument): number {
+/**
+ * The root font size, for `rem`.
+ *
+ * Exported because anything that resolves lengths outside the layout pass — the
+ * screenshot renderer builds its own basis — has to start from the same number,
+ * or `rem` means one thing in a box read and another in a screenshot.
+ */
+export function rootFontSizeOf(document: LayoutDocument): number {
   const root = document.documentElement
   if (!root?._styleReader)
     return 16
@@ -92,7 +98,7 @@ function boxesFor(document: LayoutDocument): LayoutResult {
     ? layoutTree(root, {
         viewportWidth: viewport.width,
         viewportHeight: viewport.height,
-        rootFontSize: rootFontSize(document),
+        rootFontSize: rootFontSizeOf(document),
       })
     : new Map()
 
