@@ -13,7 +13,7 @@
  * machine's quirk.
  */
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { classifyFamily, isBoldWeight, measureText } from '../src/layout/font-metrics'
+import { baselineOffset, classifyFamily, isBoldWeight, measureText, normalLineHeight } from '../src/layout/font-metrics'
 import { Window } from '../src/window/Window'
 
 /** Chrome's own width for a string at 16px, measured in the browser. */
@@ -235,5 +235,67 @@ describe('what layout does with it', () => {
 
     const height = (id: string): number => document.getElementById(id).getBoundingClientRect().height
     expect(height('narrow')).toBeLessThan(height('wide'))
+  })
+})
+
+/**
+ * `line-height: normal` and the baseline position, against Chrome.
+ *
+ * Measured at a 2048px font, where one pixel is one em unit and Chrome's
+ * half-pixel rounding therefore hands back the font's own metrics exactly. The
+ * baseline was read off a zero-height `inline-block`, whose bottom edge sits
+ * on it. Both used to be guesses — a flat 1.2 line height and a flat
+ * `font-size x 0.82` ascent, which put every family's baseline at 0.92 of the
+ * font size.
+ */
+describe('vertical metrics', () => {
+  /** [font, family, line-height, baseline] per 2048px em, read off Chrome. */
+  const CHROME: Array<[string, 'serif' | 'sans' | 'mono', number, number]> = [
+    ['Times New Roman', 'serif', 2355, 1868.5],
+    ['Arial', 'sans', 2355, 1887.5],
+    ['Courier New', 'mono', 2320, 1705],
+  ]
+
+  for (const [font, family, height, baseline] of CHROME) {
+    test(`${font} matches Chrome exactly, metric for metric`, () => {
+      const line = normalLineHeight(2048, family)
+      expect(line).toBe(height)
+      expect(baselineOffset(2048, line, family)).toBe(baseline)
+    })
+  }
+
+  test('the old guesses were out by this much', () => {
+    // 1.2 was 4% tall on every family, and the flat 0.92 baseline was fine for
+    // Arial and 1.4px out at 16px for monospace.
+    const mono = normalLineHeight(16, 'mono')
+    expect(Math.abs(mono - 1.2 * 16)).toBeGreaterThan(1)
+    expect(Math.abs(baselineOffset(16, mono, 'mono') - 0.92 * 16)).toBeGreaterThan(1.3)
+  })
+
+  test('scales linearly with the font size', () => {
+    expect(normalLineHeight(32, 'serif')).toBeCloseTo(2 * normalLineHeight(16, 'serif'), 10)
+    expect(normalLineHeight(0, 'serif')).toBe(0)
+  })
+
+  test('a taller line pushes the baseline down by half the extra', () => {
+    // Leftover leading splits evenly above and below the content area, so the
+    // baseline moves by half of whatever the line gained.
+    const normal = normalLineHeight(16, 'serif')
+    const at = (line: number): number => baselineOffset(16, line, 'serif')
+    expect(at(normal + 10) - at(normal)).toBeCloseTo(5, 10)
+  })
+
+  test('monospace carries no leading of its own', () => {
+    // Courier New's lineGap is 0, so `normal` is exactly its content area and
+    // the baseline sits at the ascent with nothing added above it.
+    expect(normalLineHeight(2048, 'mono')).toBe(1705 + 615)
+    expect(baselineOffset(2048, normalLineHeight(2048, 'mono'), 'mono')).toBe(1705)
+  })
+
+  test('serif and sans share a line height but not a baseline', () => {
+    // Times New Roman and Arial both come to 2355/2048, out of different
+    // ascents, descents and leadings — so their baselines do differ.
+    expect(normalLineHeight(2048, 'serif')).toBe(normalLineHeight(2048, 'sans'))
+    expect(baselineOffset(2048, 2355, 'serif')).not.toBe(baselineOffset(2048, 2355, 'sans'))
   })
 })

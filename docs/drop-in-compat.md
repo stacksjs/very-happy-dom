@@ -351,6 +351,13 @@ input.blur()    // fires blur + bubbling focusout
   here agrees with Chrome to within a tenth of a percent. It used to be a flat half the font size per
   character, which was out by up to 50% in either direction.
 
+  The same tables carry each font's **vertical** metrics, so `line-height: normal` is the font's own
+  spacing — 2355/2048 of the font size for Times New Roman and Arial, 2320/2048 for Courier New — and a
+  line box puts its baseline at the ascent plus half the leading left over. Both were guesses: a flat 1.2
+  line height, 4% tall on every family, and a flat `font-size x 0.82` ascent that put every baseline at
+  0.92 of the font size, which was 1.4px out at 16px in monospace. At a 2048px font, where one pixel is
+  one em unit, all six figures now match Chrome exactly.
+
   Inline-level boxes — `inline-block`, `inline-flex`, `inline-grid` — sit on the text baseline of the line
   they are on, and a line box carries the strut its container's font and `line-height` imply, so a line
   holding only a small box is still as tall as `line-height` says.
@@ -358,7 +365,7 @@ input.blur()    // fires blur + bubbling focusout
   **Margin collapsing** is implemented: adjoining vertical margins collapse to the largest positive plus the
   most negative, a first or last child's margin escapes a parent that has nothing in the way, a box with
   nothing in it collapses through entirely, and a border, padding, a definite height, `overflow` other than
-  `visible`, a line box or a flex container each stop it.
+  `visible`, a line box, a flex or grid container, and being a flex or grid item each stop it.
 
   **Grid** is implemented: `grid-template-columns`/`rows` with lengths, percentages, `fr`, `auto`,
   `min-content`/`max-content`, `minmax()`, `fit-content()`, `repeat()` and `repeat(auto-fill, …)`;
@@ -383,11 +390,10 @@ input.blur()    // fires blur + bubbling focusout
   | | |
   | --- | --- |
   | **Fonts beyond the three families** | Text is measured with real per-glyph advances and kerning, but only for `serif`, `sans-serif` and `monospace` — matching Times New Roman, Arial and Courier. A page in Inter or Roboto is measured as Arial, which is close but not its own metrics, and a character outside ASCII takes the family's average advance. |
-  | **Baseline position** | A line's baseline sits at `font-size x 0.82`, an estimate of the font's ascent. Chrome's own ratio runs from 0.806 to 0.838 depending on the font, so a baseline here is within about a third of a pixel at 16px. |
   | **`ex` and `ch`** | Approximated at half the font size. `ex` is the font's x-height and `ch` the width of its zero, so both need the font. |
   | **Grid refinements** | An item spanning several tracks does not contribute its content to their sizes; named grid lines (`[name]`) are parsed away rather than resolved; `auto-fit` behaves as `auto-fill` without collapsing empty tracks; an `fr` track can shrink below its content. |
-  | **`line-height: normal`** | Taken as `font-size x 1.2`. Chrome derives it from the font and lands between 1.15 and 1.19, so a line box here is about 0.7px taller at 16px, and a long page drifts down by that much per line. Declare `line-height` where a test asserts a y-position. |
-  | **User-agent stylesheet** | An element has only the margins and padding the page declares. `body` starts at `(0, 0)`, not a browser's 8px inset, and a `<p>` has no margins of its own. |
+  | **Sub-pixel rounding** | Chrome quantises a line box to a half pixel, and this does not, so a line height can differ by up to 0.1px at 16px and a tall page drifts by that much per line. Positions agree exactly wherever no line box is involved. |
+  | **User-agent stylesheet** | An element has only the margins and padding the page declares. `body` starts at `(0, 0)`, not a browser's 8px inset, a `<p>` has no margins of its own, and a `monospace` element keeps the inherited font size where a browser drops it to 13px. |
   | **Floats** | Not implemented; a floated box stays in flow. |
   | **`transform`** | Does not move or resize a box. |
   | **Intrinsic sizes** | Nothing is decoded or measured, so an `<img>` with no declared size has no size. |

@@ -294,8 +294,8 @@ automatic minimum that keeps an item from shrinking below its content.
 
 Adjoining vertical **margins collapse**, including a first or last child's
 escaping its parent and an empty box collapsing through entirely; a border,
-padding, a definite height, `overflow` other than `visible`, a line box or a flex
-container each stop it.
+padding, a definite height, `overflow` other than `visible`, a line box, a flex or
+grid container, and being a flex or grid item each stop it.
 
 **Grid works** too: track lists with `fr`, `auto`, `minmax()` and
 `repeat(auto-fill, …)`, named areas, implicit tracks, `grid-auto-flow`,
@@ -308,15 +308,22 @@ of their line rather than at the top of it.
 
 Text is measured with **real font metrics** — per-glyph advance widths and
 kerning pairs for `serif`, `sans-serif` and `monospace` at both weights, which
-agree with Chrome to within a tenth of a percent.
+agree with Chrome to within a tenth of a percent. The same tables carry each
+font's vertical metrics, so `line-height: normal` is the font's own spacing and a
+line box puts its baseline where the font does, both matching Chrome exactly.
+
+**Screenshots read this same layout.** `captureHtml` and `createRenderer` from
+`very-happy-dom/screenshot` used to run a separate engine that knew nothing of
+flexbox, grid or stylesheets; a screenshot and a `getBoundingClientRect()` of the
+same markup now agree.
 
 What is not: a font outside those three families is measured as the generic one
-it falls back to, so a page in Inter is measured as Arial. A line's baseline
-comes from an estimated ascent, within about a third of a pixel. An item
-spanning several grid tracks does not contribute to their sizes, and named grid
-lines are not resolved. There is no user-agent stylesheet, so `body` starts at
-`(0, 0)` rather than a browser's 8px inset. Floats, `transform`, `z-index`
-ordering and intrinsic image sizes are absent.
+it falls back to, so a page in Inter is measured as Arial. Chrome quantises a
+line box to a half pixel and this does not, so a line height can differ by 0.1px
+at 16px. An item spanning several grid tracks does not contribute to their sizes,
+and named grid lines are not resolved. There is no user-agent stylesheet, so
+`body` starts at `(0, 0)` rather than a browser's 8px inset. Floats, `transform`,
+`z-index` ordering and intrinsic image sizes are absent.
 [The compatibility guide][compat-guide] has the full table.
 
 `scrollIntoViewIfNeeded()` resolves and fires a `scroll` event; nothing scrolls on

@@ -247,7 +247,8 @@ describe('paint values come off the same cascade', () => {
 
   test('the used line-height is reported', () => {
     expect(firstChild('<div style="font-size:20px;line-height:1.5">x</div>').styles.lineHeight).toBe(30)
-    expect(firstChild('<div style="font-size:20px">x</div>').styles.lineHeight).toBe(24)
+    // `normal` is the font's own spacing, 2355/2048 of the size for serif.
+    expect(firstChild('<div style="font-size:20px">x</div>').styles.lineHeight).toBe(22.998046875)
   })
 
   test('font-size resolves, and the family is the first one named', () => {
@@ -399,7 +400,7 @@ describe('the renderer paints what the layout pass measured', () => {
 describe('wrapped text fits the box it was measured into', () => {
   test('the box is as tall as the lines it holds', () => {
     // The old engine estimated this at `length * fontSize * 0.6` and made the
-    // box 96px — five lines where three fit.
+    // box 96px — five lines where three fit. Chrome: 55.5.
     const tree = computeLayout(
       '<div style="width:140px;font-size:16px">The quick brown fox jumps over the lazy dog again and again</div>',
       '',
@@ -407,8 +408,8 @@ describe('wrapped text fits the box it was measured into', () => {
       200,
     )
     const div = tree.children.find(child => child.tagName === 'body')!.children[0]
-    expect(div.styles.lineHeight).toBe(19.2)
-    expect(div.box.height).toBeCloseTo(3 * 19.2, 5)
+    expect(div.styles.lineHeight).toBe(18.3984375)
+    expect(div.box.height).toBeCloseTo(3 * 18.3984375, 5)
   })
 
   test('the ink stays inside it', () => {
@@ -417,6 +418,7 @@ describe('wrapped text fits the box it was measured into', () => {
     // was measured with real advances.
     const markup = '<div style="width:140px;font-size:16px">The quick brown fox jumps over the lazy dog again and again</div>'
     const buffer = renderHtmlToPixels(markup, 200, 200, { r: 255, g: 255, b: 255, a: 255 })
+    const lines = 3 * 18.3984375
 
     let right = -1
     let bottom = -1
@@ -432,7 +434,7 @@ describe('wrapped text fits the box it was measured into', () => {
 
     expect(right).toBeGreaterThan(0)
     expect(right).toBeLessThan(140)
-    expect(bottom).toBeLessThan(3 * 19.2)
+    expect(bottom).toBeLessThan(lines)
   })
 })
 

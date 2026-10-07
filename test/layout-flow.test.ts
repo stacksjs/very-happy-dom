@@ -131,10 +131,11 @@ describe('inline flow', () => {
       + '<span style="display:inline-block;width:10px;height:35px"></span>'
       + '<div id="after" style="height:5px"></div>')
 
-    // Chrome: 39.7. The line is the tallest box above the baseline plus what
-    // the strut leaves below it, not just the tallest box. Within a third of a
-    // pixel, which is the estimated ascent showing through.
-    expect(Math.abs(box('after').y - 39.7)).toBeLessThan(0.3)
+    // Chrome: 39, measured with margins reset at Times/16px. The line is the
+    // tallest box above the baseline plus what the strut leaves below it, not
+    // just the tallest box. Within a fifth of a pixel, which is Chrome's own
+    // half-pixel rounding of the line height showing through.
+    expect(Math.abs(box('after').y - 39)).toBeLessThan(0.3)
   })
 
   test('a line wraps when it runs out of room', () => {
@@ -145,12 +146,12 @@ describe('inline flow', () => {
       + '</div>')
 
     // Chrome: the first two at y=4.5 on the first line's baseline, the third at
-    // y=23.7 on the second's.
+    // y=23 on the second's.
     expect(box('a').x).toBe(0)
     expect(Math.abs(box('a').y - 4.5)).toBeLessThan(0.3)
     expect(box('b').x).toBe(100)
     expect(box('c').x).toBe(0)
-    expect(Math.abs(box('c').y - 23.7)).toBeLessThan(0.3)
+    expect(Math.abs(box('c').y - 23)).toBeLessThan(0.3)
   })
 
   test('an inline box shrinks to fit rather than filling the line', () => {
@@ -177,9 +178,10 @@ describe('text', () => {
   test('text gives its container a height', () => {
     const box = render('<div id="a" style="width: 500px">a short line</div>')
 
-    // No font engine, so the height is an estimate: one line at the default
-    // 16px font and a 1.2 normal line-height.
-    expect(box('a').height).toBeCloseTo(19.2, 5)
+    // One line at the default 16px serif, whose `line-height: normal` is
+    // 2355/2048 of the font size. Chrome reports 18.5, rounded up from the same
+    // 18.398 to its own half-pixel grid.
+    expect(box('a').height).toBeCloseTo(18.3984375, 5)
   })
 
   test('text wraps onto more lines as the box narrows', () => {
@@ -195,7 +197,8 @@ describe('text', () => {
     const large = render('<div id="a" style="width: 500px; font-size: 40px">hi</div>')('a').height
 
     expect(large).toBeGreaterThan(small)
-    expect(large).toBeCloseTo(48, 5)
+    // Chrome: 46.
+    expect(large).toBeCloseTo(45.99609375, 5)
   })
 
   test('line-height is honoured', () => {

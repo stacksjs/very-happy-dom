@@ -9,11 +9,11 @@
  *
  * What it does not model, and reports plainly rather than approximating badly:
  *
- * - **Font metrics.** Text is measured by character count, and the baseline a
- *   line sits on comes from an estimated ascent — see `ASCENT_RATIO`. Widths
- *   come from real advance tables in `font-metrics.ts`, but only for the three
- *   generic families, so a page in a font those tables do not cover is measured
- *   as its generic equivalent.
+ * - **Fonts beyond the three families.** Widths, `line-height: normal` and the
+ *   baseline all come from real metrics in `font-metrics.ts`, but only for the
+ *   three generic families, so a page in a font those tables do not cover is
+ *   measured as its generic equivalent, and a character outside ASCII takes the
+ *   family's average advance.
  * - **Grid refinements.** An item spanning several tracks does not contribute
  *   its content to their sizes, named grid lines are parsed away rather than
  *   resolved, `auto-fit` behaves as `auto-fill` without collapsing the empty
@@ -21,9 +21,6 @@
  * - **`ex` and `ch`.** Approximated at half the font size. Both need the
  *   font — `ex` is its x-height and `ch` the width of its zero.
  * - **Floats.** Not implemented. A floated box stays in flow.
- * - **Text metrics.** There is no font engine, so a line count is estimated
- *   from the character count. An element whose height comes only from wrapped
- *   text is approximate.
  * - **A user-agent stylesheet.** An element has only the margins and padding
  *   the page declares, so `body` starts at (0, 0) rather than a browser's 8px
  *   inset, and a `<p>` has no margins of its own.
@@ -34,7 +31,7 @@
 
 import { type FlexItemInput, solveFlex } from './flex'
 import { AUTO_TRACK, type GridItemLines, type GridPlacement, parseAreas, parseTrackList, placeItems, sizeTracks, type Track, trackOffsets } from './grid'
-import { classifyFamily, isBoldWeight, measureText } from './font-metrics'
+import { baselineOffset, classifyFamily, isBoldWeight, measureText, normalLineHeight } from './font-metrics'
 import { clampSize, type LengthBasis, resolveLength } from './length'
 import { isEmptyMargin, joinMargins, type Margin, marginOf, marginValue, NO_MARGIN } from './margins'
 import { type InheritedStyle, resolveLayoutStyle, type StyledElement } from './style'
@@ -58,27 +55,25 @@ const TEXT = 3
 // out by as much as 50% either way.
 
 
-/** Line height when `line-height` is `normal`, as a multiple of the font size. */
-const NORMAL_LINE_HEIGHT = 1.2
-
-/**
- * Where the text baseline sits inside a line, as a fraction of the font size.
- *
- * The font's ascent, which there is no way to read without the font. Measured
- * off Chrome for its default serif: 0.806 at 16px, 0.822 at 32px and 0.825 at
- * 40px, and 0.838 for its monospace. One number for all of them, chosen to sit
- * in the middle of that range rather than at the low end — at 0.81 the error
- * reached 0.6px by a 40px font, and at 0.82 it stays under 0.25px across all of
- * them. The same kind of estimate as the glyph width above, and the same
- * reason: there is no font here to ask.
- */
-const ASCENT_RATIO = 0.82
+// `line-height: normal` and the baseline inside a line box both come from the
+// font's vertical metrics, in `font-metrics.ts`. They used to be a flat 1.2 and
+// a flat `font-size x 0.82`, which put every family's baseline at 0.92 of the
+// font size — 4% tall on the line height, and 1.4px out at 16px on a monospace
+// baseline.
 
 /** Tags whose content is not rendered, so they take part in no flow. */
 const NOT_RENDERED = new Set(['SCRIPT', 'STYLE', 'HEAD', 'TITLE', 'META', 'LINK', 'BASE', 'TEMPLATE'])
 
 /** Display values that take part in inline flow rather than block flow. */
 const INLINE_LEVEL = new Set(['inline', 'inline-block', 'inline-flex', 'inline-grid', 'inline-table'])
+
+/**
+ * Displays whose children are items rather than boxes in normal flow.
+ *
+ * Being one of their children is enough to establish a block formatting
+ * context, which the child's own `display` says nothing about.
+ */
+const ITEMISING = new Set(['flex', 'inline-flex', 'grid', 'inline-grid'])
 
 // Anything not inline-level is laid out as a block, which is why `flex`, `grid`
 // and the table displays stack their children instead of arranging them.
@@ -214,7 +209,18 @@ function textWidth(text: string, style: LayoutStyle): number {
  * and has to step by the same amount the line boxes were built with.
  */
 export function lineHeightOf(style: LayoutStyle): number {
-  return style.lineHeight ?? style.fontSize * NORMAL_LINE_HEIGHT
+  return style.lineHeight ?? normalLineHeight(style.fontSize, classifyFamily(style.fontFamily))
+}
+
+/**
+ * Where this element's own font puts the baseline, below the top of its line.
+ *
+ * With `lineHeightOf` this is the strut: the two halves add up to the line
+ * height, so a line holding nothing but text is exactly as tall as
+ * `line-height` says.
+ */
+function aboveBaselineOf(style: LayoutStyle): number {
+  return baselineOffset(style.fontSize, lineHeightOf(style), classifyFamily(style.fontFamily))
 }
 
 /**
@@ -266,12 +272,21 @@ function intrinsicFlexWidth(context: Context, node: FlowNode, style: LayoutStyle
  * Margins do not collapse across the edges of one, which is the standard way to
  * stop a child's margin escaping its parent: `overflow: hidden` on the parent.
  * A flex or grid container, an inline-block and an out-of-flow box are all their
- * own context too, and a flex item's margins never collapse with anything.
+ * own context too.
+ *
+ * `parentDisplay` is here because being a flex or grid *item* is enough on its
+ * own, and nothing about the box's own style reveals it. Chrome keeps the margin
+ * inside in that case: a `<p style="margin:4px 0">` in a flex item sits 4px down
+ * inside an 18px item, where without this it sat at the item's own top edge and
+ * the item was 10px tall. The drift from the old `line-height` estimate happened
+ * to cancel it out on the comparison page, which is how it went unnoticed.
  */
-function establishesBlockContext(style: LayoutStyle): boolean {
+function establishesBlockContext(style: LayoutStyle, parentDisplay: string): boolean {
   if (style.overflow !== '' && style.overflow !== 'visible')
     return true
   if (style.position === 'absolute' || style.position === 'fixed')
+    return true
+  if (ITEMISING.has(parentDisplay))
     return true
 
   return style.display === 'flex'
@@ -572,7 +587,12 @@ function layoutBox(
   // sits between them and stops it; so does a block formatting context; and at
   // the bottom, a declared height means the box's size no longer depends on
   // where its last child's margin ends up.
-  const blockContext = establishesBlockContext(style)
+  // The parent's style is already resolved — it was laid out before this — and
+  // only its `display` is wanted, which does not depend on a containing width.
+  const parentDisplay = ancestors.length > 0
+    ? context.styles.get(ancestors[0])?.style.display ?? ''
+    : ''
+  const blockContext = establishesBlockContext(style, parentDisplay)
   const isRoot = ancestors.length === 0
   const collapseThrough = {
     top: !blockContext && !isRoot && style.border.top === 0 && style.padding.top === 0,
@@ -787,7 +807,7 @@ function layoutChildren(
 
     const own = styleFor(context, node, contentWidth)
     const height = lineHeightOf(own)
-    const above = (height - own.fontSize) / 2 + own.fontSize * ASCENT_RATIO
+    const above = aboveBaselineOf(own)
     lineAbove = Math.max(lineAbove, above)
     lineBelow = Math.max(lineBelow, height - above)
   }
@@ -839,7 +859,7 @@ function layoutChildren(
       // The strut: where this element's own font puts the baseline, and what is
       // left below it. The two add up to the line height, so a line of nothing
       // but text is exactly as tall as `line-height` says.
-      const strutAbove = (perLine - style.fontSize) / 2 + style.fontSize * ASCENT_RATIO
+      const strutAbove = aboveBaselineOf(style)
       const strutBelow = perLine - strutAbove
 
       const width = textWidth(text, style)
@@ -1542,8 +1562,7 @@ function layoutGridChildren(
 function firstBaselineOf(context: Context, node: FlowNode, containingWidth: number): number | null {
   const style = styleFor(context, node, containingWidth)
   const top = style.border.top + style.padding.top
-  const ownBaseline = (): number =>
-    top + (lineHeightOf(style) - style.fontSize) / 2 + style.fontSize * ASCENT_RATIO
+  const ownBaseline = (): number => top + aboveBaselineOf(style)
 
   for (const child of node.childNodes) {
     if (child.nodeType === TEXT) {

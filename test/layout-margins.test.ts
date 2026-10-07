@@ -166,12 +166,40 @@ describe('a box that collapses through', () => {
 })
 
 describe('what does not collapse', () => {
+  test('a flex item keeps its child\'s margin inside it', () => {
+    // A flex item is its own block formatting context, so the margin does not
+    // escape. Chrome: the item is 18 tall (4 + 10 + 4) with the child 4 down.
+    const box = render('<div style="display:flex">'
+      + '<div id="item" style="flex:1"><p id="p" style="margin:4px 0;height:10px"></p></div></div>')
+
+    expect(box('item')).toEqual({ y: 0, height: 18 })
+    expect(box('p').y).toBe(4)
+  })
+
+  test('a grid item does too', () => {
+    const box = render('<div style="display:grid">'
+      + '<div id="item"><p id="p" style="margin:4px 0;height:10px"></p></div></div>')
+
+    expect(box('item')).toEqual({ y: 0, height: 18 })
+    expect(box('p').y).toBe(4)
+  })
+
+  test('a plain block in normal flow still lets it escape', () => {
+    // The contrast that makes the two above meaningful: with no formatting
+    // context in the way the margin passes through and moves the parent.
+    const box = render('<div id="plain"><p id="p" style="margin:4px 0;height:10px"></p></div>')
+
+    expect(box('plain')).toEqual({ y: 4, height: 10 })
+    expect(box('p').y).toBe(4)
+  })
+
   test('a line box between two margins separates them', () => {
     const box = render('<div style="margin-bottom:30px;height:10px"></div>text'
       + '<div id="after" style="margin-top:20px;height:10px"></div>')
 
-    // 10 + 30 of margin, a 19.2px line, then 20 more.
-    expect(box('after').y).toBe(79)
+    // 10 + 30 of margin, an 18.4px line, then 20 more. Chrome lands on 78.5
+    // exactly; this reader rounds, and 78.398 rounds down where 78.5 rounds up.
+    expect(box('after').y).toBe(78)
   })
 
   test('flex items never collapse', () => {

@@ -25,6 +25,66 @@
 /** Which of the three tables a `font-family` resolves to. */
 export type FontFamilyClass = 'serif' | 'sans' | 'mono'
 
+/**
+ * One font's vertical metrics, as a fraction of the em.
+ *
+ * These decide two things a line box needs and the advance tables above cannot
+ * answer: how tall `line-height: normal` is, and where the baseline sits inside
+ * a line of any height.
+ */
+interface VerticalMetrics {
+  /** Baseline to the top of the content area. */
+  ascent: number
+  /** Baseline to the bottom of it. */
+  descent: number
+  /** The font's own leading, which `normal` adds and a declared length does not. */
+  lineGap: number
+}
+
+/**
+ * The `hhea` metrics of the fonts the advance tables model, over a 2048 em.
+ *
+ * Both numbers used to be guessed: `normal` was a flat 1.2 and the baseline a
+ * flat `font-size x 0.82`, which put it at `0.92` of the font size for every
+ * family. Measured against Chrome at 256px — where its half-pixel rounding is
+ * proportionally smallest — the real figures are a line height of 1.1504 for
+ * Times New Roman, 1.1523 for Arial and 1.1328 for Courier New, with baselines
+ * at 0.9121, 0.9219 and 0.8320. These tables reproduce all six to within
+ * 0.0005 of the em, where 1.2 was out by 4% on the height and the flat 0.92
+ * baseline was out by 1.4px at 16px in monospace.
+ */
+const VERTICAL: Record<FontFamilyClass, VerticalMetrics> = {
+  // Times New Roman: ascender 1825, descender -443, lineGap 87.
+  serif: { ascent: 1825 / 2048, descent: 443 / 2048, lineGap: 87 / 2048 },
+  // Arial: 1854, -434, 67.
+  sans: { ascent: 1854 / 2048, descent: 434 / 2048, lineGap: 67 / 2048 },
+  // Courier New: 1705, -615, 0 — it carries no leading of its own.
+  mono: { ascent: 1705 / 2048, descent: 615 / 2048, lineGap: 0 },
+}
+
+/**
+ * The height of a line box whose `line-height` is `normal`, in pixels.
+ *
+ * `normal` is the font's own line spacing: the content area plus its leading.
+ */
+export function normalLineHeight(fontSize: number, family: FontFamilyClass): number {
+  const metrics = VERTICAL[family]
+  return (metrics.ascent + metrics.descent + metrics.lineGap) * fontSize
+}
+
+/**
+ * How far the baseline sits below the top of a line box `lineHeight` tall.
+ *
+ * The leading left over once the content area is placed is split evenly above
+ * and below it, so a line taller than the font pushes the baseline down by half
+ * the difference. That is why this needs the line height and not just the font.
+ */
+export function baselineOffset(fontSize: number, lineHeight: number, family: FontFamilyClass): number {
+  const metrics = VERTICAL[family]
+  const content = (metrics.ascent + metrics.descent) * fontSize
+  return (lineHeight - content) / 2 + metrics.ascent * fontSize
+}
+
 /** ASCII 32..126, in thousandths of the em. */
 const ADVANCES: Record<FontFamilyClass, Record<'regular' | 'bold', string>> = {
   serif: {
