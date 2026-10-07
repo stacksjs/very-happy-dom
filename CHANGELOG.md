@@ -1,3 +1,38 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.3.6...v0.4.0)
+
+## ✨ Features
+
+- **layout**: measure text with real font metrics ([1d35980](https://github.com/stacksjs/very-happy-dom/commit/1d35980)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **layout**: align on baselines, and give every line box its strut ([54692ab](https://github.com/stacksjs/very-happy-dom/commit/54692ab)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **layout**: give auto margins their space, and pack grids densely ([2e42040](https://github.com/stacksjs/very-happy-dom/commit/2e42040)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **layout**: resolve em against the inherited size, and evaluate calc() ([a7bf62b](https://github.com/stacksjs/very-happy-dom/commit/a7bf62b)) _(by glennmichael123 <gtorregosa@gmail.com>)_ ([#1600](https://github.com/stacksjs/very-happy-dom/issues/1600))
+- **layout**: place grid containers on a grid ([064e298](https://github.com/stacksjs/very-happy-dom/commit/064e298)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **layout**: collapse adjoining vertical margins ([8ef8917](https://github.com/stacksjs/very-happy-dom/commit/8ef8917)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **layout**: lay flex containers out as flex ([aaa4690](https://github.com/stacksjs/very-happy-dom/commit/aaa4690)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **layout**: compute normal flow, so boxes have positions ([5389f8c](https://github.com/stacksjs/very-happy-dom/commit/5389f8c)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## 🐛 Bug Fixes
+
+- **layout**: report the part of the box each metric names ([525ce60](https://github.com/stacksjs/very-happy-dom/commit/525ce60)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **css**: expand shorthand declarations into longhands ([1d7170c](https://github.com/stacksjs/very-happy-dom/commit/1d7170c)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## ⚡ Performance Improvements
+
+- **css**: keep the shorthand work off the paths that do not need it ([1f2ac20](https://github.com/stacksjs/very-happy-dom/commit/1f2ac20)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## ✅ Tests
+
+- **inner-text**: measure the growth shape without measuring the machine ([4293454](https://github.com/stacksjs/very-happy-dom/commit/4293454)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **layout**: cover normal flow, and document what it does not model ([fb24318](https://github.com/stacksjs/very-happy-dom/commit/fb24318)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## 🔧 Chores
+
+- release v0.4.0 ([fe86ca5](https://github.com/stacksjs/very-happy-dom/commit/fe86ca5)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## Contributors
+
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.3.5...v0.3.6)
 
 ## 🐛 Bug Fixes
