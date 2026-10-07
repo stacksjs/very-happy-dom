@@ -207,6 +207,8 @@ function readGridItem(declared: (property: string) => string): GridItemStyle {
 /** The values an element takes from its parent when it declares none. */
 export interface InheritedStyle {
   fontSize: number
+  fontFamily: string
+  fontWeight: string
   lineHeight: number | null
 }
 
@@ -228,6 +230,13 @@ export function resolveLayoutStyle(
   // on this element that uses `em` measures against the result.
   const fontSize = readFontSize(read('font-size'), basis, inherited.fontSize)
   const own: LengthBasis = { ...basis, fontSize }
+
+  // Both inherit, and both pick which advance table measures this element's
+  // text, so an undeclared one takes the parent's rather than the initial value.
+  const declaredFamily = read('font-family').trim()
+  const fontFamily = declaredFamily === '' || declaredFamily === 'inherit' ? inherited.fontFamily : declaredFamily
+  const declaredWeight = read('font-weight').trim()
+  const fontWeight = declaredWeight === '' || declaredWeight === 'inherit' ? inherited.fontWeight : declaredWeight
 
   /**
    * A declared size, or the `width`/`height` attribute when CSS says nothing.
@@ -251,6 +260,8 @@ export function resolveLayoutStyle(
     pointerEvents: declared('pointer-events').trim().toLowerCase(),
     visibility: declared('visibility').trim().toLowerCase(),
     fontSize,
+    fontFamily,
+    fontWeight,
     lineHeight: readLineHeight(read('line-height'), fontSize, own, inherited.lineHeight),
     flexContainer: readFlexContainer(declared, own),
     flexItem: readFlexItem(declared),

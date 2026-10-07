@@ -306,12 +306,17 @@ them. `auto` margins work in flex containers, so `margin-left: auto` pushes.
 `align-items: baseline` works, and inline-level boxes sit on the text baseline
 of their line rather than at the top of it.
 
-What is not: an item spanning several grid tracks does not contribute to their
-sizes, and named grid lines are not resolved. There is no font engine, so text
-is measured by character count and a baseline comes from an estimated ascent —
-close to Chrome's default fonts, exact for none. There is no user-agent
-stylesheet, so `body` starts at `(0, 0)` rather than a browser's 8px inset.
-Floats, `transform`, `z-index` ordering and intrinsic image sizes are absent.
+Text is measured with **real font metrics** — per-glyph advance widths and
+kerning pairs for `serif`, `sans-serif` and `monospace` at both weights, which
+agree with Chrome to within a tenth of a percent.
+
+What is not: a font outside those three families is measured as the generic one
+it falls back to, so a page in Inter is measured as Arial. A line's baseline
+comes from an estimated ascent, within about a third of a pixel. An item
+spanning several grid tracks does not contribute to their sizes, and named grid
+lines are not resolved. There is no user-agent stylesheet, so `body` starts at
+`(0, 0)` rather than a browser's 8px inset. Floats, `transform`, `z-index`
+ordering and intrinsic image sizes are absent.
 [The compatibility guide][compat-guide] has the full table.
 
 `scrollIntoViewIfNeeded()` resolves and fires a `scroll` event; nothing scrolls on

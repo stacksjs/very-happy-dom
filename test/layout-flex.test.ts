@@ -589,12 +589,11 @@ describe('align-items: baseline', () => {
 })
 
 describe('what flex does not model', () => {
-  test('an item sized by its text is only as close as the text estimate', () => {
-    // Chrome reports 34 for "Logo" at the default 16px serif; the estimate here
-    // is character count x font-size x 0.5, so 32. Everything downstream of an
-    // item like this inherits that error.
+  test('an item sized by its text matches Chrome', () => {
+    // This used to be 32 against Chrome's 34: text was measured at a flat half
+    // the font size per character. test/font-metrics.test.ts has the rest.
     const box = render('<div id="box" style="display:inline-flex"><span id="a">Logo</span></div>')
 
-    expect(box('a').width).toBe(32)
+    expect(box('a').width).toBe(34)
   })
 })

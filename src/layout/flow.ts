@@ -10,9 +10,10 @@
  * What it does not model, and reports plainly rather than approximating badly:
  *
  * - **Font metrics.** Text is measured by character count, and the baseline a
- *   line sits on comes from an estimated ascent — see `GLYPH_WIDTH_RATIO` and
- *   `ASCENT_RATIO`. Both are within a fraction of a pixel of Chrome for its
- *   default fonts and neither is exact for any font in particular.
+ *   line sits on comes from an estimated ascent — see `ASCENT_RATIO`. Widths
+ *   come from real advance tables in `font-metrics.ts`, but only for the three
+ *   generic families, so a page in a font those tables do not cover is measured
+ *   as its generic equivalent.
  * - **Grid refinements.** An item spanning several tracks does not contribute
  *   its content to their sizes, named grid lines are parsed away rather than
  *   resolved, `auto-fit` behaves as `auto-fill` without collapsing the empty
@@ -33,6 +34,7 @@
 
 import { type FlexItemInput, solveFlex } from './flex'
 import { AUTO_TRACK, type GridItemLines, type GridPlacement, parseAreas, parseTrackList, placeItems, sizeTracks, type Track, trackOffsets } from './grid'
+import { classifyFamily, isBoldWeight, measureText } from './font-metrics'
 import { clampSize, type LengthBasis, resolveLength } from './length'
 import { isEmptyMargin, joinMargins, type Margin, marginOf, marginValue, NO_MARGIN } from './margins'
 import { type InheritedStyle, resolveLayoutStyle, type StyledElement } from './style'
@@ -51,14 +53,10 @@ interface FlowNode {
 const ELEMENT = 1
 const TEXT = 3
 
-/**
- * Average glyph width as a fraction of the font size.
- *
- * A stand-in for font metrics. Chosen to match the screenshot renderer, which
- * has been estimating text this way since before layout existed, so the two
- * agree about how tall a paragraph is.
- */
-const GLYPH_WIDTH_RATIO = 0.5
+// Text is measured with real per-glyph advances, in `font-metrics.ts`. It used
+// to be `length x font-size x 0.5` — every character the same width, which was
+// out by as much as 50% either way.
+
 
 /** Line height when `line-height` is `normal`, as a multiple of the font size. */
 const NORMAL_LINE_HEIGHT = 1.2
@@ -164,7 +162,7 @@ function inheritedFor(context: Context, node: FlowNode): InheritedStyle {
     current = current.parentNode ?? null
   }
 
-  return { fontSize: context.rootFontSize, lineHeight: null }
+  return { fontSize: context.rootFontSize, fontFamily: 'serif', fontWeight: '400', lineHeight: null }
 }
 
 /** The element's resolved style for this containing width, matched once. */
@@ -186,7 +184,12 @@ function styleFor(context: Context, node: FlowNode, containingWidth: number): La
 
   const style = resolveLayoutStyle(node as unknown as StyledElement, basis, inherited)
   context.styles.set(node, { width: containingWidth, style })
-  context.inherited.set(node, { fontSize: style.fontSize, lineHeight: style.lineHeight })
+  context.inherited.set(node, {
+    fontSize: style.fontSize,
+    fontFamily: style.fontFamily,
+    fontWeight: style.fontWeight,
+    lineHeight: style.lineHeight,
+  })
   return style
 }
 
@@ -199,9 +202,9 @@ function renderedText(node: FlowNode): string {
   return (node.nodeValue ?? '').replace(/\s+/g, ' ')
 }
 
-/** The estimated width of a text run at a given font size. */
-function textWidth(text: string, fontSize: number): number {
-  return text.length * fontSize * GLYPH_WIDTH_RATIO
+/** The width of a text run, in the font the element asks for. */
+function textWidth(text: string, style: LayoutStyle): number {
+  return measureText(text, style.fontSize, classifyFamily(style.fontFamily), isBoldWeight(style.fontWeight))
 }
 
 function lineHeightOf(style: LayoutStyle): number {
@@ -399,7 +402,7 @@ function intrinsicWidth(context: Context, node: FlowNode, available: number): nu
         continue
 
       const style = styleFor(context, node, available)
-      lineWidth += textWidth(text, style.fontSize)
+      lineWidth += textWidth(text, style)
       widest = Math.max(widest, lineWidth)
       continue
     }
@@ -833,7 +836,7 @@ function layoutChildren(
       const strutAbove = (perLine - style.fontSize) / 2 + style.fontSize * ASCENT_RATIO
       const strutBelow = perLine - strutAbove
 
-      const width = textWidth(text, style.fontSize)
+      const width = textWidth(text, style)
       const roomOnLine = Math.max(0, contentWidth - lineWidth)
 
       if (width <= roomOnLine) {

@@ -345,6 +345,12 @@ input.blur()    // fires blur + bubbling focusout
   `line-height` inherit, so `em` measures against the size an element actually has, and
   `getComputedStyle` reports the inherited value rather than the initial one.
 
+  **Text is measured with real font metrics**: per-glyph advance widths and kerning pairs for the three
+  generic families at both weights, taken from Chrome and matching the published Times New Roman, Arial
+  and Courier tables. `font-family` and `font-weight` are inherited and both pick the table, so a width
+  here agrees with Chrome to within a tenth of a percent. It used to be a flat half the font size per
+  character, which was out by up to 50% in either direction.
+
   Inline-level boxes — `inline-block`, `inline-flex`, `inline-grid` — sit on the text baseline of the line
   they are on, and a line box carries the strut its container's font and `line-height` imply, so a line
   holding only a small box is still as tall as `line-height` says.
@@ -376,7 +382,8 @@ input.blur()    // fires blur + bubbling focusout
 
   | | |
   | --- | --- |
-  | **Font metrics** | Text is measured at `font-size x 0.5` per character, and a line's baseline sits at `font-size x 0.82` — both estimates, since there is no font to measure. Chrome's own ascent ratio runs from 0.806 to 0.838 depending on the font, so a baseline here is within about a third of a pixel at 16px and a text-driven width within a few percent. |
+  | **Fonts beyond the three families** | Text is measured with real per-glyph advances and kerning, but only for `serif`, `sans-serif` and `monospace` — matching Times New Roman, Arial and Courier. A page in Inter or Roboto is measured as Arial, which is close but not its own metrics, and a character outside ASCII takes the family's average advance. |
+  | **Baseline position** | A line's baseline sits at `font-size x 0.82`, an estimate of the font's ascent. Chrome's own ratio runs from 0.806 to 0.838 depending on the font, so a baseline here is within about a third of a pixel at 16px. |
   | **`ex` and `ch`** | Approximated at half the font size. `ex` is the font's x-height and `ch` the width of its zero, so both need the font. |
   | **Grid refinements** | An item spanning several tracks does not contribute its content to their sizes; named grid lines (`[name]`) are parsed away rather than resolved; `auto-fit` behaves as `auto-fill` without collapsing empty tracks; an `fr` track can shrink below its content. |
   | **Text metrics** | No font engine, so a line count is estimated from the character count at `font-size x 0.5` per glyph. A height that comes only from wrapped text is approximate. |
@@ -437,9 +444,9 @@ Use this when deciding if a given test suite will migrate cleanly:
 
       hit testing, is-it-above-the-fold)? — Supported for normal flow.
 
-- [ ] Does it rely on baseline alignment, or a height measured from wrapped
+- [ ] Does it measure text in a font other than `serif`, `sans-serif` or
 
-      text? — See the layout note above; these are approximated.
+      `monospace`? — Measured as the generic family it falls back to.
 
 - [ ] Does it depend on node source locations? — Not tracked.
 - [ ] Does it depend on Service Workers / Web Workers? — Not implemented.

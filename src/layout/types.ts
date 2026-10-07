@@ -106,6 +106,10 @@ export interface LayoutStyle {
   pointerEvents: string
   visibility: string
   fontSize: number
+  /** The declared `font-family` list, for picking a metrics table. */
+  fontFamily: string
+  /** The declared `font-weight`, which decides regular or bold advances. */
+  fontWeight: string
   lineHeight: number | null
   flexContainer: FlexContainerStyle
   flexItem: FlexItemStyle
