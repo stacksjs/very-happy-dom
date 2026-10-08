@@ -75,10 +75,10 @@
     "typecheck": "bun --bun tsc --noEmit"
   },
   "devDependencies": {
-    "@stacksjs/bunpress": "^0.2.14",
-    "@stacksjs/dtsx": "^0.11.13",
-    "better-dx": "^0.2.25",
-    "bun-plugin-dtsx": "^0.11.13",
+    "@stacksjs/bunpress": "^0.2.18",
+    "@stacksjs/dtsx": "^0.11.19",
+    "better-dx": "^0.2.37",
+    "bun-plugin-dtsx": "^0.11.19",
     "bunfig": "^0.15.19",
     "mitata": "^1.0.34"
   },
