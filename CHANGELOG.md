@@ -1,3 +1,23 @@
+[Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.4.0...v0.4.1)
+
+## 🐛 Bug Fixes
+
+- scope options to select and datalist interfaces ([805e374](https://github.com/stacksjs/very-happy-dom/commit/805e374)) _(by Chris <chris@stacksjs.com>)_ ([#1625](https://github.com/stacksjs/very-happy-dom/issues/1625))
+- **layout**: take line-height and the baseline from the font ([8555766](https://github.com/stacksjs/very-happy-dom/commit/8555766)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## ♻️ Code Refactoring
+
+- **screenshot**: read layout from the layout pass ([87af21a](https://github.com/stacksjs/very-happy-dom/commit/87af21a)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## 🔧 Chores
+
+- release v0.4.1 ([d23eec5](https://github.com/stacksjs/very-happy-dom/commit/d23eec5)) _(by Chris <chris@stacksjs.com>)_
+
+## Contributors
+
+- _Chris <chris@stacksjs.com>_
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 [Compare changes](https://github.com/stacksjs/very-happy-dom/compare/v0.3.6...v0.4.0)
 
 ## ✨ Features
