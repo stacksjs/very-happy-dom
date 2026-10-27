@@ -1,6 +1,7 @@
 import { CanvasRenderingContext2D } from '../apis/Canvas'
 import { VirtualElement } from './VirtualElement'
 import { getAssignedElements, getAssignedNodes } from '../webcomponents/slot-utils'
+import { selectOptionsDescriptor } from './select-options'
 import type { VirtualNode } from './VirtualNode'
 
 // HTML Element subclasses - lightweight aliases for drop-in compatibility with happy-dom/jsdom.
@@ -34,6 +35,7 @@ export class HTMLDataElement extends VirtualElement {
 export class HTMLDataListElement extends VirtualElement {
   constructor() { super('datalist') }
 }
+Object.defineProperty(HTMLDataListElement.prototype, 'options', selectOptionsDescriptor)
 export class HTMLDetailsElement extends VirtualElement {
   constructor() { super('details') }
 }
@@ -145,6 +147,7 @@ export class HTMLScriptElement extends VirtualElement {
 export class HTMLSelectElement extends VirtualElement {
   constructor() { super('select') }
 }
+Object.defineProperty(HTMLSelectElement.prototype, 'options', selectOptionsDescriptor)
 export class HTMLSlotElement extends VirtualElement {
   constructor() { super('slot') }
 

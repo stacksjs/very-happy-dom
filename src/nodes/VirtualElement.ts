@@ -12,6 +12,7 @@ import { hasCombinators, matchesComplexSelector, matchesSimpleSelector, querySel
 import { ShadowRoot } from '../webcomponents/ShadowRoot'
 import { invokeAttributeChangedCallback } from '../webcomponents/custom-element-utils'
 import { notifySlotAssignmentChange } from '../webcomponents/slot-utils'
+import { selectOptionsDescriptor } from './select-options'
 import { MutationObserver } from '../observers/MutationObserver'
 
 /**
@@ -56,6 +57,9 @@ interface Insets {
 const BORDER_WIDTH_KEYWORDS: Record<string, number> = { thin: 1, medium: 3, thick: 5 }
 
 export class VirtualElement extends VirtualNodeBase {
+  // VirtualElement models several tag interfaces. The accessor exists only
+  // on matching controls, so a custom element can own an unrelated options prop.
+  declare readonly options: VirtualElement[]
   nodeType: NodeType = ELEMENT_NODE
   nodeKind: NodeKind = 'element'
   nodeName: string
@@ -96,6 +100,8 @@ export class VirtualElement extends VirtualNodeBase {
     super()
     this.tagName = tagName.toUpperCase()
     this.nodeName = this.tagName
+    if ((this.tagName === 'SELECT' || this.tagName === 'DATALIST') && !('options' in this))
+      Object.defineProperty(this, 'options', selectOptionsDescriptor)
   }
 
   get shadowRoot(): ShadowRoot | null {
@@ -1886,10 +1892,6 @@ export class VirtualElement extends VirtualNodeBase {
     else {
       this.removeAttribute('selected')
     }
-  }
-
-  get options(): VirtualElement[] {
-    return this._getSelectOptions()
   }
 
   get selectedOptions(): VirtualElement[] {
